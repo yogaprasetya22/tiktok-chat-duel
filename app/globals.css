@@ -1,0 +1,78 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #161823;
+  --tiktok-cyan: #00f2ea;
+  --tiktok-magenta: #ff0050;
+  --glass-bg: rgba(255, 255, 255, 0.7);
+  --glass-border: rgba(22, 24, 35, 0.12);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-tiktok-cyan: var(--tiktok-cyan);
+  --color-tiktok-magenta: var(--tiktok-magenta);
+  --color-glass-panel: var(--glass-bg);
+  --font-sans: var(--font-geist-sans), "Inter", "Outfit", sans-serif;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  background-image: 
+    radial-gradient(circle at 0% 0%, rgba(0, 242, 234, 0.05) 0%, transparent 40%),
+    radial-gradient(circle at 100% 100%, rgba(255, 0, 80, 0.05) 0%, transparent 40%);
+  background-attachment: fixed;
+  font-feature-settings: "ss01", "ss02", "cv01", "cv02";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom Scrollbar for Chat Feed */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(22, 24, 35, 0.1);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(22, 24, 35, 0.2);
+}
+
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.04);
+}
+
+@keyframes pulse-live {
+  0% { transform: scale(0.95); opacity: 0.8; }
+  50% { transform: scale(1.05); opacity: 1; }
+  100% { transform: scale(0.95); opacity: 0.8; }
+}
+
+.animate-pulse-live {
+  animation: pulse-live 1.5s infinite ease-in-out;
+}
+
+@keyframes message-slide-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-message {
+  animation: message-slide-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+
