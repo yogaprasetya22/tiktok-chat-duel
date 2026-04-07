@@ -1,9 +1,8 @@
 import { useStore } from '../../hooks/useStore';
 import React from 'react';
-import { Html } from "@react-three/drei";
+import { Billboard, Plane, Text } from "@react-three/drei";
 
 interface BaseProps {
-  hp: number;
   maxHp: number;
   position: [number, number, number];
   type: "player" | "enemy";
@@ -11,8 +10,10 @@ interface BaseProps {
   customColor: string;
 }
 
-export const Base = React.memo(({ hp, maxHp, position, type, name, customColor }: BaseProps) => {
+export const Base = React.memo(({ maxHp, position, type, name, customColor }: BaseProps) => {
   const gameState = useStore(s => s.gameState);
+  const hp = useStore(s => type === 'player' ? s.playerBaseHp : s.enemyBaseHp);
+
   return (
     <group position={position}>
       {/* 3D Base Mesh */}
@@ -21,44 +22,45 @@ export const Base = React.memo(({ hp, maxHp, position, type, name, customColor }
         <meshStandardMaterial color={customColor} roughness={0.4} metalness={0.6} />
       </mesh>
       
-      {/* HP BAR - Base Version (Mobile Legends Style) */}
+      {/* HP BAR - Base Version (GPU Optimized) */}
       {gameState !== 'SETUP' && (
-        <Html position={[0, 2.8, 0]} center pointerEvents="none" zIndexRange={[5, 0]}>
-          <div className="relative w-40 h-3 bg-black/80 rounded-sm border-[1.5px] border-black overflow-hidden shadow-2xl">
-            {/* Ghost Bar */}
-            <div 
-              className="absolute inset-0 bg-white/40 transition-all duration-1000 ease-out z-0"
-              style={{ width: `${(hp / maxHp) * 100}%` }}
-            />
+        <Billboard position={[0, 4.5, 0]}>
+          <group>
+            {/* Background */}
+            <Plane args={[4.5, 0.4]}>
+              <meshBasicMaterial color="#000000" transparent opacity={0.6} />
+            </Plane>
             
-            {/* Main HP Bar with CSS Segments */}
-            <div 
-              className="absolute inset-0 h-full transition-all duration-300 ease-out z-10"
-              style={{ 
-                width: `${(hp / maxHp) * 100}%`, 
-                backgroundColor: customColor,
-                backgroundImage: `
-                  linear-gradient(to bottom, rgba(255,255,255,0.3), transparent),
-                  repeating-linear-gradient(to right, transparent, transparent 9.5%, rgba(0,0,0,0.5) 9.5%, rgba(0,0,0,0.5) 10.5%)
-                `
-              }}
-            />
-          </div>
-        </Html>
-      )}
+            {/* Main HP Bar */}
+            <mesh position-z={0.01} scale-x={hp/maxHp} position-x={2.25 * (hp/maxHp - 1)}>
+              <planeGeometry args={[4.4, 0.3]} />
+              <meshBasicMaterial color={customColor} />
+            </mesh>
 
-      {/* Label - Fortress Style */}
-      {gameState !== 'SETUP' && (
-        <Html position={[0, -1.8, 0]} center pointerEvents="none" zIndexRange={[5, 0]}>
-          <div className="flex flex-col items-center">
-            <div className="text-[12px] font-black uppercase tracking-[0.2em] text-white whitespace-nowrap px-4 py-1.5 bg-zinc-900/90 rounded-sm border-x-4 border-white/20 shadow-xl drop-shadow-md">
-              {name}
-            </div>
-            <div className="mt-1 text-[9px] font-bold text-white/60 tabular-nums">
-              {hp} / {maxHp}
-            </div>
-          </div>
-        </Html>
+            {/* Title / Name */}
+            <Text
+              fontSize={0.6}
+              color="white"
+              anchorY="bottom"
+              position={[0, 0.4, 0]}
+              outlineWidth={0.05}
+              outlineColor="#000000"
+            >
+              {name.toUpperCase()}
+            </Text>
+            
+            {/* HP Numbers */}
+            <Text
+              fontSize={0.3}
+              color="white"
+              anchorY="top"
+              position={[0, -0.25, 0]}
+              fillOpacity={0.8}
+            >
+              {`${hp} / ${maxHp}`}
+            </Text>
+          </group>
+        </Billboard>
       )}
     </group>
   );

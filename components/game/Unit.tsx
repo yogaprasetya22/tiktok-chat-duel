@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import React, { useRef, useMemo, useEffect, useState, useLayoutEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { Billboard, Text, Plane } from '@react-three/drei';
+import { Billboard, Text } from '@react-three/drei';
 import { Character, AnimationName } from './Character';
 import { useVFX } from './VFXManager';
 import { useStore } from "../../hooks/useStore";
@@ -51,22 +51,18 @@ export const Unit = React.memo(({
   unitRegistry
 }: UnitProps) => {
   const meshRef = useRef<THREE.Group>(null!);
-  const hpBarRef = useRef<HTMLDivElement>(null!);
   const auraRef = useRef<THREE.Mesh>(null!);
   const currentHp = useRef(initialHp);
   const lastHp = useRef(initialHp);
-  const hpPercentRef = useRef(initialHp / maxHp);
   const labelRef = useRef<THREE.Group>(null!);
-  const barInnerRef = useRef<THREE.Mesh>(null!);
-  const [internalStatus, setInternalStatus] = useState(initialStatus);
-  const [showLabel, setShowLabel] = useState(false);
+  const statusRef = useRef(initialStatus);
+  const [currentAnimation, setCurrentAnimation] = useState<AnimationName>(initialStatus === 'attacking' ? 'Attack(1h)' : (initialStatus === 'marching' ? 'Run' : 'Idle'));
   const { spawnVFX } = useVFX();
-  const gameState = useStore(s => s.gameState);
   const characterRef = useRef<any>(null);
 
   // Scale variation for visual diversity
   const randomScale = useMemo(() => 0.8 + Math.random() * 0.4, []);
-  
+
   useLayoutEffect(() => {
     const data = unitRegistry.current?.get(id);
     if (data && meshRef.current) {
@@ -82,10 +78,16 @@ export const Unit = React.memo(({
 
     // 1. DATA SYNC
     currentHp.current = data.hp;
-    
+
     // 2. TRIGGER RE-RENDER ONLY ON STATUS CHANGE (Saves huge CPU)
-    if (data.status !== internalStatus) {
-      setInternalStatus(data.status as any);
+    if (data.status !== statusRef.current) {
+      statusRef.current = data.status as any;
+      
+      // Map status to animation name manually to trigger ONE re-render
+      const nextAnim: AnimationName = data.status === 'attacking' ? 'Attack(1h)' : (data.status === 'marching' ? 'Run' : 'Idle');
+      if (nextAnim !== currentAnimation) {
+        setCurrentAnimation(nextAnim);
+      }
     }
 
     // 3. MOVEMENT & ROTATION
@@ -97,53 +99,50 @@ export const Unit = React.memo(({
       _q1.setFromEuler(_e1.set(0, targetAngle, 0));
       meshRef.current.quaternion.slerp(_q1, 0.4);
     } else {
-      _v2.copy(_v1).sub(meshRef.current.position); 
+      _v2.copy(_v1).sub(meshRef.current.position);
       if (_v2.lengthSq() > 0.001) {
         const angle = Math.atan2(_v2.x, _v2.z);
         _q1.setFromEuler(_e1.set(0, angle, 0));
-        meshRef.current.quaternion.slerp(_q1, 0.2);
+        meshRef.current.quaternion.slerp(_q1, 0.1);
       }
     }
 
-    
-    // 4. HP BAR & LABEL SYNC (GPU-BASED)
-    const hpPercent = Math.max(0, currentHp.current / maxHp);
-    hpPercentRef.current = hpPercent;
-    
-    if (barInnerRef.current) {
-        const barWidth = isBoss ? 2.4 : 1.2;
-        barInnerRef.current.scale.x = hpPercent;
-        barInnerRef.current.position.x = (barWidth * 0.5) * (hpPercent - 1);
-        
-        // Critical Color logic
-        const material = barInnerRef.current.material as THREE.MeshBasicMaterial;
-        if (hpPercent < 0.25) {
-            material.color.set(Math.sin(state.clock.elapsedTime * 15) > 0 ? '#ff0000' : '#7f0000');
-        } else {
-            material.color.set(hpPercent > 0.5 ? '#22c55e' : '#f59e0b');
-        }
-    }
 
-    if (labelRef.current) {
-        labelRef.current.visible = !isDying;
+    // 4. HUD VISIBILITY & CULLING (Throttled for performance)
+    if (state.clock.getElapsedTime() - ((meshRef.current as any)._lastCullTime || 0) > 0.15) {
+      (meshRef.current as any)._lastCullTime = state.clock.getElapsedTime();
+      const dist = state.camera.position.distanceTo(meshRef.current.position);
+      
+      if (labelRef.current) {
+        const gState = useStore.getState().gameState;
+        // Conservative Name Culling (Restored 60 FPS balance)
+        const maxDist = isBoss ? 60 : 35;
+        labelRef.current.visible = !isDying && gState !== 'SETUP' && dist < maxDist; 
+      }
+      (meshRef.current as any)._lastDist = dist;
     }
+    const dist = (meshRef.current as any)._lastDist || 0;
 
-    // 6. VFX & SOUND (Throttled)
+    // 5. HP & VFX SYNC (Plays even if HUD is culled)
     if (currentHp.current < lastHp.current) {
-      if (Math.random() > 0.5 || isBoss) { // 50% chance for particle on normal hit to reduce clutter
-        const pos = meshRef.current.position;
-        spawnVFX([pos.x, pos.y, pos.z], currentHp.current <= 0 ? 'death' : 'hit', teamColor);
+      const pos = meshRef.current.position;
+      if (currentHp.current <= 0) {
+        spawnVFX([pos.x, pos.y, pos.z], 'death', teamColor);
+      } else if (isBoss) {
+        spawnVFX([pos.x, pos.y, pos.z], 'hit', teamColor);
       }
     }
-
     lastHp.current = currentHp.current;
+
+    // 6. HUD Sync (Only Bosses)
+    if (!labelRef.current || !labelRef.current.visible) {
+      return; 
+    }
   });
 
   const getAnimation = (): AnimationName => {
     if (isDying) return 'Defeat';
-    if (internalStatus === 'attacking') return 'Attack(1h)';
-    if (internalStatus === 'marching') return 'Run';
-    return 'Idle';
+    return currentAnimation;
   };
 
   return (
@@ -161,37 +160,24 @@ export const Unit = React.memo(({
         characterScale={(isBoss ? 4.5 : 1.5) * randomScale}
       />
 
-      {/* GPU-BASED UI BILLBOARD (SUPER FAST) */}
-      {!isDying && gameState !== 'SETUP' && (
+      {/* GPU-BASED UI BILLBOARD (ALL UNITS) */}
+      {!isDying && (
         <Billboard
           ref={labelRef}
-          position={[0, isBoss ? 7.6 : 3.2 + (id.charCodeAt(0) % 10) * 0.15, 0]}
+          position={[0, isBoss ? 7.6 : 3.2, 0]}
+          visible={false} /* Controlled by useFrame */
         >
-          {/* UserName Text */}
           <Text
-            fontSize={isBoss ? 0.8 : 0.45}
+            fontSize={isBoss ? 0.8 : 0.4}
             color="white"
             anchorX="center"
             anchorY="bottom"
-            outlineWidth={0.04}
+            outlineWidth={0} // ABSOLUTELY NO OUTLINES FOR MAXIMUM PERFORMANCE
             outlineColor="#000000"
             position-y={0.25}
           >
-            {isBoss ? `🔥 ${userName} 🔥` : userName}
+            {isBoss ? `Boss ${userName}` : userName}
           </Text>
-
-          {/* 3D HP BAR */}
-          <group position-y={0.1}>
-            {/* Background */}
-            <Plane args={[isBoss ? 2.5 : 1.25, isBoss ? 0.25 : 0.12]}>
-              <meshBasicMaterial color="#000000" transparent opacity={0.6} />
-            </Plane>
-            {/* Health Inner */}
-            <mesh ref={barInnerRef} position-z={0.01}>
-              <planeGeometry args={[isBoss ? 2.4 : 1.2, isBoss ? 0.2 : 0.08]} />
-              <meshBasicMaterial color="#22c55e" />
-            </mesh>
-          </group>
         </Billboard>
       )}
     </group>

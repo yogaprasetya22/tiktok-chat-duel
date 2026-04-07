@@ -115,15 +115,20 @@ export const Character = React.memo(({ animation, color = 'blue', characterScale
     const groupPos = _v1.setFromMatrixPosition(group.current.matrixWorld);
     const dist = state.camera.position.distanceTo(groupPos);
     
-    // 1. GENEROUS RADIUS: Animations stay alive for much further
-    if (dist > 75 && !isBoss) return; 
+    // 1. CULLING: Hide the mesh entirely if too far to save draw calls
+    const isVisible = dist < 120 || isBoss;
+    if (clone.visible !== isVisible) {
+      clone.visible = isVisible;
+    }
 
+    if (!isVisible || !mixer || !group.current) return;
+
+    // 2. ANIMATION THROTTLING
     skipCount.current++;
     
-    // 2. BROAD THROTTLING RANGES
     let skipInterval = 1;
-    if (dist > 45) skipInterval = 4; // Very far (but moving!)
-    else if (dist > 25) skipInterval = 2; // Mid-range
+    if (dist > 60) skipInterval = 4; // Far
+    else if (dist > 30) skipInterval = 2; // Mid
     
     if (skipCount.current % skipInterval !== 0) return;
 

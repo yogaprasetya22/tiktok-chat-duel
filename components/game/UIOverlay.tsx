@@ -28,6 +28,9 @@ interface UIOverlayProps {
   testingMode: boolean;
   onToggleTesting: () => void;
   onDownloadReplay: () => void;
+  isFullscreen: boolean;
+  onToggleFullscreen: () => void;
+  standalone?: boolean;
 }
 
 export const UIOverlay = ({
@@ -48,6 +51,9 @@ export const UIOverlay = ({
   testingMode,
   onToggleTesting,
   onDownloadReplay,
+  isFullscreen,
+  onToggleFullscreen,
+  standalone,
 }: UIOverlayProps) => {
   const playerBaseHp = useStore(s => s.playerBaseHp);
   const enemyBaseHp = useStore(s => s.enemyBaseHp);
@@ -64,30 +70,29 @@ export const UIOverlay = ({
     const container = document.getElementById('game-canvas-container');
     if (!container) return;
 
+    // Use Virtual Fullscreen AND Native for maximum compatibility
+    onToggleFullscreen();
+
     const doc = document as any;
     const element = container as any;
 
-    if (!doc.fullscreenElement && !doc.webkitFullscreenElement && !doc.msFullscreenElement) {
+    if (!doc.fullscreenElement && !doc.webkitFullscreenElement) {
       if (element.requestFullscreen) {
-        element.requestFullscreen();
+        element.requestFullscreen().catch(() => {});
       } else if (element.webkitRequestFullscreen) {
         element.webkitRequestFullscreen();
-      } else if (element.msRequestFullscreen) {
-        element.msRequestFullscreen();
       }
     } else {
       if (doc.exitFullscreen) {
         doc.exitFullscreen();
       } else if (doc.webkitExitFullscreen) {
         doc.webkitExitFullscreen();
-      } else if (doc.msExitFullscreen) {
-        doc.msExitFullscreen();
       }
     }
   };
 
   return (
-    <div className="absolute inset-0 pointer-events-none flex flex-col justify-between p-6 z-[1000]">
+    <div className={`${standalone ? 'relative w-full' : 'absolute inset-0 pointer-events-none'} flex flex-col justify-between z-[1000] ${isFullscreen ? 'p-0' : 'p-6'}`}>
 
       {/* Fullscreen & Camera Controls - Top Right - HIDDEN DURING SETUP */}
       {gameState !== 'SETUP' && (
@@ -123,18 +128,18 @@ export const UIOverlay = ({
           </button>
           <button 
             onClick={toggleFullscreen}
-            className="p-3 bg-zinc-950/80 backdrop-blur-md rounded-xl border border-white/10 text-white/50 hover:text-white transition-colors"
+            className={`p-3 backdrop-blur-md rounded-xl border border-white/10 transition-all ${isFullscreen ? 'bg-zinc-100 text-zinc-950' : 'bg-zinc-950/80 text-white/50 hover:text-white'}`}
             title="Fullscreen Canvas"
           >
-            <Maximize2 className="w-5 h-5" />
+            {isFullscreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
           </button>
         </div>
       )}
 
       {/* Setup Modal Wizard - SUPREME Z-INDEX */}
       {gameState === "SETUP" && (
-        <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4 md:p-12 bg-zinc-950/90 backdrop-blur-xl animate-in fade-in duration-500 pointer-events-auto">
-          <div className="w-full max-w-2xl bg-zinc-900 border border-white/10 rounded-[40px] p-10 md:p-16 shadow-[0_0_100px_-20px_rgba(79,70,229,0.3)] space-y-10 relative overflow-hidden">
+        <div className={`${standalone ? 'relative w-full p-0 flex flex-col items-center justify-center' : 'fixed inset-0 z-[2000] flex items-center justify-center p-4 md:p-12 bg-zinc-950/90 backdrop-blur-xl animate-in fade-in duration-500'} pointer-events-auto`}>
+          <div className={`w-full max-w-2xl bg-zinc-900 border border-white/10 rounded-[40px] p-10 md:p-16 shadow-[0_0_100px_-20px_rgba(79,70,229,0.3)] space-y-10 relative overflow-hidden ${standalone ? 'm-0' : ''}`}>
             {/* Background Glow */}
             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-96 h-96 bg-indigo-600/10 blur-[120px] rounded-full -z-10" />
 
@@ -537,29 +542,23 @@ export const UIOverlay = ({
             {gameState === 'PLAYING' && (
               <div className="absolute inset-x-0 top-0 h-full pointer-events-none p-8 flex flex-col items-center">
                 
-                {/* 1. TOP CENTER: Kill Feed (Refined Animation) */}
-                <div className="absolute top-12 left-1/2 -translate-x-1/2 w-full max-w-md flex flex-col gap-2 items-center pointer-events-none z-[1100]">
-                  {killEvents.slice(-3).map((event, i) => (
-                    <div key={event.id} className="animate-in slide-in-from-top-4 fade-in duration-500 bg-zinc-950/80 backdrop-blur-md px-6 py-2.5 rounded-2xl border border-white/10 flex items-center gap-4 shadow-2xl">
-                      <span className="text-white font-black italic text-base tracking-tighter" style={{ color: towerConfig.player.color }}>{event.killer}</span>
-                      <Sword className="w-4 h-4 text-rose-500 animate-pulse" />
-                      <div className="flex flex-col items-center">
-                        <span className="text-rose-500 font-black uppercase text-[8px] tracking-[0.3em] italic leading-none mb-0.5">ELIMINATED</span>
-                        <span className="h-0.5 w-full bg-rose-500/30 rounded-full" />
-                      </div>
-                      <span className="text-white/60 font-bold text-sm tracking-tight">{event.victim}</span>
+                {/* 1. TOP LEFT: Compact Kill Feed */}
+                <div className="absolute top-6 left-6 w-72 flex flex-col gap-1.5 items-start pointer-events-none z-[1100]">
+                  {killEvents.slice(-2).map((event, i) => (
+                    <div key={event.id} className="animate-in slide-in-from-left-4 fade-in duration-500 bg-zinc-950/80 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/10 flex items-center gap-3 shadow-xl">
+                      <span className="text-white font-black italic text-xs tracking-tighter" style={{ color: towerConfig.player.color }}>{event.killer}</span>
+                      <Sword className="w-3 h-3 text-rose-500" />
+                      <span className="text-white/60 font-bold text-[10px] tracking-tight">{event.victim}</span>
                     </div>
                   ))}
                 </div>
 
-                {/* 2. LEFT SIDE: PLAYER TEAM LEADERBOARD */}
-                <div className="absolute top-32 left-8 w-64 pointer-events-auto z-[1100]">
-                  <div className="bg-zinc-950/80 backdrop-blur-2xl rounded-[32px] border-l-4 border-l-blue-500 border border-white/10 p-6 shadow-2xl space-y-5 animate-in slide-in-from-left-12 duration-700">
-                    <div className="flex items-center gap-2 border-b border-white/5 pb-4">
-                      <div className="p-1.5 bg-blue-500/20 rounded-lg text-blue-400">
-                        <Trophy className="w-4 h-4" />
-                      </div>
-                      <span className="text-xs font-black text-white uppercase tracking-widest italic">{towerConfig.player.name} TOP HITS</span>
+                {/* 2. LEFT SIDE: Compact Leaderboard */}
+                <div className="absolute top-28 left-6 w-56 pointer-events-auto z-[1100]">
+                  <div className="bg-zinc-950/80 backdrop-blur-2xl rounded-2xl border-l-4 border-l-blue-500 border border-white/10 p-4 shadow-2xl space-y-4 animate-in slide-in-from-left-12 duration-700">
+                    <div className="flex items-center gap-2 border-b border-white/5 pb-3">
+                      <Trophy className="w-4 h-4 text-blue-400" />
+                      <span className="text-[10px] font-black text-white uppercase tracking-widest italic">{towerConfig.player.name} TOP</span>
                     </div>
                     
                     <div className="space-y-3">
@@ -589,14 +588,12 @@ export const UIOverlay = ({
                   </div>
                 </div>
 
-                {/* 3. RIGHT SIDE: ENEMY TEAM LEADERBOARD */}
-                <div className="absolute top-32 right-8 w-64 pointer-events-auto z-[1100]">
-                  <div className="bg-zinc-950/80 backdrop-blur-2xl rounded-[32px] border-r-4 border-r-rose-500 border border-white/10 p-6 shadow-2xl space-y-5 animate-in slide-in-from-right-12 duration-700">
-                    <div className="flex items-center gap-2 border-b border-white/5 pb-4">
-                      <div className="p-1.5 bg-rose-500/20 rounded-lg text-rose-400">
-                        <Zap className="w-4 h-4" />
-                      </div>
-                      <span className="text-xs font-black text-white uppercase tracking-widest italic">{towerConfig.enemy.name} TOP HITS</span>
+                {/* 3. RIGHT SIDE: Compact Leaderboard */}
+                <div className="absolute top-28 right-6 w-56 pointer-events-auto z-[1100]">
+                  <div className="bg-zinc-950/80 backdrop-blur-2xl rounded-2xl border-r-4 border-r-rose-500 border border-white/10 p-4 shadow-2xl space-y-4 animate-in slide-in-from-right-12 duration-700">
+                    <div className="flex items-center gap-2 border-b border-white/5 pb-3">
+                      <Zap className="w-4 h-4 text-rose-400" />
+                      <span className="text-[10px] font-black text-white uppercase tracking-widest italic">{towerConfig.enemy.name} TOP</span>
                     </div>
                     
                     <div className="space-y-3">

@@ -12,12 +12,15 @@ import {
   AdaptiveEvents,
   AdaptiveDpr,
   useGLTF,
-  Sphere
+  Sphere,
+  Billboard,
+  Text
 } from "@react-three/drei";
 import { Unit } from "./Unit";
 import { Base } from "./Base";
 import { Chessboard } from "./Chessboard";
 import { VFXProvider, useVFX } from "./VFXManager";
+import { UnitHUDBatcher } from "./UnitHUDBatcher";
 import { ActiveUnit, TowerConfig, DamageText, MapObstacle } from "../../hooks/useBattleSystem";
 import { useStore } from "../../hooks/useStore";
 import React, { useState, useEffect, useRef } from "react";
@@ -31,14 +34,15 @@ const CameraDirector = () => {
   const { camera } = useThree();
   const { spawnVFX } = useVFX();
   const hasTriggeredRef = useRef(false);
-  const gameState = useStore(s => s.gameState);
-  const playerBaseHp = useStore(s => s.playerBaseHp);
-  const enemyBaseHp = useStore(s => s.enemyBaseHp);
-  
+
   const lastBaseHp = useRef({ player: 1000, enemy: 1000 });
   const shakeIntensity = useRef(0);
 
   useFrame((state, delta) => {
+    const gameState = useStore.getState().gameState;
+    const playerBaseHp = useStore.getState().playerBaseHp;
+    const enemyBaseHp = useStore.getState().enemyBaseHp;
+
     // 1. Damage Shake
     if (playerBaseHp < lastBaseHp.current.player || enemyBaseHp < lastBaseHp.current.enemy) {
       shakeIntensity.current = 0.35;
@@ -77,7 +81,7 @@ const PerformanceProbe = ({ syncPerformance }: { syncPerformance: (data: any) =>
   const { gl } = useThree();
   const lastTime = useRef(performance.now());
   const frameCount = useRef(0);
-  
+
   useFrame(() => {
     frameCount.current++;
     if (frameCount.current % 30 === 0) { // Update every 30 frames to save CPU
@@ -101,8 +105,9 @@ interface GameCanvasProps {
   setMapObstacles: (obs: MapObstacle[]) => void;
   mapObstacles: MapObstacle[];
   debug: boolean;
-  unitRegistry: React.RefObject<Map<string, { hp: number; status: string; position: number[] }>>;
+  unitRegistry: React.RefObject<Map<string, { hp: number; status: string; position: number[]; isBoss: boolean; maxHp?: number }>>;
   syncPerformance: (data: any) => void;
+  isFullscreen?: boolean;
 }
 
 export const GameCanvas = React.memo(({
@@ -114,16 +119,16 @@ export const GameCanvas = React.memo(({
   debug,
   unitRegistry,
   syncPerformance,
+  isFullscreen,
 }: GameCanvasProps) => {
   const [dpr, setDpr] = useState(1.0);
-  const playerBaseHp = useStore(s => s.playerBaseHp);
-  const enemyBaseHp = useStore(s => s.enemyBaseHp);
   const gameState = useStore(s => s.gameState);
-  const killEvents = useStore(s => s.killEvents);
-  const liveStats = useStore(s => s.liveStats);
 
   return (
-    <div id="game-canvas-container" className="w-full h-full rounded-2xl overflow-hidden border border-white/10 shadow-2xl relative bg-sky-300">
+    <div className={`w-full h-full overflow-hidden relative bg-black select-none touch-none ${isFullscreen ? '' : 'rounded-2xl border border-white/10 shadow-2xl'}`}>
+      <div className="absolute top-4 left-4 z-10 bg-black/50 p-2 rounded text-[10px] text-white backdrop-blur-md border border-white/10 pointer-events-none">
+        DPR: {dpr.toFixed(2)}
+      </div>
       <Stats className="!absolute !bottom-4 !right-4 !left-auto !top-auto opacity-50 grayscale" />
       <Canvas
         dpr={dpr}
@@ -133,6 +138,7 @@ export const GameCanvas = React.memo(({
           powerPreference: "high-performance",
           alpha: false
         }}
+        className="select-none touch-none "
       >
         <PerformanceProbe syncPerformance={syncPerformance} />
         <PerformanceMonitor onIncline={() => setDpr(1.2)} onDecline={() => setDpr(0.7)} />
@@ -167,11 +173,11 @@ export const GameCanvas = React.memo(({
 
         <VFXProvider>
           <CameraDirector />
-          
+          <UnitHUDBatcher unitRegistry={unitRegistry} />
+
           {/* Bridge removed. Units now battle throughout the natural forest clearing. */}
 
           <Base
-            hp={playerBaseHp}
             maxHp={towerConfig.baseHp}
             position={[0, 0, 24]}
             type="player"
@@ -179,7 +185,6 @@ export const GameCanvas = React.memo(({
             customColor={towerConfig.player.color}
           />
           <Base
-            hp={enemyBaseHp}
             maxHp={towerConfig.baseHp}
             position={[0, 0, -24]}
             type="enemy"
@@ -213,29 +218,8 @@ export const GameCanvas = React.memo(({
           ))}
         </VFXProvider>
 
-        {/* Only show the most recent 12 damage texts to prevent DOM layout thrashing */}
-        {damageTexts.slice(-12).map((text) => {
-          const scale = Math.min(1.2 + text.value / 400, 3.5);
-          const isBig = text.value > 100;
-          return (
-            <Html key={text.id} position={text.position} center distanceFactor={12}>
-              <div 
-                className={`pointer-events-none select-none animate-in fade-out slide-out-to-top-48 duration-700 fill-mode-forwards`}
-                style={{ 
-                  transform: `scale(${scale})`,
-                  filter: isBig ? 'drop-shadow(0 0 8px rgba(255,215,0,0.8))' : 'none'
-                }}
-              >
-                <div
-                  className={`font-black italic drop-shadow-[0_4px_6px_rgba(0,0,0,0.8)] whitespace-nowrap ${isBig ? 'text-6xl text-yellow-400 underline decoration-yellow-600' : 'text-4xl'}`}
-                  style={{ color: isBig ? '#FFD700' : text.color }}
-                >
-                  {isBig ? '🔥' : ''}{text.value}
-                </div>
-              </div>
-            </Html>
-          );
-        })}
+        {/* Damage text removed for maximum performance and clarity as requested */}
+
 
         {/* Removed ContactShadows for massive performance boost on low-end hardware */}
       </Canvas>

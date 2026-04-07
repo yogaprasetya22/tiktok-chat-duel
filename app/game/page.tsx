@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { useTikTokLive } from "../../lib/hooks";
 import { useBattleSystem } from "../../hooks/useBattleSystem";
 import { useStore } from "../../hooks/useStore";
@@ -17,6 +18,7 @@ export default function GamePage() {
   const [targetUsername, setTargetUsername] = useState("");
   const [activeUsername, setActiveUsername] = useState("");
   const [testingMode, setTestingMode] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const lastProcessedId = useRef<string | null>(null);
 
   useEffect(() => {
@@ -148,6 +150,28 @@ export default function GamePage() {
 
   const mvpData = getMVPData();
 
+  const overlayProps = {
+    towerConfig,
+    setTowerConfig,
+    onSpawn: () => spawnUnit(1, "Owner", "player"),
+    onStart: resetBattle,
+    onConnect: (user: string) => setActiveUsername(user),
+    connected,
+    loading,
+    error,
+    onRestart: resetBattle,
+    isCinematic,
+    onToggleCinematic: () => setIsCinematic(!isCinematic),
+    showChat,
+    onToggleChat: () => setShowChat(!showChat),
+    mvpData,
+    testingMode,
+    onToggleTesting: () => setTestingMode(!testingMode),
+    onDownloadReplay: downloadReplay,
+    isFullscreen,
+    onToggleFullscreen: () => setIsFullscreen(!isFullscreen),
+  };
+
   return (
     <div className="min-h-screen bg-zinc-950 text-white selection:bg-indigo-500/30 selection:text-indigo-200">
       <div className="max-w-7xl mx-auto px-4 py-8 md:py-12 flex flex-col gap-8">
@@ -185,42 +209,41 @@ export default function GamePage() {
         {/* Main Content Area */}
         <main className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
 
-          <div className={`${showChat ? 'lg:col-span-8' : 'lg:col-span-12'} flex flex-col gap-6 transition-all duration-500`}>
-            <div id="game-canvas-container" className={`group relative w-full overflow-hidden rounded-2xl transition-all duration-700 ${gameState === 'PLAYING' ? 'h-[calc(100vh-200px)]' : 'h-[600px]'}`}>
-                <GameCanvas
-                  activeUnits={activeUnits}
-                  towerConfig={towerConfig}
-                  damageTexts={damageTexts}
-                  isCinematic={isCinematic}
-                  setMapObstacles={setMapObstacles}
-                  mapObstacles={mapObstacles}
-                  debug={debug}
-                  unitRegistry={unitRegistry}
-                  syncPerformance={syncPerformance}
-                />
-  
-                <div className="absolute inset-0 pointer-events-none z-[100]">
-                  <UIOverlay
+          <div className={`${showChat && !isFullscreen ? 'lg:col-span-8' : 'lg:col-span-12'} flex flex-col gap-6 transition-all duration-500`}>
+                
+            {/* 1. STANDALONE SETUP (Outside Canvas) */}
+            {gameState === 'SETUP' && !isFullscreen && (
+              <div className="animate-in slide-in-from-top-4 duration-500">
+                <UIOverlay {...overlayProps} standalone={true} />
+              </div>
+            )}
+
+                <div 
+                  id="game-canvas-container" 
+                  className={`group overflow-hidden transition-all duration-700 ${
+                    isFullscreen ? 'fixed inset-0 z-[9999] bg-black rounded-none h-screen w-screen' : 
+                    `relative w-full rounded-2xl ${gameState === 'PLAYING' ? 'h-[calc(100vh-200px)]' : (gameState === 'SETUP' ? 'h-[300px] opacity-40 grayscale blur-sm' : 'h-[600px]')}`
+                  }`}
+                >
+                  <GameCanvas
+                    activeUnits={activeUnits}
                     towerConfig={towerConfig}
-                    setTowerConfig={setTowerConfig}
-                    onSpawn={() => spawnUnit(1, "Owner", "player")}
-                    onStart={resetBattle}
-                    onConnect={(user) => setActiveUsername(user)}
-                    connected={connected}
-                    loading={loading}
-                    error={error}
-                    onRestart={resetBattle}
+                    damageTexts={damageTexts}
                     isCinematic={isCinematic}
-                    onToggleCinematic={() => setIsCinematic(!isCinematic)}
-                    showChat={showChat}
-                    onToggleChat={() => setShowChat(!showChat)}
-                    mvpData={mvpData}
-                    testingMode={testingMode}
-                    onToggleTesting={() => setTestingMode(!testingMode)}
-                    onDownloadReplay={downloadReplay}
+                    setMapObstacles={setMapObstacles}
+                    mapObstacles={mapObstacles}
+                    debug={debug}
+                    unitRegistry={unitRegistry}
+                    syncPerformance={syncPerformance}
+                    isFullscreen={isFullscreen}
                   />
+    
+                  <div className="absolute inset-0 pointer-events-none z-[100]">
+                    {(gameState !== 'SETUP' || isFullscreen) && (
+                      <UIOverlay {...overlayProps} standalone={false} />
+                    )}
+                  </div>
                 </div>
-            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="bg-zinc-900/30 p-4 rounded-xl border border-white/5 flex gap-4 items-center">
