@@ -20,6 +20,8 @@ export default function GamePage() {
   const [testingMode, setTestingMode] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const lastProcessedId = useRef<string | null>(null);
+  const likeCounterRef = useRef<number>(0);
+  const cumulativeLikesRef = useRef<number>(0);
 
   useEffect(() => {
     setMounted(true);
@@ -28,10 +30,10 @@ export default function GamePage() {
   const { messages, connected, error, loading, disconnect } = useTikTokLive(activeUsername);
 
   const {
-    activeUnits,
     damageTexts,
     towerConfig,
     setTowerConfig,
+    updateSettingsRef,
     spawnUnit,
     resetBattle,
     getMVPData,
@@ -44,6 +46,10 @@ export default function GamePage() {
     stats,
     replayStats,
     downloadReplay,
+    triggerAirstrike,
+    updateSimulation,
+    damageQueue,
+    settingsRef,
   } = useBattleSystem();
 
   const gameState = useStore(s => s.gameState);
@@ -137,6 +143,16 @@ export default function GamePage() {
         }
       };
 
+      if (msg.type === "like") {
+        cumulativeLikesRef.current += (msg.likeCount || 1);
+        if (cumulativeLikesRef.current - likeCounterRef.current >= 1000) {
+            // ENGAGEMENT MILESTONE: TRIGGER AIRSTRIKE
+            likeCounterRef.current += 1000;
+            // Balance: Damage both sides to keep it chaotic, or just randomize
+            triggerAirstrike(Math.random() > 0.5 ? "player" : "enemy");
+        }
+      }
+
       processSpawn("player");
       processSpawn("enemy");
     });
@@ -170,6 +186,7 @@ export default function GamePage() {
     onDownloadReplay: downloadReplay,
     isFullscreen,
     onToggleFullscreen: () => setIsFullscreen(!isFullscreen),
+    updateSettingsRef,
   };
 
   return (
@@ -226,8 +243,8 @@ export default function GamePage() {
                   }`}
                 >
                   <GameCanvas
-                    activeUnits={activeUnits}
                     towerConfig={towerConfig}
+                    setTowerConfig={setTowerConfig}
                     damageTexts={damageTexts}
                     isCinematic={isCinematic}
                     setMapObstacles={setMapObstacles}
@@ -236,6 +253,9 @@ export default function GamePage() {
                     unitRegistry={unitRegistry}
                     syncPerformance={syncPerformance}
                     isFullscreen={isFullscreen}
+                    updateSimulation={updateSimulation}
+                    damageQueue={damageQueue}
+                    settingsRef={settingsRef}
                   />
     
                   <div className="absolute inset-0 pointer-events-none z-[100]">

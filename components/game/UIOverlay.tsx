@@ -30,6 +30,7 @@ interface UIOverlayProps {
   onDownloadReplay: () => void;
   isFullscreen: boolean;
   onToggleFullscreen: () => void;
+  updateSettingsRef?: (settings: any) => void;
   standalone?: boolean;
 }
 
@@ -53,6 +54,7 @@ export const UIOverlay = ({
   onDownloadReplay,
   isFullscreen,
   onToggleFullscreen,
+  updateSettingsRef,
   standalone,
 }: UIOverlayProps) => {
   const playerBaseHp = useStore(s => s.playerBaseHp);
@@ -61,6 +63,10 @@ export const UIOverlay = ({
   const armyCounts = useStore(s => s.armyCounts);
   const killEvents = useStore(s => s.killEvents);
   const liveStats = useStore(s => s.liveStats);
+  const isSettingsOpen = useStore(s => s.isSettingsOpen);
+  const setIsSettingsOpen = useStore(s => s.setIsSettingsOpen);
+  const settings = useStore(s => s.settings);
+  const updateSettings = useStore(s => s.updateSettings);
   const [step, setStep] = useState(1);
   const [username, setUsername] = useState("");
 
@@ -127,6 +133,13 @@ export const UIOverlay = ({
             <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-zinc-900 animate-pulse" />
           </button>
           <button 
+            onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+            className={`p-3 backdrop-blur-md rounded-xl border border-white/10 transition-all shadow-xl ${isSettingsOpen ? 'bg-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.5)]' : 'bg-zinc-900/80 text-white/50 hover:text-white'}`}
+            title="Update Configuration"
+          >
+            <Settings2 className="w-5 h-5" />
+          </button>
+          <button 
             onClick={toggleFullscreen}
             className={`p-3 backdrop-blur-md rounded-xl border border-white/10 transition-all ${isFullscreen ? 'bg-zinc-100 text-zinc-950' : 'bg-zinc-950/80 text-white/50 hover:text-white'}`}
             title="Fullscreen Canvas"
@@ -135,6 +148,7 @@ export const UIOverlay = ({
           </button>
         </div>
       )}
+
 
       {/* Setup Modal Wizard - SUPREME Z-INDEX */}
       {gameState === "SETUP" && (
@@ -150,10 +164,10 @@ export const UIOverlay = ({
               </div>
               <div className="space-y-1">
                 <h2 className="text-3xl font-black uppercase tracking-tighter text-white italic">Setup Battle</h2>
-                <p className="text-zinc-500 text-xs uppercase font-bold tracking-[0.2em]">Step {step} of 4 • Configuration</p>
+                <p className="text-zinc-500 text-xs uppercase font-bold tracking-[0.2em]">Step {step} of 3 • Configuration</p>
               </div>
               <div className="flex gap-2 w-full max-w-[200px] mt-2">
-                {[1, 2, 3, 4].map(i => (
+                {[1, 2, 3].map(i => (
                   <div key={i} className={`flex-1 h-1.5 rounded-full transition-all duration-500 ${step >= i ? 'bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]' : 'bg-zinc-800'}`} />
                 ))}
               </div>
@@ -403,69 +417,6 @@ export const UIOverlay = ({
 
                 <div className="flex gap-4">
                   <button onClick={prevStep} className="flex-1 py-5 bg-zinc-800 text-white font-black uppercase tracking-widest rounded-2xl hover:bg-zinc-700 transition-all active:scale-[0.98]">Back</button>
-                  <button onClick={nextStep} className="flex-[2] py-5 bg-zinc-200 text-zinc-900 font-black uppercase tracking-widest rounded-2xl hover:bg-white transition-all shadow-xl active:scale-[0.98]">Unit Tuning</button>
-                </div>
-              </div>
-            )}
-
-            {/* Step 4: Unit Multipliers */}
-            {step === 4 && (
-              <div className="space-y-8 animate-in slide-in-from-bottom-8 duration-500">
-                <div className="p-8 bg-amber-500/5 rounded-[32px] border border-amber-500/10 space-y-6">
-                  <h3 className="text-lg font-black text-amber-400 uppercase tracking-tighter italic flex items-center gap-3">
-                    <Zap className="w-5 h-5 shadow-lg" /> Unit Multipliers Tuning
-                  </h3>
-                  
-                  <div className="space-y-6">
-                    <div className="space-y-3">
-                      <div className="flex justify-between items-center px-1">
-                        <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Health (HP) x{towerConfig.unitConfig.hpMultiplier.toFixed(1)}</label>
-                      </div>
-                      <input 
-                        type="range" 
-                        min="0.5" 
-                        max="5.0" 
-                        step="0.1"
-                        value={towerConfig.unitConfig.hpMultiplier}
-                        onChange={(e) => setTowerConfig(prev => ({ ...prev, unitConfig: { ...prev.unitConfig, hpMultiplier: parseFloat(e.target.value) } }))}
-                        className="w-full accent-amber-500"
-                      />
-                    </div>
-
-                    <div className="space-y-3">
-                      <div className="flex justify-between items-center px-1">
-                        <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Attack Power x{towerConfig.unitConfig.attackMultiplier.toFixed(1)}</label>
-                      </div>
-                      <input 
-                        type="range" 
-                        min="0.5" 
-                        max="5.0" 
-                        step="0.1"
-                        value={towerConfig.unitConfig.attackMultiplier}
-                        onChange={(e) => setTowerConfig(prev => ({ ...prev, unitConfig: { ...prev.unitConfig, attackMultiplier: parseFloat(e.target.value) } }))}
-                        className="w-full accent-amber-500"
-                      />
-                    </div>
-
-                    <div className="space-y-3">
-                      <div className="flex justify-between items-center px-1">
-                        <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">March Speed x{towerConfig.unitConfig.speedMultiplier.toFixed(1)}</label>
-                      </div>
-                      <input 
-                        type="range" 
-                        min="0.5" 
-                        max="3.0" 
-                        step="0.1"
-                        value={towerConfig.unitConfig.speedMultiplier}
-                        onChange={(e) => setTowerConfig(prev => ({ ...prev, unitConfig: { ...prev.unitConfig, speedMultiplier: parseFloat(e.target.value) } }))}
-                        className="w-full accent-amber-500"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex gap-4">
-                  <button onClick={prevStep} className="flex-1 py-5 bg-zinc-800 text-white font-black uppercase tracking-widest rounded-2xl hover:bg-zinc-700 transition-all active:scale-[0.98]">Back</button>
                   <button 
                     onClick={onStart} 
                     disabled={loading}
@@ -544,7 +495,7 @@ export const UIOverlay = ({
                 
                 {/* 1. TOP LEFT: Compact Kill Feed */}
                 <div className="absolute top-6 left-6 w-72 flex flex-col gap-1.5 items-start pointer-events-none z-[1100]">
-                  {killEvents.slice(-2).map((event, i) => (
+                  {killEvents.slice(-2).map((event, i) => event && event.id && (
                     <div key={event.id} className="animate-in slide-in-from-left-4 fade-in duration-500 bg-zinc-950/80 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/10 flex items-center gap-3 shadow-xl">
                       <span className="text-white font-black italic text-xs tracking-tighter" style={{ color: towerConfig.player.color }}>{event.killer}</span>
                       <Sword className="w-3 h-3 text-rose-500" />

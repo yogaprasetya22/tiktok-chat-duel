@@ -1,10 +1,14 @@
 import { create } from 'zustand';
-import { TowerConfig, KillEvent } from './useBattleSystem';
+import { TowerConfig, KillEvent, SimulationSettings } from './useBattleSystem';
+import { INITIAL_SETTINGS } from './battle/constants';
 
 interface BattleState {
   // Game Status
   gameState: "SETUP" | "PLAYING" | "WON" | "LOST";
   setGameState: (state: "SETUP" | "PLAYING" | "WON" | "LOST") => void;
+  
+  isSettingsOpen: boolean;
+  setIsSettingsOpen: (isOpen: boolean) => void;
   
   // Base Stats (High Frequency)
   playerBaseHp: number;
@@ -29,9 +33,13 @@ interface BattleState {
   armyCounts: { player: number; enemy: number };
   setArmyCounts: (player: number, enemy: number) => void;
   
-  // System Monitor (Diagnostics)
+  // Performance Monitor (Diagnostics)
   perfSnapshot: any;
   setPerfSnapshot: (snap: any) => void;
+
+  // Dynamic Simulation Settings
+  settings: SimulationSettings;
+  updateSettings: (partial: Partial<SimulationSettings>) => void;
 
   // Reset
   resetStore: (config: TowerConfig) => void;
@@ -40,6 +48,9 @@ interface BattleState {
 export const useStore = create<BattleState>((set) => ({
   gameState: "SETUP",
   setGameState: (state) => set({ gameState: state }),
+  
+  isSettingsOpen: false,
+  setIsSettingsOpen: (isOpen) => set({ isSettingsOpen: isOpen }),
   
   playerBaseHp: 1000,
   enemyBaseHp: 1000,
@@ -61,6 +72,11 @@ export const useStore = create<BattleState>((set) => ({
   
   perfSnapshot: null,
   setPerfSnapshot: (perfSnapshot) => set({ perfSnapshot }),
+
+  settings: INITIAL_SETTINGS,
+  updateSettings: (partial) => set((state) => ({ 
+    settings: { ...state.settings, ...partial } 
+  })),
 
   resetStore: (config) => set({
     gameState: "PLAYING",

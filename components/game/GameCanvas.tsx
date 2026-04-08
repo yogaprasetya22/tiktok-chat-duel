@@ -14,13 +14,15 @@ import {
   useGLTF,
   Sphere,
   Billboard,
-  Text
+  Text,
 } from "@react-three/drei";
-import { Unit } from "./Unit";
+import { useControls, Leva } from "leva";
+// // import { Unit } from "./Unit"; (Removed as requested)
 import { Base } from "./Base";
 import { Chessboard } from "./Chessboard";
 import { VFXProvider, useVFX } from "./VFXManager";
-import { UnitHUDBatcher } from "./UnitHUDBatcher";
+import { BattleArmy } from "./BattleArmy";
+import { DamageHUDBatcher } from "./DamageHUDBatcher";
 import { ActiveUnit, TowerConfig, DamageText, MapObstacle } from "../../hooks/useBattleSystem";
 import { useStore } from "../../hooks/useStore";
 import React, { useState, useEffect, useRef } from "react";
@@ -30,6 +32,8 @@ import * as THREE from 'three';
 // Map removed as requested. Base ground provided by OrbitControls/Sky.
 
 // --- Camera Director for Epic Endings & Shake ---
+const _targetPos = new THREE.Vector3(); // Fix #4: zero-alloc, reused per frame
+
 const CameraDirector = () => {
   const { camera } = useThree();
   const { spawnVFX } = useVFX();
@@ -58,9 +62,10 @@ const CameraDirector = () => {
     // 2. Cinematic Ending
     if (gameState === 'WON' || gameState === 'LOST') {
       const targetZ = gameState === 'WON' ? -18 : 18;
-      const targetPos = new THREE.Vector3(0, 7, targetZ + (gameState === 'WON' ? -12 : 12));
+      // Fix #4: reuse _targetPos instead of new THREE.Vector3() each frame
+      _targetPos.set(0, 7, targetZ + (gameState === 'WON' ? -12 : 12));
 
-      camera.position.lerp(targetPos, 0.05);
+      camera.position.lerp(_targetPos, 0.05);
       camera.lookAt(0, 0, targetZ);
 
       if (!hasTriggeredRef.current) {
@@ -98,7 +103,6 @@ const PerformanceProbe = ({ syncPerformance }: { syncPerformance: (data: any) =>
 };
 
 interface GameCanvasProps {
-  activeUnits: ActiveUnit[];
   towerConfig: TowerConfig;
   damageTexts: DamageText[];
   isCinematic: boolean;
@@ -108,10 +112,13 @@ interface GameCanvasProps {
   unitRegistry: React.RefObject<Map<string, { hp: number; status: string; position: number[]; isBoss: boolean; maxHp?: number }>>;
   syncPerformance: (data: any) => void;
   isFullscreen?: boolean;
+  updateSimulation: (delta: number) => void;
+  damageQueue: React.RefObject<any[]>;
+  settingsRef: React.RefObject<any>;
+  setTowerConfig?: (config: TowerConfig | ((prev: TowerConfig) => TowerConfig)) => void;
 }
 
 export const GameCanvas = React.memo(({
-  activeUnits,
   towerConfig,
   damageTexts,
   isCinematic,
@@ -120,19 +127,84 @@ export const GameCanvas = React.memo(({
   unitRegistry,
   syncPerformance,
   isFullscreen,
+  updateSimulation,
+  damageQueue,
+  settingsRef,
+  setTowerConfig,
 }: GameCanvasProps) => {
   const [dpr, setDpr] = useState(1.0);
   const gameState = useStore(s => s.gameState);
+  const isSettingsOpen = useStore(s => s.isSettingsOpen);
+
+  // --- High-Performance Simulation Controls (Leva) ---
+  useControls("Military Tuning", {
+    hpMult: { 
+      value: settingsRef.current.globalHpMultiplier, min: 0.1, max: 5, step: 0.1, label: "HP Multiplier",
+      onChange: (v) => { settingsRef.current.globalHpMultiplier = v; }
+    },
+    dmgMult: { 
+      value: settingsRef.current.globalDamageMultiplier, min: 0.1, max: 5, step: 0.1, label: "DMG Multiplier",
+      onChange: (v) => { settingsRef.current.globalDamageMultiplier = v; }
+    },
+    speedMult: { 
+      value: settingsRef.current.globalSpeedMultiplier, min: 0.1, max: 3, step: 0.1, label: "Speed Multiplier",
+      onChange: (v) => { settingsRef.current.globalSpeedMultiplier = v; }
+    },
+    cooldown: { 
+      value: settingsRef.current.globalAttackCooldown, min: 100, max: 2000, step: 50, label: "Atk Cooldown (ms)",
+      onChange: (v) => { settingsRef.current.globalAttackCooldown = v; }
+    },
+    crit: { 
+      value: settingsRef.current.critChance, min: 0, max: 1, step: 0.05, label: "Crit Chance",
+      onChange: (v) => { settingsRef.current.critChance = v; }
+    },
+    maxCap: {
+      value: towerConfig.maxUnits, min: 10, max: 300, step: 5, label: "Max Units",
+      onChange: (v) => { if (setTowerConfig) setTowerConfig(prev => ({...prev, maxUnits: v})); }
+    },
+    baseHp: {
+      value: towerConfig.baseHp, min: 500, max: 20000, step: 100, label: "Tower HP",
+      onChange: (v) => { if (setTowerConfig) setTowerConfig(prev => ({...prev, baseHp: v})); }
+    }
+  }, { collapsed: false });
+
+  useControls("World Tuning", {
+    timeScale: { 
+      value: settingsRef.current.timeScale, min: 0.1, max: 3.0, step: 0.1, label: "Time Scale",
+      onChange: (v) => { settingsRef.current.timeScale = v; }
+    },
+    unitScale: { 
+      value: settingsRef.current.unitScale, min: 0.5, max: 3.0, step: 0.1, label: "Unit Visual Scale",
+      onChange: (v) => { settingsRef.current.unitScale = v; }
+    }
+  }, { collapsed: true });
 
   return (
     <div className={`w-full h-full overflow-hidden relative bg-black select-none touch-none ${isFullscreen ? '' : 'rounded-2xl border border-white/10 shadow-2xl'}`}>
+      
+      {/* Engine Bridge: Leva Console (Bottom Left) */}
+      <div className={`absolute bottom-6 left-6 z-[1200] w-80 transition-all duration-300 shadow-2xl ${
+        !isSettingsOpen ? 'opacity-0 pointer-events-none translate-y-4' : 'opacity-100 pointer-events-auto translate-y-0'
+      }`}>
+        <Leva 
+          hidden={!isSettingsOpen} 
+          theme={{
+            colors: { accent1: '#6366f1', accent2: '#4f46e5', accent3: '#4338ca', elevation1: '#09090bee', elevation2: '#18181bee', elevation3: '#27272aee' },
+            radii: { xs: '8px', sm: '12px', lg: '20px' }
+          }}
+          fill
+          flat
+          titleBar={{ title: "Supreme Engine Tuning", drag: false }}
+        />
+      </div>
+
       <div className="absolute top-4 left-4 z-10 bg-black/50 p-2 rounded text-[10px] text-white backdrop-blur-md border border-white/10 pointer-events-none">
         DPR: {dpr.toFixed(2)}
       </div>
       <Stats className="!absolute !bottom-4 !right-4 !left-auto !top-auto opacity-50 grayscale" />
       <Canvas
         dpr={dpr}
-        camera={{ position: [0, 20, 30], fov: 40 }}
+        camera={{ position: [0, 20, 60], fov: 40, far: 500 }}
         gl={{
           antialias: false,
           powerPreference: "high-performance",
@@ -150,7 +222,7 @@ export const GameCanvas = React.memo(({
           enablePan={!isCinematic && gameState === 'PLAYING'}
           maxPolarAngle={Math.PI / 2.1}
           minPolarAngle={Math.PI / 12}
-          maxDistance={120}
+          maxDistance={220}
           minDistance={10}
         />
 
@@ -173,9 +245,15 @@ export const GameCanvas = React.memo(({
 
         <VFXProvider>
           <CameraDirector />
-          <UnitHUDBatcher unitRegistry={unitRegistry} />
 
-          {/* Bridge removed. Units now battle throughout the natural forest clearing. */}
+          <BattleArmy
+            unitRegistry={unitRegistry}
+            towerConfig={towerConfig}
+            updateSimulation={updateSimulation}
+            settingsRef={settingsRef}
+          />
+
+          <DamageHUDBatcher damageQueue={damageQueue} />
 
           <Base
             maxHp={towerConfig.baseHp}
@@ -191,24 +269,6 @@ export const GameCanvas = React.memo(({
             name={towerConfig.enemy.name}
             customColor={towerConfig.enemy.color}
           />
-
-          {activeUnits.map((u) => (
-            <Unit
-              key={u.id}
-              id={u.id}
-              userName={u.userName}
-              type={u.type}
-              level={u.level}
-              hp={u.hp}
-              maxHp={u.maxHp}
-              status={u.status}
-              teamColor={u.type === 'player' ? towerConfig.player.color : towerConfig.enemy.color}
-              isDying={u.isDying}
-              isBoss={u.isBoss}
-              debug={debug}
-              unitRegistry={unitRegistry}
-            />
-          ))}
 
           {/* DEBUG OBSTACLES */}
           {debug && mapObstacles.map((obs: MapObstacle, i: number) => (
