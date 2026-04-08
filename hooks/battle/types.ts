@@ -27,6 +27,7 @@ export interface TowerConfig {
     player: TeamConfig;
     enemy: TeamConfig;
     baseHp: number;
+    baseDistance?: number;
     maxUnits: number;
     unitConfig: {
         hpMultiplier: number;

@@ -160,6 +160,7 @@ export const useBattleSystem = () => {
             giftKeyword: "coffee",
         },
         baseHp: 1000,
+        baseDistance: 24,
         maxUnits: 20,
         unitConfig: {
             hpMultiplier: 1.0,
@@ -344,12 +345,14 @@ export const useBattleSystem = () => {
                 const unitId = `${type}-${Math.random().toString(36).substring(2, 9)}`;
                 const laneOffset = isBoss ? 0 : pickRandom(LANE_OFFSETS);
 
+                const distance = towerConfigRef.current.baseDistance || 24;
                 const jitterX = (Math.random() - 0.5) * 8.0;
                 const jitterZ = (Math.random() - 0.5) * 8.0;
+                const spawnZ = type === "player" ? distance - 2 : -(distance) + 2;
                 const spawnPos = [
                     laneOffset + jitterX,
                     -0.4,
-                    (type === "player" ? 22 : -22) + jitterZ,
+                    spawnZ + jitterZ,
                 ] as [number, number, number];
 
                 const vehicle = new YUKA.Vehicle();
@@ -366,8 +369,10 @@ export const useBattleSystem = () => {
                 obstacleAvoidance.weight = 3.0;
                 vehicle.steering.add(obstacleAvoidance);
 
+                const distance2 = towerConfigRef.current.baseDistance || 24;
+                const targetBaseZ = type === "player" ? -distance2 : distance2;
                 const seek = new YUKA.SeekBehavior(
-                    new YUKA.Vector3(laneOffset, -0.4, type === "player" ? ENEMY_BASE_Z : PLAYER_BASE_Z),
+                    new YUKA.Vector3(laneOffset, -0.4, targetBaseZ),
                 );
                 seek.weight = 1.2;
                 vehicle.steering.add(seek);
@@ -589,7 +594,7 @@ export const useBattleSystem = () => {
                     if (dSq > settingsRef.current.perceptionRadiusSq && !target.isBoss) continue;
 
                     let score = 5000 / (dSq + 1);
-                    const myBaseZ = u.type === 'player' ? PLAYER_BASE_Z : ENEMY_BASE_Z;
+                    const myBaseZ = u.type === 'player' ? -(towerConfigRef.current.baseDistance || 24) : (towerConfigRef.current.baseDistance || 24);
                     const targetDistToBase = Math.abs(tData.position[2] - myBaseZ);
 
                     // Frontline Discipline: penalise cross-lane targeting
@@ -674,7 +679,7 @@ export const useBattleSystem = () => {
                         const swagger = Math.sin(now * 0.001 + uData.jitterOffset) * settingsRef.current.laneSwaggerAmp;
                         const laneTargetX = uData.laneOffset + swagger;
                         const currentX = vehicle.position.x;
-                        const targetZ = u.type === "player" ? ENEMY_BASE_Z : PLAYER_BASE_Z;
+                        const targetZ = u.type === "player" ? -(towerConfigRef.current.baseDistance || 24) : (towerConfigRef.current.baseDistance || 24);
                         const spring = Math.abs(currentX - laneTargetX) > settingsRef.current.laneDriftThreshold ? settingsRef.current.laneSpringFar : settingsRef.current.laneSpringNear;
                         seek.target.set(laneTargetX + (currentX - laneTargetX) * (1 - spring), -0.4, targetZ);
                     }
@@ -693,6 +698,11 @@ export const useBattleSystem = () => {
                     vehicle.maxSpeed = targetMaxSpeed;
                 }
                 
+                const limitEdgeZ = (towerConfigRef.current.baseDistance || 24) - 2;
+                // Fix Base Attacker positioning based on targeted base
+                if (vehicle.position.z < -limitEdgeZ) vehicle.position.z = -limitEdgeZ;
+                if (vehicle.position.z > limitEdgeZ) vehicle.position.z = limitEdgeZ;
+
                 if (uData.status === "attacking") vehicle.velocity.set(0, 0, 0);
                 uData.position[0] = vehicle.position.x;
                 uData.position[2] = vehicle.position.z;

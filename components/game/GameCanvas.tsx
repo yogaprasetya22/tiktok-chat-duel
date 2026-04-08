@@ -17,11 +17,12 @@ import {
   Text,
 } from "@react-three/drei";
 import { useControls, Leva } from "leva";
-// // import { Unit } from "./Unit"; (Removed as requested)
+import { EffectComposer, Bloom } from '@react-three/postprocessing';
 import { Base } from "./Base";
 import { Chessboard } from "./Chessboard";
 import { VFXProvider, useVFX } from "./VFXManager";
 import { BattleArmy } from "./BattleArmy";
+import { StormEnvironment } from "./StormEnvironment";
 import { DamageHUDBatcher } from "./DamageHUDBatcher";
 import { ActiveUnit, TowerConfig, DamageText, MapObstacle } from "../../hooks/useBattleSystem";
 import { useStore } from "../../hooks/useStore";
@@ -165,6 +166,10 @@ export const GameCanvas = React.memo(({
     baseHp: {
       value: towerConfig.baseHp, min: 500, max: 20000, step: 100, label: "Tower HP",
       onChange: (v) => { if (setTowerConfig) setTowerConfig(prev => ({...prev, baseHp: v})); }
+    },
+    baseDist: {
+      value: towerConfig.baseDistance || 24, min: 10, max: 80, step: 2, label: "Jarak Base",
+      onChange: (v) => { if (setTowerConfig) setTowerConfig(prev => ({...prev, baseDistance: v})); }
     }
   }, { collapsed: false });
 
@@ -226,22 +231,11 @@ export const GameCanvas = React.memo(({
           minDistance={10}
         />
 
-        {/* Daytime / Sun Atmosphere (Siang) */}
-        <Sky sunPosition={[100, 20, 100]} />
-        <ambientLight intensity={1.2} />
-        <directionalLight
-          position={[10, 20, 10]}
-          intensity={2.5}
-          castShadow
-          shadow-mapSize={[512, 512]} // Optimized for RAM
-        />
+        <EffectComposer multisampling={0}>
+          <Bloom luminanceThreshold={0.5} luminanceSmoothing={0.9} intensity={1.5} mipmapBlur />
+        </EffectComposer>
 
-        {/* Basic Ground for Battle Simulator */}
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.51, 0]} receiveShadow>
-          <planeGeometry args={[200, 200]} />
-          <meshStandardMaterial color="#2d2d2d" roughness={0.8} />
-        </mesh>
-        <DreiEnvironment preset="city" />
+        <StormEnvironment baseDistance={towerConfig.baseDistance || 24} />
 
         <VFXProvider>
           <CameraDirector />
@@ -257,14 +251,14 @@ export const GameCanvas = React.memo(({
 
           <Base
             maxHp={towerConfig.baseHp}
-            position={[0, 0, 24]}
+            position={[0, 0, towerConfig.baseDistance || 24]}
             type="player"
             name={towerConfig.player.name}
             customColor={towerConfig.player.color}
           />
           <Base
             maxHp={towerConfig.baseHp}
-            position={[0, 0, -24]}
+            position={[0, 0, -(towerConfig.baseDistance || 24)]}
             type="enemy"
             name={towerConfig.enemy.name}
             customColor={towerConfig.enemy.color}
