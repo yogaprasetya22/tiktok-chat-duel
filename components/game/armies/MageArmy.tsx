@@ -246,9 +246,19 @@ export function MageArmy({ unitsMap, towerConfig, settingsRef, spellsRef, simTim
       if (u.isDying) targetAnim = 'Death';
       else if (uData.status === 'marching') targetAnim = 'Run';
       else if (uData.status === 'attacking') {
-        const timeSinceAtk = (simTimeRef.current || 0) - (u.lastAttackTime || 0);
-        // Play attack animation for 800ms, then go back to Idle/Ready pose while waiting for next cooldown
-        targetAnim = timeSinceAtk < 800 ? 'Attack' : 'Idle';
+        // Dynamic search for attack animation
+        const attackKeywords = ['spell', 'cast', 'shoot', 'attack', 'slash'];
+        let foundAttack = '';
+        
+        for (const kw of attackKeywords) {
+          const matched = Object.keys(pItem.actions).find(name => name.toLowerCase().includes(kw));
+          if (matched) {
+            foundAttack = matched;
+            break;
+          }
+        }
+        
+        targetAnim = foundAttack || 'Idle';
       }
       if (!pItem.actions[targetAnim]) targetAnim = 'Idle';
 

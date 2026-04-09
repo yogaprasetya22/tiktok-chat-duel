@@ -224,7 +224,10 @@ export function MarksmanArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, v
       else if (uData.status === 'marching') targetAnim = 'Run';
       else if (uData.status === 'attacking') {
         const timeSinceAtk = (simTimeRef.current || 0) - (u.lastAttackTime || 0);
-        targetAnim = timeSinceAtk < 600 ? 'Shoot_OneHanded' : 'Idle';
+        const shootName = pItem.actions['Shoot_OneHanded'] ? 'Shoot_OneHanded' : 
+                          (pItem.actions['Shoot'] ? 'Shoot' : 
+                          (pItem.actions['Attack'] ? 'Attack' : 'Idle'));
+        targetAnim = timeSinceAtk < 600 ? shootName : 'Idle';
       }
       if (!pItem.actions[targetAnim]) targetAnim = 'Idle';
 
