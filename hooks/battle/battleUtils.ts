@@ -14,20 +14,27 @@ import type { TowerConfig, UnitStats, SimulationSettings } from "./types";
 export const getUnitStats = (
     level: number,
     config: TowerConfig["unitConfig"],
-    settings: SimulationSettings, // Fix: support dynamic settings in spawn
+    settings: SimulationSettings, 
 ): UnitStats => ({
     hp: Math.floor(100 * Math.pow(2.2, level - 1) * config.hpMultiplier * settings.globalHpMultiplier),
     maxHp: Math.floor(100 * Math.pow(2.2, level - 1) * config.hpMultiplier * settings.globalHpMultiplier),
+    hpRegen: 0,
     attack: Math.floor(25 * Math.pow(1.8, level - 1) * config.attackMultiplier * settings.globalDamageMultiplier),
+    physicalDefense: 0,
+    magicDefense: 0,
+    physicalPen: 0,
+    magicPen: 0,
+    lifesteal: 0,
+    spellVamp: 0,
     speed: 3.2 * config.speedMultiplier * settings.globalSpeedMultiplier,
-    range: 3.0 * settings.unitScale, // Slightly increased base range for better engagement
+    range: 3.0 * settings.unitScale,
+    tenacity: 0,
+    cooldownReduction: 0,
+    critDamage: 2.0,
+    critChance: 0,
     level,
 });
 
-/**
- * Applies boss multipliers to a unit's stats in-place.
- * Call this after getUnitStats() if isBoss === true.
- */
 export const applyBossModifiers = (stats: UnitStats): UnitStats => ({
     ...stats,
     hp: stats.hp * 10,
@@ -38,16 +45,27 @@ export const applyBossModifiers = (stats: UnitStats): UnitStats => ({
 });
 
 /**
- * Calculates final damage with optional critical hit.
+ * Calculates final damage with defense and penetration logic.
  */
 export const calcDamage = (
-    baseAttack: number,
-    critChance: number,
-    critMultiplier: number,
+    attacker: UnitStats,
+    target: UnitStats,
+    isMagic: boolean = false
 ): { damage: number; isCrit: boolean } => {
-    const isCrit = Math.random() < critChance;
+    const isCrit = Math.random() < attacker.critChance;
+    const critMult = isCrit ? attacker.critDamage : 1.0;
+    
+    const baseDamage = attacker.attack * critMult;
+    
+    // Defense calculation: dmg = base * (100 / (100 + effectiveDefense))
+    const defense = isMagic ? target.magicDefense : target.physicalDefense;
+    const pen = isMagic ? attacker.magicPen : attacker.physicalPen;
+    const effectiveDefense = Math.max(0, defense - pen);
+    
+    const damage = Math.floor(baseDamage * (100 / (100 + effectiveDefense)));
+    
     return {
-        damage: isCrit ? Math.floor(baseAttack * critMultiplier) : baseAttack,
+        damage: Math.max(1, damage),
         isCrit,
     };
 };

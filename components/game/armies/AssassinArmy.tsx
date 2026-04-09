@@ -8,14 +8,12 @@ import { SkeletonUtils } from 'three-stdlib';
 import { useVFX } from '../VFXManager';
 import { ActiveUnit, TowerConfig, SimulationSettings } from '../../../hooks/battle/types';
 import { useStore } from '../../../hooks/useStore';
-import { SpellEntry, SpellsRegistryRef } from '../MageSpellEffect';
 import { PLAYER_BASE_Z, ENEMY_BASE_Z } from '../../../hooks/battle/constants';
 
-interface MageArmyProps {
+interface AssassinArmyProps {
   unitsMap: React.RefObject<Map<string, any>>;
   towerConfig: TowerConfig;
   settingsRef: React.RefObject<SimulationSettings>;
-  spellsRef: SpellsRegistryRef;
   simTimeRef: React.RefObject<number>;
   vehicles: React.RefObject<Map<string, any>>;
   unitIndex: React.RefObject<Map<string, any>>;
@@ -23,33 +21,33 @@ interface MageArmyProps {
 
 const POOL_SIZE = 30;
 
-export function MageArmy({ unitsMap, towerConfig, settingsRef, spellsRef, simTimeRef, vehicles, unitIndex }: MageArmyProps) {
+export function AssassinArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, vehicles, unitIndex }: AssassinArmyProps) {
   const poolMapRef = useRef<Map<string, number>>(new Map());
   const availableIndicesRef = useRef<number[]>([]);
   const activeSetRef = useRef<Set<string>>(new Set());
-  const frameCountRef = useRef(0);
-  const prevStatusRef = useRef<Map<string, string>>(new Map());
-  const { spawnVFX } = useVFX();
   const lastVFXRef = useRef<Map<string, number>>(new Map());
+  const frameCountRef = useRef(0);
+  const { spawnVFX } = useVFX();
 
   useEffect(() => {
     availableIndicesRef.current = Array.from({ length: POOL_SIZE }, (_, i) => i);
   }, []);
 
-  const mage1 = useGLTF('/assets-model/Witch.glb') as any;
-  const mage2 = useGLTF('/assets-model/Wizard.glb') as any;
+  const n1 = useGLTF('/assets-model/Ninja_Female.glb') as any;
+  const n2 = useGLTF('/assets-model/Ninja_Male.glb') as any;
 
   const characterPool = useMemo(() => {
     const items: any[] = [];
-    if (!mage1.scene || !mage2.scene) return [];
-    const availableAssets = [mage1, mage2];
+    if (!n1.scene || !n2.scene) return [];
+    const assets = [n1, n2];
+
     for (let i = 0; i < POOL_SIZE; i++) {
-        const selectedAsset = availableAssets[Math.floor(Math.random() * availableAssets.length)];
-        const clone = SkeletonUtils.clone(selectedAsset.scene);
+        const selected = assets[Math.floor(Math.random() * assets.length)];
+        const clone = SkeletonUtils.clone(selected.scene);
         const mixer = new THREE.AnimationMixer(clone);
         const actions: Record<string, THREE.AnimationAction> = {};
-        if (selectedAsset.animations) {
-          selectedAsset.animations.forEach((clip: THREE.AnimationClip) => { actions[clip.name] = mixer.clipAction(clip); });
+        if (selected.animations) {
+          selected.animations.forEach((clip: THREE.AnimationClip) => { actions[clip.name] = mixer.clipAction(clip); });
         }
         clone.traverse((child: any) => {
           if (child.isMesh) {
@@ -61,7 +59,7 @@ export function MageArmy({ unitsMap, towerConfig, settingsRef, spellsRef, simTim
         items.push({ group: clone, mixer, actions, currentAnim: '', lastUpdate: 0, rotation: 0, initialized: false });
     }
     return items;
-  }, [mage1, mage2]);
+  }, [n1, n2]);
 
   useFrame((state, delta) => {
     frameCountRef.current++;
@@ -79,20 +77,20 @@ export function MageArmy({ unitsMap, towerConfig, settingsRef, spellsRef, simTim
     // Filter units of this class
     const myUnits: any[] = [];
     rawMap.forEach((u: any, id: string) => {
-        if (!u || u.hp <= 0 || u.unitClass !== 'mage') return;
+        if (!u || u.hp <= 0 || u.unitClass !== 'assassin') return;
         u.id = id;
         myUnits.push(u);
     });
 
-    // --- 1. BRAIN LOOP: Process ALL units of this class for AI/Steering ---
+    // --- 1. BRAIN LOOP ---
     myUnits.forEach((u) => {
         const id = u.id;
         const uData = rawMap.get(id);
         if (!uData) return;
 
-        // Targeting (Throttled)
+        // Targeting
         if (frameCountRef.current % 10 === 0 || !u.targetId) {
-            let bestDistSq = uData.perceptionRadiusSq || 3600; 
+            let bestDistSq = uData.perceptionRadiusSq || 4225;
             let bestTargetId = undefined;
             rawMap.forEach((potential, pid) => {
                 if (pid === id || potential.hp <= 0 || potential.isDying) return;
@@ -101,10 +99,7 @@ export function MageArmy({ unitsMap, towerConfig, settingsRef, spellsRef, simTim
                 const dx = uData.position[0] - potential.position[0];
                 const dz = uData.position[2] - potential.position[2];
                 const dSq = dx * dx + dz * dz;
-                const perceptionRadiusSq = uData.perceptionRadiusSq || 2025;
-                const chaseRangeSq = (uData.chaseRange || 60) * (uData.chaseRange || 60);
-                const switchThreshold = pid === u.targetId ? 1.0 : 0.5;
-                if (dSq < perceptionRadiusSq && dSq < bestDistSq * switchThreshold && dSq < chaseRangeSq) {
+                if (dSq < bestDistSq) {
                     bestDistSq = dSq;
                     bestTargetId = pid;
                 }
@@ -114,15 +109,6 @@ export function MageArmy({ unitsMap, towerConfig, settingsRef, spellsRef, simTim
             if (coreUnit) coreUnit.targetId = bestTargetId;
         }
 
-        // VFX & Spark Logic (Ensure launch effects always show)
-        const currentAtk = u.lastAttackTime || 0;
-        const prevAtk = lastVFXRef.current.get(id) || 0;
-        if (currentAtk > prevAtk) {
-             const launchY = uData.position[1] + 1.8;
-             spawnVFX([uData.position[0], launchY, uData.position[2]], 'spark', u.type === 'player' ? towerConfig.player.color : towerConfig.enemy.color);
-             lastVFXRef.current.set(id, currentAtk);
-        }
-
         // Status
         if (u.targetId) {
             const target = rawMap.get(u.targetId);
@@ -130,46 +116,40 @@ export function MageArmy({ unitsMap, towerConfig, settingsRef, spellsRef, simTim
                 const dx = uData.position[0] - target.position[0];
                 const dz = uData.position[2] - target.position[2];
                 const distSq = dx * dx + dz * dz;
-                const rangeSq = (u.range || 12) * (u.range || 12);
+                const rangeSq = (u.range || 1.1) * (u.range || 1.1);
                 uData.status = distSq <= rangeSq ? 'attacking' : 'marching';
-            } else {
-                u.targetId = undefined;
-            }
+            } else { u.targetId = undefined; }
         } else {
-            const baseZ = u.type === 'player' ? ENEMY_BASE_Z : PLAYER_BASE_Z; 
+            const baseZ = u.type === 'player' ? ENEMY_BASE_Z : PLAYER_BASE_Z;
             const distToBaseSq = Math.pow(uData.position[2] - baseZ, 2);
-            uData.status = distToBaseSq < 225 ? 'attacking' : 'marching';
+            uData.status = distToBaseSq < 9 ? 'attacking' : 'marching';
         }
 
-        // Steering & Rotation
+        // VFX (Melee Slashes)
+        const currentAtk = u.lastAttackTime || 0;
+        const prevAtk = lastVFXRef.current.get(id) || 0;
+        if (currentAtk > prevAtk) {
+            const forwardX = Math.sin(uData.rotation[1]) * 1.2;
+            const forwardZ = Math.cos(uData.rotation[1]) * 1.2;
+            spawnVFX([uData.position[0] + forwardX, 1.2, uData.position[2] + forwardZ], 'slash', '#ffffff');
+            lastVFXRef.current.set(id, currentAtk);
+        }
+
+        // Steering
         const vehicle = vehicles?.current?.get(id);
         if (vehicle) {
             let isChasing = false;
-            let isKiting = false;
             if (u.targetId) {
                 const target = rawMap.get(u.targetId);
                 if (target) {
-                    const dx = uData.position[0] - target.position[0];
-                    const dz = uData.position[2] - target.position[2];
-                    const distSq = dx * dx + dz * dz;
-                    const kitingThresholdSq = 49; 
                     vehicle.steering.behaviors.forEach((b: any) => {
                         if (b.constructor.name === 'SeekBehavior') {
-                            if (distSq < kitingThresholdSq) {
-                                const safeDirZ = u.type === 'player' ? 1 : -1;
-                                const retreatX = uData.position[0] + (uData.position[0] - target.position[0]) * 2;
-                                const retreatZ = uData.position[2] + (uData.position[2] - target.position[2]) * 2 + (safeDirZ * 5);
-                                b.target.set(retreatX, 0, retreatZ);
-                                isKiting = true;
-                            } else {
-                                // ENCIRCLEMENT for Mages (They spread out even more)
-                                const totalVal = id.split('-').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0);
-                                const angle = (totalVal % 360) * (Math.PI / 180);
-                                const encRadius = (settings.encirclementRadius || 0.75) * 2.0; 
-                                const offsetX = Math.cos(angle) * encRadius;
-                                const offsetZ = Math.sin(angle) * encRadius;
-                                b.target.set(target.position[0] + offsetX, 0, target.position[2] + offsetZ);
-                            }
+                            const totalVal = id.split('-').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0);
+                            const angle = (totalVal % 360) * (Math.PI / 180);
+                            const orbitRadius = uData.encirclementRadius || 3.0;
+                            const offsetX = Math.cos(angle) * orbitRadius;
+                            const offsetZ = Math.sin(angle) * orbitRadius;
+                            b.target.set(target.position[0] + offsetX, 0, target.position[2] + offsetZ);
                             isChasing = true;
                         }
                     });
@@ -179,13 +159,13 @@ export function MageArmy({ unitsMap, towerConfig, settingsRef, spellsRef, simTim
                 vehicle.steering.behaviors.forEach((b: any) => {
                     if (b.constructor.name === 'SeekBehavior') {
                         const baseZ = u.type === 'player' ? ENEMY_BASE_Z : PLAYER_BASE_Z;
-                        const amp = uData.laneSwaggerAmp || 0.5;
-                        const swagger = Math.sin((id.length * 8) + (uData.jitterOffset || 0)) * amp;
+                        const amp = uData.laneSwaggerAmp || 0.8;
+                        const swagger = Math.sin((id.length * 10) + (uData.jitterOffset || 0)) * amp;
                         b.target.set((uData.laneOffset || 0) + swagger, 0, baseZ);
                     }
                 });
             }
-            vehicle.maxSpeed = (uData.status === 'attacking' || u.isDying) ? 0 : (u.speed || 3) * (settings.globalSpeedMultiplier || 1);
+            vehicle.maxSpeed = (uData.status === 'attacking' || u.isDying) ? 0 : (u.speed || 4) * (settings.globalSpeedMultiplier || 1);
             
             // Rotation
             const velSq = vehicle.velocity.x ** 2 + vehicle.velocity.z ** 2;
@@ -202,10 +182,10 @@ export function MageArmy({ unitsMap, towerConfig, settingsRef, spellsRef, simTim
         }
     });
 
-    // --- 2. ACTOR LOOP: Process POOL_SIZE units for rendering ---
+    // --- 2. ACTOR LOOP ---
     myUnits.sort((a, b) => {
-        if (a.isBoss !== b.isBoss) return -1;
-        return a.dSq - b.dSq;
+      if (a.isBoss !== b.isBoss) return -1;
+      return a.dSq - b.dSq;
     });
     const visibleUnits = myUnits.slice(0, POOL_SIZE);
 
@@ -224,10 +204,10 @@ export function MageArmy({ unitsMap, towerConfig, settingsRef, spellsRef, simTim
           pItem.group.traverse((child: any) => {
             if (child.isMesh) {
               const name = child.name.toLowerCase();
-              if (name.includes('cloth') || name.includes('robe') || name.includes('hat') || name.includes('cape') || name.includes('trim')) {
-                 if (!child._originalMaterial) child._originalMaterial = child.material;
-                 child.material = child.material.clone();
-                 child.material.color.set(teamColor);
+              if (name.includes('cloth') || name.includes('mask') || name.includes('hood') || name.includes('wrap')) {
+                if (!child._originalMaterial) child._originalMaterial = child.material;
+                child.material = child.material.clone();
+                child.material.color.set(teamColor);
               }
             }
           });
@@ -245,11 +225,7 @@ export function MageArmy({ unitsMap, towerConfig, settingsRef, spellsRef, simTim
       let targetAnim = 'Idle';
       if (u.isDying) targetAnim = 'Death';
       else if (uData.status === 'marching') targetAnim = 'Run';
-      else if (uData.status === 'attacking') {
-        const timeSinceAtk = (simTimeRef.current || 0) - (u.lastAttackTime || 0);
-        // Play attack animation for 800ms, then go back to Idle/Ready pose while waiting for next cooldown
-        targetAnim = timeSinceAtk < 800 ? 'Attack' : 'Idle';
-      }
+      else if (uData.status === 'attacking') targetAnim = 'Attack';
       if (!pItem.actions[targetAnim]) targetAnim = 'Idle';
 
       if (pItem.currentAnim !== targetAnim) {
@@ -285,7 +261,7 @@ export function MageArmy({ unitsMap, towerConfig, settingsRef, spellsRef, simTim
         pItem.mixer.update(delta * sf);
         pItem.lastUpdate = time;
       }
-    }); // end visibleUnits.forEach (Removed redundant Engine-handled spell launch)
+    });
 
     poolMapRef.current.forEach((poolIdx, unitId) => {
       if (!_activeSet.has(unitId)) {
@@ -299,10 +275,10 @@ export function MageArmy({ unitsMap, towerConfig, settingsRef, spellsRef, simTim
 
   return (
     <group>
-      {characterPool.map((item, idx) => ( <primitive key={"pool-mage-" + idx} object={item.group} /> ))}
+      {characterPool.map((item, idx) => ( <primitive key={"pool-assassin-" + idx} object={item.group} /> ))}
     </group>
   );
 }
 
-useGLTF.preload('/assets-model/Witch.glb');
-useGLTF.preload('/assets-model/Wizard.glb');
+useGLTF.preload('/assets-model/Ninja_Female.glb');
+useGLTF.preload('/assets-model/Ninja_Male.glb');

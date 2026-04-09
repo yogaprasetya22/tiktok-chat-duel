@@ -8,9 +8,20 @@
 export interface UnitStats {
     hp: number;
     maxHp: number;
+    hpRegen: number;
     attack: number;
+    physicalDefense: number;
+    magicDefense: number;
+    physicalPen: number;
+    magicPen: number;
+    lifesteal: number;
+    spellVamp: number;
     speed: number;
     range: number;
+    tenacity: number;
+    cooldownReduction: number;
+    critDamage: number;
+    critChance: number;
     level?: number;
 }
 
@@ -50,7 +61,7 @@ export interface DamageText {
 export interface ActiveUnit extends UnitStats {
     id: string;
     type: "player" | "enemy";
-    unitClass: "fighter" | "tank" | "mage";
+    unitClass: "fighter" | "tank" | "mage" | "marksman" | "assassin";
     userName: string;
     position?: [number, number, number];
     status: "idling" | "marching" | "attacking";
@@ -60,6 +71,8 @@ export interface ActiveUnit extends UnitStats {
     deathTime?: number;
     isBoss: boolean;
     animationOffset: number;
+    attackCooldown: number;
+    critChance: number;
 }
 
 export interface MapObstacle {
@@ -89,6 +102,7 @@ export interface BattleStats {
 
 /** Internal runtime data for each unit, stored in unitDataRef */
 export interface UnitRuntimeData {
+    id: string;
     hp: number;
     maxHp: number;
     status: string;
@@ -98,6 +112,7 @@ export interface UnitRuntimeData {
     type: 'player' | 'enemy';
     level: number;
     isBoss: boolean;
+    isDummy: boolean;
     laneOffset: number;
     lastAttackTime: number;
     isAttackingBase?: boolean;
@@ -107,7 +122,14 @@ export interface UnitRuntimeData {
     jitterOffset: number;
     isDying?: boolean;
     isKiting?: boolean;
-    unitClass: string;
+    unitClass: "fighter" | "tank" | "mage" | "marksman" | "assassin";
+    
+    // Class Behavior Overrides
+    separationRadius: number;
+    encirclementRadius: number;
+    laneSwaggerAmp: number;
+    perceptionRadiusSq: number;
+    chaseRange: number;
 }
 
 export interface DamageQueueEntry {
@@ -160,3 +182,4 @@ export interface SimulationSettings {
     unitScale: number; // Visual scale multiplier
     vfxIntensity: number;
 }
+

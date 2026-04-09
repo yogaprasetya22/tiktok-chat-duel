@@ -14,13 +14,14 @@ interface FighterArmyProps {
   unitsMap: React.RefObject<Map<string, any>>;
   towerConfig: TowerConfig;
   settingsRef: React.RefObject<SimulationSettings>;
+  simTimeRef: React.RefObject<number>;
   vehicles: React.RefObject<Map<string, any>>;
   unitIndex: React.RefObject<Map<string, any>>;
 }
 
 const POOL_SIZE = 40;
 
-export function FighterArmy({ unitsMap, towerConfig, settingsRef, vehicles, unitIndex }: FighterArmyProps) {
+export function FighterArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, vehicles, unitIndex }: FighterArmyProps) {
   const poolMapRef = useRef<Map<string, number>>(new Map());
   const availableIndicesRef = useRef<number[]>([]);
   const activeSetRef = useRef<Set<string>>(new Set());
@@ -92,7 +93,7 @@ export function FighterArmy({ unitsMap, towerConfig, settingsRef, vehicles, unit
 
         // Targeting (Throttled)
         if (frameCountRef.current % 10 === 0 || !u.targetId) {
-            let bestDistSq = 1600; 
+            let bestDistSq = uData.perceptionRadiusSq || 3600; 
             let bestTargetId = undefined;
             rawMap.forEach((potential, pid) => {
                 if (pid === id || potential.hp <= 0 || potential.isDying) return;
@@ -102,8 +103,8 @@ export function FighterArmy({ unitsMap, towerConfig, settingsRef, vehicles, unit
                 const dx = uData.position[0] - potential.position[0];
                 const dz = uData.position[2] - potential.position[2];
                 const dSq = dx * dx + dz * dz;
-                const switchThreshold = pid === u.targetId ? 1.0 : 0.6;
-                if (dSq < bestDistSq * switchThreshold) {
+                const chaseRangeSq = (uData.chaseRange || 60) * (uData.chaseRange || 60);
+                if (dSq < bestDistSq && dSq < chaseRangeSq) {
                     bestDistSq = dSq;
                     bestTargetId = pid;
                 }
@@ -131,6 +132,16 @@ export function FighterArmy({ unitsMap, towerConfig, settingsRef, vehicles, unit
             uData.status = distToBaseSq < 9 ? 'attacking' : 'marching';
         }
 
+        // VFX (Melee Slashes)
+        const currentAtk = u.lastAttackTime || 0;
+        const prevAtk = lastVFXRef.current.get(id) || 0;
+        if (currentAtk > prevAtk) {
+             const forwardX = Math.sin(uData.rotation[1]) * 1.5;
+             const forwardZ = Math.cos(uData.rotation[1]) * 1.5;
+             spawnVFX([uData.position[0] + forwardX, 1.2, uData.position[2] + forwardZ], 'slash', '#ffffff');
+             lastVFXRef.current.set(id, currentAtk);
+        }
+
         // Steering & Rotation
         const vehicle = vehicles?.current?.get(id);
         if (vehicle) {
@@ -144,9 +155,9 @@ export function FighterArmy({ unitsMap, towerConfig, settingsRef, vehicles, unit
                             // ENCIRCLEMENT: Add offset based on unit ID to prevent merging into a single point
                             const totalVal = id.split('-').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0);
                             const angle = (totalVal % 360) * (Math.PI / 180);
-                            const encRadius = settings.encirclementRadius || 0.75;
-                            const offsetX = Math.cos(angle) * encRadius;
-                            const offsetZ = Math.sin(angle) * encRadius;
+                            const orbitRadius = uData.encirclementRadius || 1.25;
+                            const offsetX = Math.cos(angle) * orbitRadius;
+                            const offsetZ = Math.sin(angle) * orbitRadius;
                             b.target.set(target.position[0] + offsetX, 0, target.position[2] + offsetZ);
                             isChasing = true;
                         }
@@ -158,7 +169,7 @@ export function FighterArmy({ unitsMap, towerConfig, settingsRef, vehicles, unit
                 vehicle.steering.behaviors.forEach((b: any) => {
                     if (b.constructor.name === 'SeekBehavior') {
                         const baseZ = u.type === 'player' ? ENEMY_BASE_Z : PLAYER_BASE_Z;
-                        const amp = settings.laneSwaggerAmp || 0.5;
+                        const amp = uData.laneSwaggerAmp || 0.5;
                         const swagger = Math.sin((id.length * 8) + (uData.jitterOffset || 0)) * amp;
                         b.target.set((uData.laneOffset || 0) + swagger, 0, baseZ);
                     }
@@ -228,18 +239,6 @@ export function FighterArmy({ unitsMap, towerConfig, settingsRef, vehicles, unit
         targetAnim = pItem.actions['SwordSlash'] ? 'SwordSlash' : (pItem.actions['Attack'] ? 'Attack' : 'Idle');
       }
       if (!pItem.actions[targetAnim]) targetAnim = 'Idle';
-
-      if (uData.status === 'attacking' && u.hp > 0 && !u.isDying) {
-         const now = Date.now();
-         const lastVFX = lastVFXRef.current.get(id) || 0;
-         const cooldown = settings.globalAttackCooldown || 800;
-         if (now - lastVFX > cooldown) {
-            const forwardX = Math.sin(uData.rotation[1]) * 1.5;
-            const forwardZ = Math.cos(uData.rotation[1]) * 1.5;
-            spawnVFX([uData.position[0] + forwardX, 1.2, uData.position[2] + forwardZ], 'slash', '#ffffff');
-            lastVFXRef.current.set(id, now);
-         }
-      }
 
       if (pItem.currentAnim !== targetAnim) {
         const prev = pItem.actions[pItem.currentAnim];

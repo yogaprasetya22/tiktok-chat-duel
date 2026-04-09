@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import React, { createContext, useContext, useRef, useMemo, useCallback } from 'react';
 import { useFrame } from '@react-three/fiber';
 
-export type VFXType = 'hit' | 'death' | 'blood' | 'boss-spawn' | 'mega_explosion' | 'spark' | 'shockwave' | 'fireball_hit' | 'slash';
+export type VFXType = 'hit' | 'death' | 'blood' | 'boss-spawn' | 'mega_explosion' | 'spark' | 'shockwave' | 'fireball_hit' | 'slash' | 'muzzle';
 
 
 interface Particle {
@@ -58,7 +58,7 @@ export const VFXProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // If the same effect is requested at the same spot within 50ms, skip it.
     const key = `${type}-${Math.round(position[0])}-${Math.round(position[2])}`;
     const now = performance.now();
-    if (lastSpawnAt.current[key] && now - lastSpawnAt.current[key] < 50) return;
+    if (lastSpawnAt.current[key] && now - lastSpawnAt.current[key] < 20) return;
     lastSpawnAt.current[key] = now;
 
       const count = type === 'mega_explosion' ? 60 :
@@ -67,7 +67,8 @@ export const VFXProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       type === 'boss-spawn' ? 40 :
         type === 'death' ? 15 :
         type === 'slash' ? 12 :
-          type === 'shockwave' ? 1 : 8;
+          type === 'muzzle' ? 6 :
+            type === 'shockwave' ? 1 : 8;
 
 
     const speed = type === 'mega_explosion' ? 10 :
@@ -75,7 +76,8 @@ export const VFXProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       type === 'blood' ? 6 : 
       type === 'spark' ? 12 :
       type === 'slash' ? 15 :
-        type === 'death' ? 4 : 3;
+        type === 'muzzle' ? 20 :
+          type === 'death' ? 4 : 3;
 
 
     const baseSize = type === 'shockwave' ? 3.5 :
@@ -83,7 +85,8 @@ export const VFXProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       type === 'blood' ? 0.35 : 
       type === 'mega_explosion' ? 0.4 :
         type === 'spark' ? 0.12 : 
-        type === 'slash' ? 0.8 : 0.25;
+        type === 'muzzle' ? 0.6 :
+          type === 'slash' ? 0.8 : 0.25;
 
 
     const baseLife = type === 'shockwave' ? 0.3 :
@@ -91,7 +94,8 @@ export const VFXProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       type === 'blood' ? 0.8 : 
       type === 'mega_explosion' ? 2.5 :
         type === 'spark' ? 0.3 : 
-        type === 'slash' ? 0.25 : 0.6;
+        type === 'muzzle' ? 0.15 :
+          type === 'slash' ? 0.25 : 0.6;
 
 
     for (let i = 0; i < count; i++) {

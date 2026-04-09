@@ -9,6 +9,8 @@ import { ActiveUnit, TowerConfig, SimulationSettings } from '../../hooks/battle/
 import { FighterArmy } from './armies/FighterArmy';
 import { TankArmy } from './armies/TankArmy';
 import { MageArmy } from './armies/MageArmy';
+import { MarksmanArmy } from './armies/MarksmanArmy';
+import { AssassinArmy } from './armies/AssassinArmy';
 import { MageSpellEffect, SpellEntry } from './MageSpellEffect';
 
 interface BattleArmyProps {
@@ -20,12 +22,13 @@ interface BattleArmyProps {
   vehicles: React.RefObject<Map<string, any>>;
   unitIndex: React.RefObject<Map<string, any>>;
   spellsRef: React.RefObject<SpellEntry[]>;
+  vfxRef: React.RefObject<any>;
 }
 
 
 
-const MAX_UNITS = 300;
-const NAME_POOL_SIZE = 80;
+const MAX_UNITS = 350;
+const NAME_POOL_SIZE = 150;
 
 const _healthColor = new THREE.Color();
 const _c1 = new THREE.Color('#22c55e');
@@ -75,7 +78,7 @@ const MLHealthBarShader = {
   `
 };
 
-export function BattleArmy({ unitRegistry, towerConfig, updateSimulation, settingsRef, simTimeRef, vehicles, unitIndex, spellsRef }: BattleArmyProps) {
+export function BattleArmy({ unitRegistry, towerConfig, updateSimulation, settingsRef, simTimeRef, vehicles, unitIndex, spellsRef, vfxRef }: BattleArmyProps) {
 
   const shadowRef = useRef<THREE.InstancedMesh>(null!);
   const healthBgRef = useRef<THREE.InstancedMesh>(null!);
@@ -84,6 +87,13 @@ export function BattleArmy({ unitRegistry, towerConfig, updateSimulation, settin
 
   const { spawnVFX } = useVFX();
   const lastSpawnedRef = useRef<Map<string, number>>(new Map());
+
+  // --- VFX BRIDGE: Link the context to the ref ---
+  useEffect(() => {
+    if (vfxRef && !vfxRef.current) {
+        vfxRef.current = { spawnVFX };
+    }
+  }, [spawnVFX, vfxRef]);
 
 
 
@@ -164,8 +174,8 @@ export function BattleArmy({ unitRegistry, towerConfig, updateSimulation, settin
 
     const activeUnits = cachedActiveUnits.current;
     let hudIdx = 0;
-    const FRUSTUM_CULL_DIST_SQ = 220 * 220; // Increased to show more units from distance
-    const HUD_DETAIL_DIST_SQ = 150 * 150; // Increased to show HP bars from far away
+    const FRUSTUM_CULL_DIST_SQ = 250 * 250; 
+    const HUD_DETAIL_DIST_SQ = 180 * 180; 
     const maxHpAttr = notchRef.current?.geometry.getAttribute('aMaxHp');
 
     activeUnits.forEach((u: any) => {
@@ -259,7 +269,7 @@ export function BattleArmy({ unitRegistry, towerConfig, updateSimulation, settin
       } else { mesh.visible = false; }
     });
 
-    if (time - lastNameCullTime.current > 0.4) { // Increased throttle
+    if (time - lastNameCullTime.current > 0.1) { // Reduced throttle for better responsiveness 
       lastNameCullTime.current = time;
       namePoolMap.current.forEach((slot, uid) => {
         const u = rawMap.get(uid);
@@ -312,9 +322,11 @@ export function BattleArmy({ unitRegistry, towerConfig, updateSimulation, settin
   return (
     <group>
       {/* Separated Unit Rendering by Class (No internal HUD logic inside them anymore!) */}
-      <FighterArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} vehicles={vehicles} unitIndex={unitIndex} />
-      <TankArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} vehicles={vehicles} unitIndex={unitIndex} />
+      <FighterArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} />
+      <TankArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} />
       <MageArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} spellsRef={spellsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} />
+      <MarksmanArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} />
+      <AssassinArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} />
 
       {/* Mage GLSL Spell Projectiles */}
       <MageSpellEffect spellsRef={spellsRef} unitRegistry={unitRegistry} simTimeRef={simTimeRef} />

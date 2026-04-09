@@ -14,13 +14,14 @@ interface TankArmyProps {
   unitsMap: React.RefObject<Map<string, any>>;
   towerConfig: TowerConfig;
   settingsRef: React.RefObject<SimulationSettings>;
+  simTimeRef: React.RefObject<number>;
   vehicles: React.RefObject<Map<string, any>>;
   unitIndex: React.RefObject<Map<string, any>>;
 }
 
 const POOL_SIZE = 30;
 
-export function TankArmy({ unitsMap, towerConfig, settingsRef, vehicles, unitIndex }: TankArmyProps) {
+export function TankArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, vehicles, unitIndex }: TankArmyProps) {
   const poolMapRef = useRef<Map<string, number>>(new Map());
   const availableIndicesRef = useRef<number[]>([]);
   const activeSetRef = useRef<Set<string>>(new Set());
@@ -32,17 +33,21 @@ export function TankArmy({ unitsMap, towerConfig, settingsRef, vehicles, unitInd
     availableIndicesRef.current = Array.from({ length: POOL_SIZE }, (_, i) => i);
   }, []);
 
-  const asset1 = useGLTF('/assets-model/VikingHelmet.glb') as any;
+  const t1 = useGLTF('/assets-model/Viking_Male.glb') as any;
+  const t2 = useGLTF('/assets-model/Viking_Female.glb') as any;
 
   const characterPool = useMemo(() => {
     const items: any[] = [];
-    if (!asset1.scene) return [];
+    if (!t1.scene || !t2.scene) return [];
+    const assets = [t1, t2];
+
     for (let i = 0; i < POOL_SIZE; i++) {
-      const clone = SkeletonUtils.clone(asset1.scene);
+      const selected = assets[Math.floor(Math.random() * assets.length)];
+      const clone = SkeletonUtils.clone(selected.scene);
       const mixer = new THREE.AnimationMixer(clone);
       const actions: Record<string, THREE.AnimationAction> = {};
-      if (asset1.animations) {
-        asset1.animations.forEach((clip: THREE.AnimationClip) => { actions[clip.name] = mixer.clipAction(clip); });
+      if (selected.animations) {
+        selected.animations.forEach((clip: THREE.AnimationClip) => { actions[clip.name] = mixer.clipAction(clip); });
       }
       clone.traverse((child: any) => {
         if (child.isMesh) {
@@ -54,7 +59,7 @@ export function TankArmy({ unitsMap, towerConfig, settingsRef, vehicles, unitInd
       items.push({ group: clone, mixer, actions, currentAnim: '', lastUpdate: 0, rotation: 0, initialized: false });
     }
     return items;
-  }, [asset1]);
+  }, [t1, t2]);
 
   useFrame((state, delta) => {
     frameCountRef.current++;
@@ -85,18 +90,19 @@ export function TankArmy({ unitsMap, towerConfig, settingsRef, vehicles, unitInd
 
       // Targeting (Throttled)
       if (frameCountRef.current % 10 === 0 || !u.targetId) {
-        let bestDistSq = 1600; 
+        let bestDistSq = uData.perceptionRadiusSq || 3600;
         let bestTargetId = undefined;
         rawMap.forEach((potential, pid) => {
            if (pid === id || potential.hp <= 0 || potential.isDying) return;
            if (potential.type === u.type) return;
            if (mode === 'TRAINING' && u.type === 'player' && potential.userName !== 'Training') return;
-           const dx = uData.position[0] - potential.position[0];
-           const dz = uData.position[2] - potential.position[2];
-           const dSq = dx * dx + dz * dz;
-           const perceptionRadiusSq = 900; 
-           const switchThreshold = pid === u.targetId ? 1.0 : 0.6;
-           if (dSq < perceptionRadiusSq && dSq < bestDistSq * switchThreshold) {
+            const dx = uData.position[0] - potential.position[0];
+            const dz = uData.position[2] - potential.position[2];
+            const dSq = dx * dx + dz * dz;
+            const perceptionRadiusSq = uData.perceptionRadiusSq || 900; 
+            const chaseRangeSq = (uData.chaseRange || 50) * (uData.chaseRange || 50);
+            const switchThreshold = pid === u.targetId ? 1.0 : 0.6;
+            if (dSq < perceptionRadiusSq && dSq < bestDistSq * switchThreshold && dSq < chaseRangeSq) {
               bestDistSq = dSq;
               bestTargetId = pid;
            }
@@ -121,8 +127,19 @@ export function TankArmy({ unitsMap, towerConfig, settingsRef, vehicles, unitInd
       } else {
         const baseZ = u.type === 'player' ? ENEMY_BASE_Z : PLAYER_BASE_Z; 
         const distToBaseSq = Math.pow(uData.position[2] - baseZ, 2);
-        uData.status = distToBaseSq < 16 ? 'attacking' : 'marching';
+        uData.status = distToBaseSq < 9 ? 'attacking' : 'marching';
       }
+
+      // VFX Trigger
+        // VFX (Melee Slashes)
+        const currentAtk = u.lastAttackTime || 0;
+        const prevAtk = lastVFXRef.current.get(id) || 0;
+        if (currentAtk > prevAtk) {
+             const forwardX = Math.sin(uData.rotation[1]) * 2.0;
+             const forwardZ = Math.cos(uData.rotation[1]) * 2.0;
+             spawnVFX([uData.position[0] + forwardX, 1.5, uData.position[2] + forwardZ], 'slash', '#ffffff');
+             lastVFXRef.current.set(id, currentAtk);
+        }
 
       // Steering & Rotation
       const vehicle = vehicles?.current?.get(id);
@@ -135,7 +152,8 @@ export function TankArmy({ unitsMap, towerConfig, settingsRef, vehicles, unitInd
                 if (b.constructor.name === 'SeekBehavior') {
                    const totalVal = id.split('-').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0);
                    const angle = (totalVal % 360) * (Math.PI / 180);
-                   const encRadius = (settings.encirclementRadius || 0.75) * 1.5; // Tanks spread out more
+                   const orbitRadius = uData.encirclementRadius || 1.25;
+                   const encRadius = orbitRadius * 1.5; // Tanks spread out more
                    const offsetX = Math.cos(angle) * encRadius;
                    const offsetZ = Math.sin(angle) * encRadius;
                    b.target.set(target.position[0] + offsetX, 0, target.position[2] + offsetZ);
@@ -149,7 +167,7 @@ export function TankArmy({ unitsMap, towerConfig, settingsRef, vehicles, unitInd
            vehicle.steering.behaviors.forEach((b: any) => {
               if (b.constructor.name === 'SeekBehavior') {
                  const baseZ = u.type === 'player' ? ENEMY_BASE_Z : PLAYER_BASE_Z; 
-                 const amp = settings.laneSwaggerAmp || 0.5;
+                 const amp = uData.laneSwaggerAmp || 0.5;
                  const swagger = Math.sin((id.length * 5) + (uData.jitterOffset || 0)) * amp;
                  b.target.set((uData.laneOffset || 0) + swagger, 0, baseZ);
               }
@@ -216,21 +234,17 @@ export function TankArmy({ unitsMap, towerConfig, settingsRef, vehicles, unitInd
       if (u.isDying) targetAnim = 'Death';
       else if (uData.status === 'marching') targetAnim = 'Run';
       else if (uData.status === 'attacking') {
-        targetAnim = pItem.actions['SwordSlash'] ? 'SwordSlash' : (pItem.actions['Attack'] ? 'Attack' : 'Idle');
+        const actionNames = Object.keys(pItem.actions);
+        const foundAttack = actionNames.find(n => 
+          n === 'ShieldBash' || 
+          n === 'Attack' || 
+          n.includes('Attack') || 
+          n.includes('Slash') || 
+          n.includes('Bash')
+        );
+        targetAnim = foundAttack || 'Idle';
       }
       if (!pItem.actions[targetAnim]) targetAnim = 'Idle';
-
-      if (uData.status === 'attacking' && u.hp > 0 && !u.isDying) {
-         const now = Date.now();
-         const lastVFX = lastVFXRef.current.get(id) || 0;
-         const cooldown = settings.globalAttackCooldown || 800;
-         if (now - lastVFX > cooldown) {
-            const forwardX = Math.sin(uData.rotation[1]) * 2.0;
-            const forwardZ = Math.cos(uData.rotation[1]) * 2.0;
-            spawnVFX([uData.position[0] + forwardX, 1.5, uData.position[2] + forwardZ], 'slash', '#ffffff');
-            lastVFXRef.current.set(id, now);
-         }
-      }
 
       if (pItem.currentAnim !== targetAnim) {
         const prev = pItem.actions[pItem.currentAnim];
@@ -284,4 +298,5 @@ export function TankArmy({ unitsMap, towerConfig, settingsRef, vehicles, unitInd
   );
 }
 
-useGLTF.preload('/assets-model/VikingHelmet.glb');
+useGLTF.preload('/assets-model/Viking_Male.glb');
+useGLTF.preload('/assets-model/Viking_Female.glb');

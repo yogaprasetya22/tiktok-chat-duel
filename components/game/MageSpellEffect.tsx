@@ -221,8 +221,9 @@ export function MageSpellEffect({ spellsRef, unitRegistry, simTimeRef }: Props) 
             
             const pulse = Math.sin(time * 30 + j) * 0.05;
 
-            const headScale = 1.3 + pulse;
-            const trailScale = (0.7 - (j * 0.12)) + pulse;
+            const isBullet = (s as any).isBullet;
+            const headScale = (isBullet ? 0.4 : 1.3) + pulse;
+            const trailScale = (isBullet ? 0.2 : (0.7 - (j * 0.12))) + pulse;
             
             const finalScale = (j === 0 ? headScale : Math.max(0.1, trailScale * 0.8));
             _tempObj.scale.setScalar(finalScale);
