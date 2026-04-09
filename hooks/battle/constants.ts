@@ -19,7 +19,7 @@ export let INITIAL_SETTINGS: SimulationSettings = {
     critChance: 0.15,
 
     // Perception
-    perceptionRadiusSq: 18 * 18,
+    perceptionRadiusSq: 22 * 22,
 
     // Social Dynamics
     separationRadius: 0.95,
@@ -49,6 +49,9 @@ export let INITIAL_SETTINGS: SimulationSettings = {
 
     // World & Meta
     timeScale: 1.0,
-    unitScale: 1.0,
+    unitScale: 0.5,
     vfxIntensity: 1.0,
 };
+
+// --- MAGE PROJECTILE SYNC ---
+export const MAGE_PROJECTILE_TIME_MS = 350; // Faster travel for "rocket" feel

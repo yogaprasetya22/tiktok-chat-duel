@@ -11,7 +11,7 @@ export interface UnitStats {
     attack: number;
     speed: number;
     range: number;
-    level: number;
+    level?: number;
 }
 
 export interface TeamConfig {
@@ -50,6 +50,7 @@ export interface DamageText {
 export interface ActiveUnit extends UnitStats {
     id: string;
     type: "player" | "enemy";
+    unitClass: "fighter" | "tank" | "mage";
     userName: string;
     position?: [number, number, number];
     status: "idling" | "marching" | "attacking";
@@ -79,6 +80,8 @@ export interface BattleStats {
     damageDealt: Record<string, number>;
     playerDamage: Record<string, number>;
     enemyDamage: Record<string, number>;
+    playerKills: Record<string, number>;
+    enemyKills: Record<string, number>;
     unitsSpawned: Record<string, number>;
     playerHits: Record<string, number>;
     enemyHits: Record<string, number>;
@@ -102,6 +105,9 @@ export interface UnitRuntimeData {
     lastDamageTime: number;
     victoryPauseUntil: number;
     jitterOffset: number;
+    isDying?: boolean;
+    isKiting?: boolean;
+    unitClass: string;
 }
 
 export interface DamageQueueEntry {

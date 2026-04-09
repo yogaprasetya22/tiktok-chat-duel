@@ -8,7 +8,8 @@ import { useStore } from "../../hooks/useStore";
 import { GameCanvas } from "../../components/game/GameCanvas";
 import { UIOverlay } from "../../components/game/UIOverlay";
 import { BattleMonitor } from "../../components/game/BattleMonitor";
-import { Brain, MessageCircle, Heart, Gift, Radio, Shield, Sword, Skull, BarChart3, Activity, X } from "lucide-react";
+import { Brain, MessageCircle, Heart, Gift, Radio, Shield, Sword, Skull, BarChart3, Activity, X, Zap } from "lucide-react";
+import { TrainingPanel } from "../../components/game/TrainingPanel";
 
 export default function GamePage() {
   const [mounted, setMounted] = useState(false);
@@ -50,10 +51,18 @@ export default function GamePage() {
     updateSimulation,
     damageQueue,
     settingsRef,
+    simTimeRef,
+    vehicles,
+    unitIndex,
+    spellsRef,
   } = useBattleSystem();
+
+
 
   const gameState = useStore(s => s.gameState);
   const armyCounts = useStore(s => s.armyCounts);
+  const gameMode = useStore(s => s.gameMode);
+  const setGameMode = useStore(s => s.setGameMode);
 
   // Mode Testing: Rapid Spawn (0.2s) with Underdog Priority
   const countsRef = useRef({ player: 0, enemy: 0 });
@@ -62,7 +71,7 @@ export default function GamePage() {
   }, [armyCounts]);
 
   useEffect(() => {
-    if (!testingMode || gameState !== "PLAYING") return;
+    if (!testingMode || gameState !== "PLAYING" || gameMode === "TRAINING") return;
 
     const intervalId = setInterval(() => {
       const { player, enemy } = countsRef.current;
@@ -100,7 +109,7 @@ export default function GamePage() {
 
   // Process ALL new TikTok Events for Auto-Battle Spawning
   useEffect(() => {
-    if (messages.length === 0) return;
+    if (messages.length === 0 || gameMode === "TRAINING") return;
 
     let startIndex = -1;
     if (lastProcessedId.current) {
@@ -213,13 +222,30 @@ export default function GamePage() {
           </div>
 
           {connected && (
-            <button
-              onClick={disconnect}
-              className="flex items-center gap-2 px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
-            >
-              <Radio className="w-3 h-3 animate-pulse" />
-              Disconnect
-            </button>
+             <div className="flex items-center gap-3">
+               <button
+                 onClick={() => {
+                   const newMode = gameMode === 'BATTLE' ? 'TRAINING' : 'BATTLE';
+                   setGameMode(newMode);
+                   if (newMode === 'TRAINING') resetBattle();
+                 }}
+                 className={`flex items-center gap-2 px-4 py-2 border rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                   gameMode === 'TRAINING' 
+                   ? 'bg-amber-500/10 border-amber-500/50 text-amber-500 hover:bg-amber-500/20' 
+                   : 'bg-indigo-500/10 border-indigo-500/50 text-indigo-400 hover:bg-indigo-500/20'
+                 }`}
+               >
+                 <Zap className={`w-3 h-3 ${gameMode === 'TRAINING' ? 'animate-pulse' : ''}`} />
+                 {gameMode === 'TRAINING' ? 'Exit Training' : 'Mode Latihan'}
+               </button>
+               <button
+                 onClick={disconnect}
+                 className="flex items-center gap-2 px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+               >
+                 <Radio className="w-3 h-3 animate-pulse" />
+                 Disconnect
+               </button>
+             </div>
           )}
         </header>
 
@@ -256,11 +282,27 @@ export default function GamePage() {
                     updateSimulation={updateSimulation}
                     damageQueue={damageQueue}
                     settingsRef={settingsRef}
+                    simTimeRef={simTimeRef}
+                    vehicles={vehicles}
+                    unitIndex={unitIndex}
+                    spellsRef={spellsRef}
                   />
+
+
     
                   <div className="absolute inset-0 pointer-events-none z-[100]">
                     {(gameState !== 'SETUP' || isFullscreen) && (
                       <UIOverlay {...overlayProps} standalone={false} />
+                    )}
+
+                    {gameMode === 'TRAINING' && (
+                       <div className="pointer-events-auto">
+                          <TrainingPanel 
+                            onSpawnUnit={(type, side, isBoss) => spawnUnit(1, "Training", side, isBoss, type)}
+                            onReset={resetBattle}
+                            onClose={() => setGameMode('BATTLE')}
+                          />
+                       </div>
                     )}
                   </div>
                 </div>

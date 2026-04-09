@@ -17,7 +17,7 @@ import {
   Text,
 } from "@react-three/drei";
 import { useControls, Leva } from "leva";
-import { EffectComposer, Bloom } from '@react-three/postprocessing';
+
 import { Base } from "./Base";
 import { Chessboard } from "./Chessboard";
 import { VFXProvider, useVFX } from "./VFXManager";
@@ -116,8 +116,13 @@ interface GameCanvasProps {
   updateSimulation: (delta: number) => void;
   damageQueue: React.RefObject<any[]>;
   settingsRef: React.RefObject<any>;
+  simTimeRef: React.RefObject<number>;
   setTowerConfig?: (config: TowerConfig | ((prev: TowerConfig) => TowerConfig)) => void;
+  vehicles: React.RefObject<Map<string, any>>;
+  unitIndex: React.RefObject<Map<string, any>>;
+  spellsRef: React.RefObject<any[]>;
 }
+
 
 export const GameCanvas = React.memo(({
   towerConfig,
@@ -131,8 +136,13 @@ export const GameCanvas = React.memo(({
   updateSimulation,
   damageQueue,
   settingsRef,
+  simTimeRef,
   setTowerConfig,
+  vehicles,
+  unitIndex,
+  spellsRef,
 }: GameCanvasProps) => {
+
   const [dpr, setDpr] = useState(1.0);
   const gameState = useStore(s => s.gameState);
   const isSettingsOpen = useStore(s => s.isSettingsOpen);
@@ -179,7 +189,7 @@ export const GameCanvas = React.memo(({
       onChange: (v) => { settingsRef.current.timeScale = v; }
     },
     unitScale: { 
-      value: settingsRef.current.unitScale, min: 0.5, max: 3.0, step: 0.1, label: "Unit Visual Scale",
+      value: settingsRef.current.unitScale, min: 0.2, max: 2.0, step: 0.1, label: "Unit Visual Scale",
       onChange: (v) => { settingsRef.current.unitScale = v; }
     }
   }, { collapsed: true });
@@ -218,7 +228,7 @@ export const GameCanvas = React.memo(({
         className="select-none touch-none "
       >
         <PerformanceProbe syncPerformance={syncPerformance} />
-        <PerformanceMonitor onIncline={() => setDpr(1.2)} onDecline={() => setDpr(0.7)} />
+        <PerformanceMonitor onIncline={() => setDpr(Math.min(dpr + 0.1, 1.0))} onDecline={() => setDpr(Math.max(dpr - 0.1, 0.7))} />
         <AdaptiveEvents />
         <AdaptiveDpr pixelated={true} />
 
@@ -231,9 +241,7 @@ export const GameCanvas = React.memo(({
           minDistance={10}
         />
 
-        <EffectComposer multisampling={0}>
-          <Bloom luminanceThreshold={0.5} luminanceSmoothing={0.9} intensity={1.5} mipmapBlur />
-        </EffectComposer>
+
 
         <StormEnvironment baseDistance={towerConfig.baseDistance || 24} />
 
@@ -245,7 +253,12 @@ export const GameCanvas = React.memo(({
             towerConfig={towerConfig}
             updateSimulation={updateSimulation}
             settingsRef={settingsRef}
+            simTimeRef={simTimeRef}
+            vehicles={vehicles}
+            unitIndex={unitIndex}
+            spellsRef={spellsRef}
           />
+
 
           <DamageHUDBatcher damageQueue={damageQueue} />
 

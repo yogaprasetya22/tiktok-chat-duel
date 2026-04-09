@@ -6,8 +6,8 @@ import * as THREE from "three";
 // --- 1. Terrain Shader ---
 const TerrainMaterial = new THREE.ShaderMaterial({
   uniforms: {
-    baseColor: { value: new THREE.Color("#2c3e32") }, // Brighter day-time base
-    peakColor: { value: new THREE.Color("#6e8275") }, // Brighter day-time peak
+    baseColor: { value: new THREE.Color("#4a7c44") }, // Vibrant green
+    peakColor: { value: new THREE.Color("#8fb386") }, // Light green/sunny
     baseDist: { value: 24.0 },
   },
   vertexShader: `
@@ -80,7 +80,7 @@ const Terrain = ({ baseDistance }: { baseDistance: number }) => {
 
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.6, 0]} receiveShadow>
-      <planeGeometry args={[300, 300, 150, 150]} />
+      <planeGeometry args={[300, 300, 80, 80]} />
       <primitive object={TerrainMaterial} attach="material" />
     </mesh>
   );
@@ -88,7 +88,7 @@ const Terrain = ({ baseDistance }: { baseDistance: number }) => {
 
 
 // --- 2. Heavy Rain Array ---
-const RAIN_COUNT = 10000;
+const RAIN_COUNT = 5000;
 
 const Rain = () => {
   const meshRef = useRef<THREE.InstancedMesh>(null);
@@ -166,7 +166,7 @@ const Lightning = () => {
 };
 
 // --- 4. Procedural Wind Swaying Grass ---
-const GRASS_COUNT = 40000;
+const GRASS_COUNT = 15000;
 const GrassMaterial = new THREE.ShaderMaterial({
   uniforms: {
     time: { value: 0 },
@@ -197,8 +197,8 @@ const GrassMaterial = new THREE.ShaderMaterial({
   fragmentShader: `
     varying float vY;
     void main() {
-      vec3 rootColor = vec3(0.08, 0.15, 0.08); // Dark green roots
-      vec3 tipColor = vec3(0.2, 0.5, 0.2); // Saturated green tips
+      vec3 rootColor = vec3(0.15, 0.35, 0.15); // Sunny green roots
+      vec3 tipColor = vec3(0.4, 0.8, 0.3); // Bright lime-green tips
       // normalize vY from [-0.5, 0.5] to [0, 1]
       float mixFactor = clamp((vY + 0.5) * 1.0, 0.0, 1.0);
       gl_FragColor = vec4(mix(rootColor, tipColor, mixFactor), 1.0);
@@ -259,27 +259,32 @@ export const StormEnvironment = ({ baseDistance = 24 }: { baseDistance?: number 
   return (
     <group>
       <Sky 
-        sunPosition={[100, 20, -50]} 
-        turbidity={12} 
-        rayleigh={2} 
+        sunPosition={[0, 100, 0]} 
+        turbidity={1.0} 
+        rayleigh={0.5} 
         mieCoefficient={0.005} 
         mieDirectionalG={0.8} 
       />
-      <ambientLight intensity={1.2} color="#cad8eb" />
+      <hemisphereLight 
+        intensity={1.2} 
+        color="#ffffff" 
+        groundColor="#666666" 
+      />
+      <ambientLight intensity={0.5} />
       <directionalLight 
-        position={[100, 50, -50]} 
-        intensity={3.5} 
-        color="#fff1d6" 
-        castShadow 
+        position={[0, 100, 0]} 
+        intensity={4.0} 
+        color="#ffffff" 
+        castShadow={false}
       />
       
       <Terrain baseDistance={baseDistance} />
       <Grass baseDistance={baseDistance} />
-      <Rain />
-      <Lightning />
+      {/* <Rain /> */}
+      {/* <Lightning /> */}
       
-      {/* Daylight fog integrated with the storm aesthetic */}
-      <fog attach="fog" args={['#a3b5c7', 30, 150]} />
+      {/* Daylight fog - push it back so battlefield is clear */}
+      <fog attach="fog" args={["#f0f5ff", 40, 250]} />
     </group>
   );
 };

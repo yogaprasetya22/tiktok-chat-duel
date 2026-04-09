@@ -1,9 +1,10 @@
 import { TowerConfig, KillEvent } from "../../hooks/useBattleSystem";
-import { Maximize2, Minimize2, Palette, Settings2, Sword, Zap, RefreshCw, Trophy, Skull, Users, MessageSquare, Gift, CheckCircle2, Circle, Radio, Camera, Loader2, AlertTriangle, Download } from "lucide-react";
+import { Maximize2, Minimize2, Palette, Settings2, Sword, Zap, RefreshCw, Trophy, Skull, Users, MessageSquare, Gift, CheckCircle2, Circle, Radio, Camera, Loader2, AlertTriangle, Download, Target, ChevronRight } from "lucide-react";
 import { useState } from "react";
 import { KillFeed } from "../ui/KillFeed";
 import { MVPScreen } from "../ui/MVPScreen";
 import { useStore } from "../../hooks/useStore";
+import Link from "next/link";
 
 interface UIOverlayProps {
   towerConfig: TowerConfig;
@@ -139,6 +140,13 @@ export const UIOverlay = ({
           >
             <Settings2 className="w-5 h-5" />
           </button>
+          <Link
+            href="/training"
+            className="p-3 bg-rose-500/10 hover:bg-rose-500/20 backdrop-blur-md rounded-xl border border-rose-500/20 text-rose-500 transition-all shadow-xl group"
+            title="Dedicated Training Arena"
+          >
+            <Target className="w-5 h-5 group-hover:scale-110 transition-transform" />
+          </Link>
           <button 
             onClick={toggleFullscreen}
             className={`p-3 backdrop-blur-md rounded-xl border border-white/10 transition-all ${isFullscreen ? 'bg-zinc-100 text-zinc-950' : 'bg-zinc-950/80 text-white/50 hover:text-white'}`}
@@ -269,6 +277,24 @@ export const UIOverlay = ({
                 >
                   Configure Team A <Sword className="w-5 h-5" />
                 </button>
+
+                <div className="pt-4 border-t border-white/5">
+                   <Link 
+                     href="/training"
+                     className="w-full py-4 bg-zinc-800/50 hover:bg-zinc-800 rounded-2xl flex items-center justify-between px-6 group transition-all"
+                   >
+                     <div className="flex items-center gap-4">
+                        <div className="p-2 bg-rose-500/20 rounded-xl text-rose-500">
+                           <Target className="w-4 h-4" />
+                        </div>
+                        <div className="text-left">
+                           <span className="block text-[8px] font-black text-rose-500/60 uppercase tracking-widest">Solo Analysis</span>
+                           <h4 className="text-xs font-black text-white uppercase tracking-tight">Enter Dedicated Training Arena</h4>
+                        </div>
+                     </div>
+                     <ChevronRight className="w-4 h-4 text-zinc-600 group-hover:text-white group-hover:translate-x-1 transition-all" />
+                   </Link>
+                </div>
               </div>
             )}
 
@@ -493,46 +519,72 @@ export const UIOverlay = ({
             {gameState === 'PLAYING' && (
               <div className="absolute inset-x-0 top-0 h-full pointer-events-none p-8 flex flex-col items-center">
                 
-                {/* 1. TOP LEFT: Compact Kill Feed */}
-                <div className="absolute top-6 left-6 w-72 flex flex-col gap-1.5 items-start pointer-events-none z-[1100]">
-                  {killEvents.slice(-2).map((event, i) => event && event.id && (
+                {/* 1. TOP CENTER: Global Stats Hub */}
+                <div className="absolute top-6 left-1/2 -translate-x-1/2 flex items-center gap-6 pointer-events-auto z-[1200]">
+                  <div className="bg-zinc-950/80 backdrop-blur-3xl px-8 py-3 rounded-3xl border border-white/10 shadow-2xl flex items-center divide-x divide-white/10 gap-8">
+                     <div className="flex flex-col items-center">
+                        <span className="text-[8px] font-black text-blue-400 uppercase tracking-[0.2em] mb-1">Pihak A Total Kills</span>
+                        <span className="text-2xl font-black italic text-white leading-none">
+                          {Object.values(liveStats.playerKills || {}).reduce((a:any, b:any) => a + b, 0).toLocaleString()}
+                        </span>
+                     </div>
+                    <div className="px-6 flex flex-col items-center">
+                       <div className="bg-rose-500/20 p-2 rounded-xl mb-1">
+                          <Sword className="w-4 h-4 text-rose-500 animate-pulse" />
+                       </div>
+                       <span className="text-[8px] font-black text-white/40 uppercase tracking-[0.3em]">Engagement</span>
+                    </div>
+                     <div className="flex flex-col items-center">
+                        <span className="text-[8px] font-black text-rose-400 uppercase tracking-[0.2em] mb-1">Pihak B Total Kills</span>
+                        <span className="text-2xl font-black italic text-white leading-none">
+                          {Object.values(liveStats.enemyKills || {}).reduce((a:any, b:any) => a + b, 0).toLocaleString()}
+                        </span>
+                     </div>
+                  </div>
+                </div>
+
+                {/* 2. TOP LEFT: Compact Kill Feed */}
+                <div className="absolute top-28 left-6 w-72 flex flex-col gap-1.5 items-start pointer-events-none z-[1100]">
+                  {killEvents.slice(-3).map((event, i) => event && event.id && (
                     <div key={event.id} className="animate-in slide-in-from-left-4 fade-in duration-500 bg-zinc-950/80 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/10 flex items-center gap-3 shadow-xl">
-                      <span className="text-white font-black italic text-xs tracking-tighter" style={{ color: towerConfig.player.color }}>{event.killer}</span>
+                      <span className="text-white font-black italic text-[10px] tracking-tighter" style={{ color: towerConfig.player.color }}>{event.killer}</span>
                       <Sword className="w-3 h-3 text-rose-500" />
-                      <span className="text-white/60 font-bold text-[10px] tracking-tight">{event.victim}</span>
+                      <span className="text-white/60 font-bold text-[9px] tracking-tight">{event.victim}</span>
                     </div>
                   ))}
                 </div>
 
-                {/* 2. LEFT SIDE: Compact Leaderboard */}
+                 {/* 2. LEFT SIDE: Compact Leaderboard */}
                 <div className="absolute top-28 left-6 w-56 pointer-events-auto z-[1100]">
                   <div className="bg-zinc-950/80 backdrop-blur-2xl rounded-2xl border-l-4 border-l-blue-500 border border-white/10 p-4 shadow-2xl space-y-4 animate-in slide-in-from-left-12 duration-700">
                     <div className="flex items-center gap-2 border-b border-white/5 pb-3">
-                      <Trophy className="w-4 h-4 text-blue-400" />
-                      <span className="text-[10px] font-black text-white uppercase tracking-widest italic">{towerConfig.player.name} TOP</span>
+                      <Skull className="w-4 h-4 text-blue-400" />
+                      <span className="text-[10px] font-black text-white uppercase tracking-widest italic">{towerConfig.player.name} KILLS</span>
                     </div>
                     
                     <div className="space-y-3">
-                      {Object.entries(liveStats.playerDamage || {})
+                      {Object.entries(liveStats.playerKills || {})
                         .sort(([, a]: any, [, b]: any) => b - a)
                         .slice(0, 5)
                         .map(([username, value], i) => (
                         <div key={username} className="flex items-center justify-between group animate-in slide-in-from-left-4 fade-in" style={{ animationDelay: `${i * 100}ms` }}>
                           <div className="flex items-center gap-3">
                             <div className={`w-6 h-6 rounded-lg flex items-center justify-center font-black italic text-[10px] ${
-                              i === 0 ? 'bg-blue-500 text-white shadow-[0_0_15px_rgba(59,130,246,0.5)] scale-110' : 'bg-zinc-800 text-zinc-500'
+                              i === 0 ? 'bg-blue-600 text-white shadow-[0_0_15px_rgba(37,99,235,0.5)] scale-110' : 'bg-zinc-800 text-zinc-500'
                             }`}>
                               {i + 1}
                             </div>
                             <span className="text-xs font-black text-white/90 group-hover:text-white truncate max-w-[100px] tracking-tight transition-colors">{username}</span>
                           </div>
-                          <span className="text-xs font-black text-blue-400 italic">{(value as number).toLocaleString()}</span>
+                          <div className="flex flex-col items-end">
+                             <span className="text-xs font-black text-blue-400 italic">{(value as number)} KILLS</span>
+                          </div>
                         </div>
                       ))}
-                      {Object.keys(liveStats.playerDamage || {}).length === 0 && (
+                      {Object.keys(liveStats.playerKills || {}).length === 0 && (
                         <div className="py-8 text-center space-y-2 opacity-30">
-                          <Skull className="w-8 h-8 mx-auto" />
-                          <p className="text-[9px] uppercase tracking-[0.2em] text-zinc-400 font-black">Waiting for Hits</p>
+                          <CheckCircle2 className="w-8 h-8 mx-auto" />
+                          <p className="text-[9px] uppercase tracking-[0.2em] text-zinc-400 font-black">No Kills Yet</p>
                         </div>
                       )}
                     </div>
@@ -543,12 +595,12 @@ export const UIOverlay = ({
                 <div className="absolute top-28 right-6 w-56 pointer-events-auto z-[1100]">
                   <div className="bg-zinc-950/80 backdrop-blur-2xl rounded-2xl border-r-4 border-r-rose-500 border border-white/10 p-4 shadow-2xl space-y-4 animate-in slide-in-from-right-12 duration-700">
                     <div className="flex items-center gap-2 border-b border-white/5 pb-3">
-                      <Zap className="w-4 h-4 text-rose-400" />
-                      <span className="text-[10px] font-black text-white uppercase tracking-widest italic">{towerConfig.enemy.name} TOP</span>
+                      <Skull className="w-4 h-4 text-rose-400" />
+                      <span className="text-[10px] font-black text-white uppercase tracking-widest italic">{towerConfig.enemy.name} KILLS</span>
                     </div>
                     
                     <div className="space-y-3">
-                      {Object.entries(liveStats.enemyDamage || {})
+                      {Object.entries(liveStats.enemyKills || {})
                         .sort(([, a]: any, [, b]: any) => b - a)
                         .slice(0, 5)
                         .map(([username, value], i) => (
@@ -561,13 +613,13 @@ export const UIOverlay = ({
                             </div>
                             <span className="text-xs font-black text-white/90 group-hover:text-white truncate max-w-[100px] tracking-tight transition-colors">{username}</span>
                           </div>
-                          <span className="text-xs font-black text-rose-400 italic">{(value as number).toLocaleString()}</span>
+                          <span className="text-xs font-black text-rose-400 italic">{(value as number)} KILLS</span>
                         </div>
                       ))}
-                      {Object.keys(liveStats.enemyDamage || {}).length === 0 && (
+                      {Object.keys(liveStats.enemyKills || {}).length === 0 && (
                         <div className="py-8 text-center space-y-2 opacity-30">
-                          <Skull className="w-8 h-8 mx-auto" />
-                          <p className="text-[9px] uppercase tracking-[0.2em] text-zinc-400 font-black">Waiting for Hits</p>
+                          <CheckCircle2 className="w-8 h-8 mx-auto" />
+                          <p className="text-[9px] uppercase tracking-[0.2em] text-zinc-400 font-black">No Kills Yet</p>
                         </div>
                       )}
                     </div>

@@ -15,17 +15,20 @@ interface BattleState {
   enemyBaseHp: number;
   setBaseHp: (player: number, enemy: number) => void;
   
-  // Live Leaderboard & Kill Feed
   liveStats: { 
     damageDealt: Record<string, number>;
     playerDamage: Record<string, number>;
     enemyDamage: Record<string, number>;
+    playerKills: Record<string, number>;
+    enemyKills: Record<string, number>;
   };
   killEvents: KillEvent[];
   setLiveStats: (stats: { 
     damageDealt: Record<string, number>;
     playerDamage: Record<string, number>;
     enemyDamage: Record<string, number>;
+    playerKills: Record<string, number>;
+    enemyKills: Record<string, number>;
   }) => void;
   addKillEvent: (event: KillEvent) => void;
   
@@ -40,6 +43,10 @@ interface BattleState {
   // Dynamic Simulation Settings
   settings: SimulationSettings;
   updateSettings: (partial: Partial<SimulationSettings>) => void;
+
+  // Training Mode
+  gameMode: "BATTLE" | "TRAINING";
+  setGameMode: (mode: "BATTLE" | "TRAINING") => void;
 
   // Reset
   resetStore: (config: TowerConfig) => void;
@@ -59,7 +66,9 @@ export const useStore = create<BattleState>((set) => ({
   liveStats: { 
     damageDealt: {},
     playerDamage: {},
-    enemyDamage: {}
+    enemyDamage: {},
+    playerKills: {},
+    enemyKills: {}
   },
   killEvents: [],
   setLiveStats: (liveStats) => set({ liveStats }),
@@ -78,6 +87,9 @@ export const useStore = create<BattleState>((set) => ({
     settings: { ...state.settings, ...partial } 
   })),
 
+  gameMode: "BATTLE",
+  setGameMode: (gameMode) => set({ gameMode }),
+
   resetStore: (config) => set({
     gameState: "PLAYING",
     playerBaseHp: config.baseHp,
@@ -85,7 +97,9 @@ export const useStore = create<BattleState>((set) => ({
     liveStats: { 
       damageDealt: {},
       playerDamage: {},
-      enemyDamage: {}
+      enemyDamage: {},
+      playerKills: {},
+      enemyKills: {}
     },
     killEvents: [],
     armyCounts: { player: 0, enemy: 0 }

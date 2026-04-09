@@ -35,6 +35,7 @@ import type {
     KillEvent,
     BattleStats,
     SimulationSettings,
+    UnitRuntimeData,
 } from "./battle/types";
 
 import {
@@ -42,6 +43,7 @@ import {
     ENEMY_BASE_Z,
     LANE_OFFSETS,
     INITIAL_SETTINGS,
+    MAGE_PROJECTILE_TIME_MS,
 } from "./battle/constants";
 
 import {
@@ -76,6 +78,8 @@ export const useBattleSystem = () => {
         damageDealt: {},
         playerDamage: {},
         enemyDamage: {},
+        playerKills: {},
+        enemyKills: {},
         unitsSpawned: {},
         playerHits: {},
         enemyHits: {},
@@ -90,29 +94,7 @@ export const useBattleSystem = () => {
     const vehicles = useRef<Map<string, YUKA.Vehicle>>(new Map());
 
     // Runtime data store — keyed by unit ID, holds position/rotation/status
-    const unitDataRef = useRef<
-        Map<
-            string,
-            {
-                hp: number;
-                maxHp: number;
-                status: string;
-                position: [number, number, number];
-                rotation: [number, number, number];
-                userName: string;
-                type: 'player' | 'enemy';
-                level: number;
-                isBoss: boolean;
-                laneOffset: number;
-                lastAttackTime: number;
-                isAttackingBase?: boolean;
-                animationOffset: number;
-                lastDamageTime: number;
-                victoryPauseUntil: number;
-                jitterOffset: number;
-            }
-        >
-    >(new Map());
+    const unitDataRef = useRef<Map<string, UnitRuntimeData>>(new Map());
 
     const unitsRef = useRef<ActiveUnit[]>([]);
     const obstacleEntities = useRef<YUKA.GameEntity[]>([]);
@@ -121,6 +103,14 @@ export const useBattleSystem = () => {
     const unitIndexRef = useRef<Map<string, ActiveUnit>>(new Map());
 
     // Performance: Pre-allocated pools (zero-allocation loop)
+    const spellsRef = useRef<any[]>(
+        Array.from({ length: 300 }, () => ({
+            fromX: 0, fromY: 1, fromZ: 0,
+            toX: 0,   toY: 1,   toZ: 0,
+            progress: 0, startTime: 0, active: false,
+        }))
+    );
+
     const pUnitsPoolRef = useRef<ActiveUnit[]>([]);
     const eUnitsPoolRef = useRef<ActiveUnit[]>([]);
     const simulationTimeRef = useRef<number>(0); // Accumulated sim time for cooldowns
@@ -141,6 +131,20 @@ export const useBattleSystem = () => {
         color: string;
         timestamp: number;
     }[]>([]);
+    
+    const pendingDamageRef = useRef<{
+        targetId: string;
+        damage: number;
+        hitTime: number;
+        position: [number, number, number];
+        color: string;
+        attackerName: string;
+        attackerClass: string;
+        attackerId: string; // NEW: Track for victory pause
+    }[]>([]);
+    
+    // Performance: Store every attack transaction for deeper data analysis
+    const frameEventsRef = useRef<any[]>([]);
 
     const [towerConfig, setTowerConfig] = useState<TowerConfig>({
         player: {
@@ -257,6 +261,12 @@ export const useBattleSystem = () => {
     // ----------------------------------------------------------------
 
     const resetBattle = useCallback(() => {
+        useStore.getState().resetStore(towerConfigRef.current);
+        useStore.getState().setLiveStats({
+            damageDealt: {}, playerDamage: {}, enemyDamage: {},
+            playerKills: {}, enemyKills: {}
+        });
+        
         vehicles.current.forEach((v) => entityManager.remove(v));
         vehicles.current.clear();
         unitDataRef.current.clear();
@@ -270,14 +280,16 @@ export const useBattleSystem = () => {
         unitsRef.current = [];
         setDamageTexts([]);
 
-        statsRef.current = {
-            damageDealt: {},
-            playerDamage: {},
-            enemyDamage: {},
-            unitsSpawned: {},
-            playerHits: {},
-            enemyHits: {},
-        };
+            statsRef.current = {
+                damageDealt: {},
+                playerDamage: {},
+                enemyDamage: {},
+                playerKills: {},
+                enemyKills: {},
+                unitsSpawned: {},
+                playerHits: {},
+                enemyHits: {},
+            };
     }, [towerConfig.baseHp, entityManager]);
 
     const lastStateUpdate = useRef<number>(0);
@@ -320,15 +332,18 @@ export const useBattleSystem = () => {
     const spawnUnit = useCallback(
         (
             level: number = 1,
-            userName: string = "Guest",
+            _userName: string = "Guest",
             type: "player" | "enemy" = "player",
             isBoss: boolean = false,
+            forcedClass?: "fighter" | "tank" | "mage",
         ) => {
+            const userName = _userName.trim().substring(0, 16);
             const isTestingBot =
                 userName === towerConfigRef.current.player.name ||
                 userName === towerConfigRef.current.enemy.name;
-            if (!isBoss && !isTestingBot && (statsRef.current.unitsSpawned[userName] || 0) >= 3)
+            if (!isBoss && !isTestingBot && (useStore.getState().gameMode !== 'TRAINING') && (statsRef.current.unitsSpawned[userName] || 0) >= 3)
                 return;
+
 
             // No setState needed, we rely completely on unitsRef in engine
             const teamUnits = unitsRef.current.filter((u) => u && u.type === type && !u.isDying);
@@ -339,12 +354,28 @@ export const useBattleSystem = () => {
                 let stats = getUnitStats(level, towerConfigRef.current.unitConfig, settingsRef.current);
                 if (isBoss) stats = applyBossModifiers(stats);
 
+                const rand = Math.random();
+                const unitClass = forcedClass || (rand < 0.4 ? "fighter" : (rand < 0.7 ? "tank" : "mage"));
+                const laneOffset = isBoss ? 0 : pickRandom(LANE_OFFSETS);
+
+                // Class specific adjustments
+                if (unitClass === "tank") {
+                    stats.hp *= 5.0;      // Even tankier
+                    stats.maxHp *= 5.0;
+                    stats.speed *= 0.6;   // Adjusted from 0.45
+                    stats.attack *= 1.2;
+                    stats.range *= 0.75;  // Very close melee
+                } else if (unitClass === "mage") {
+                    stats.hp *= 0.4;      // Glass cannon
+                    stats.maxHp *= 0.4;
+                    stats.attack *= 3.0;
+                    stats.range *= 5.0;   // Reduced from 10.0 to prevent "diem bae"
+                }
+
                 const speedVariation = 0.8 + Math.random() * 0.4;
                 const actualSpeed = stats.speed * speedVariation;
 
                 const unitId = `${type}-${Math.random().toString(36).substring(2, 9)}`;
-                const laneOffset = isBoss ? 0 : pickRandom(LANE_OFFSETS);
-
                 const distance = towerConfigRef.current.baseDistance || 24;
                 const jitterX = (Math.random() - 0.5) * 8.0;
                 const jitterZ = (Math.random() - 0.5) * 8.0;
@@ -355,15 +386,20 @@ export const useBattleSystem = () => {
                     spawnZ + jitterZ,
                 ] as [number, number, number];
 
+                const isDummy = type === "enemy" && userName === "Training";
+
                 const vehicle = new YUKA.Vehicle();
                 vehicle.position.set(spawnPos[0], spawnPos[1], spawnPos[2]);
-                vehicle.maxSpeed = actualSpeed;
+                vehicle.maxSpeed = actualSpeed; 
                 vehicle.updateOrientation = false;
-                // Dynamic Scaling: Influenced by level, isBoss, and GLOBAL unitScale setting
+
+                vehicle.maxForce = 350; 
+                vehicle.velocity.set(0, 0, 0);
+
                 const globalUnitScale = settingsRef.current.unitScale;
-                const baseScale = isBoss ? 4.5 : (1.5 + (level || 1) * 0.1);
+                const baseScale = isBoss ? 4.5 : (isDummy ? 3.0 : (1.5 + (level || 1) * 0.1));
                 const finalScale = baseScale * globalUnitScale;
-                vehicle.boundingRadius = (isBoss ? 3.5 : 1.4) * finalScale;
+                vehicle.boundingRadius = (isBoss ? 4.0 : 1.6) * finalScale;
 
                 const obstacleAvoidance = new YUKA.ObstacleAvoidanceBehavior(obstacleEntities.current);
                 obstacleAvoidance.weight = 3.0;
@@ -374,23 +410,22 @@ export const useBattleSystem = () => {
                 const seek = new YUKA.SeekBehavior(
                     new YUKA.Vector3(laneOffset, -0.4, targetBaseZ),
                 );
-                seek.weight = 1.2;
+                seek.weight = 1.0;
                 vehicle.steering.add(seek);
 
+
                 const separation = new YUKA.SeparationBehavior();
-                separation.weight = 1.5;
+                separation.weight = 2.0; 
                 vehicle.steering.add(separation);
 
-                vehicle.maxForce = 150;
-                vehicle.velocity.set(0, 0, 0);
 
                 entityManager.add(vehicle);
                 vehicles.current.set(unitId, vehicle);
                 unitDataRef.current.set(unitId, {
-                    hp: stats.hp,
-                    maxHp: stats.maxHp,
+                    hp: isDummy ? 999999 : stats.hp,
+                    maxHp: isDummy ? 999999 : stats.maxHp,
                     isBoss,
-                    status: "marching",
+                    status: isDummy ? "idle" : "marching",
                     position: spawnPos,
                     rotation: [0, type === 'player' ? Math.PI : 0, 0],
                     userName,
@@ -403,6 +438,7 @@ export const useBattleSystem = () => {
                     lastDamageTime: 0,
                     victoryPauseUntil: 0,
                     jitterOffset: Math.random() * Math.PI * 2,
+                    unitClass,
                 });
 
                 const newUnit: ActiveUnit = {
@@ -414,7 +450,8 @@ export const useBattleSystem = () => {
                     status: "marching",
                     lastAttackTime: 0,
                     isBoss,
-                    animationOffset: Math.random() * 10,
+                    animationOffset: Math.random() * 100,
+                    unitClass,
                 };
 
                 unitsRef.current.push(newUnit);
@@ -457,41 +494,99 @@ export const useBattleSystem = () => {
         entityManager.update(simDelta);
         flushDamageBuffer(now);
 
+        // --- Process Delayed Hits (Mage Projectiles) ---
+        if (pendingDamageRef.current.length > 0) {
+            const hits = pendingDamageRef.current;
+            for (let i = hits.length - 1; i >= 0; i--) {
+                const h = hits[i];
+                if (simNow >= h.hitTime) {
+                    const target = unitIndexRef.current.get(h.targetId);
+                    if (target && target.hp > 0 && !target.isDying) {
+                        const tData = unitDataRef.current.get(target.id);
+                        if (tData) {
+                            target.hp -= h.damage;
+                            tData.hp = target.hp;
+                            tData.lastDamageTime = now;
+                            accumulateDamage(target.id, h.damage, tData.position, h.color);
+                            
+                            frameEventsRef.current.push({
+                                a: h.attackerName,
+                                c: h.attackerClass,
+                                tgt: target.userName,
+                                dmg: Math.round(h.damage),
+                                kill: target.hp <= 0 ? 1 : 0
+                            });
+
+                            if (target.hp <= 0) {
+                                // delayed mage kill tracking
+                                if (h.attackerClass === 'mage') {
+                                    const attackerType = h.color === towerConfig.player.color ? 'player' : 'enemy';
+                                    if (attackerType === 'player') {
+                                        statsRef.current.playerKills[h.attackerName] = (statsRef.current.playerKills[h.attackerName] || 0) + 1;
+                                        statsRef.current.playerDamage[h.attackerName] = (statsRef.current.playerDamage[h.attackerName] || 0) + h.damage;
+                                    } else {
+                                        statsRef.current.enemyKills[h.attackerName] = (statsRef.current.enemyKills[h.attackerName] || 0) + 1;
+                                        statsRef.current.enemyDamage[h.attackerName] = (statsRef.current.enemyDamage[h.attackerName] || 0) + h.damage;
+                                    }
+                                }
+                                addKillEvent(h.attackerName, target.userName, target.isBoss ? "boss" : "unit");
+                            } else {
+                                // Update damage maps even if not a kill
+                                const attackerType = h.color === towerConfig.player.color ? 'player' : 'enemy';
+                                if (attackerType === 'player') {
+                                    statsRef.current.playerDamage[h.attackerName] = (statsRef.current.playerDamage[h.attackerName] || 0) + h.damage;
+                                } else {
+                                    statsRef.current.enemyDamage[h.attackerName] = (statsRef.current.enemyDamage[h.attackerName] || 0) + h.damage;
+                                }
+                            }
+
+                        }
+                    }
+                    hits.splice(i, 1);
+                }
+            }
+        }
+
         // --- Optimized Performance Diagnostics ---
         const simulationUnits = unitsRef.current;
         const totalUnitsCount = simulationUnits.length;
         const pCount = simulationUnits.filter(u => u && u.type === "player" && !u.isDying).length;
         const eCount = totalUnitsCount - pCount;
 
-        // --- Replay Snapshot (Optimized Data Structure) ---
+        // --- Replay Snapshot (Professional Analytical Structure) ---
         if (now - lastLogTimeRef.current > 200) {
-            replayBufferRef.current.push({
+            const snapshot = {
                 t: now,
+                simTime: Math.round(simNow),
                 fps: Math.round(1 / (delta || 0.016)),
-                stats: {
-                    p: pCount, 
-                    e: eCount, 
-                    tot: totalUnitsCount,
-                    vfx: damageTexts.length,
+                meta: {
+                    pCount, 
+                    eCount, 
+                    total: totalUnitsCount,
                     drawCalls: perfRef.current.drawCalls,
                     tri: Math.round(perfRef.current.triangles / 1000),
-                    drift: perfRef.current.drift.toFixed(1),
-                    mem: (performance as any).memory ? Math.round((performance as any).memory.usedJSHeapSize / 1048576) : 0
                 },
-                // Compact unit data for memory efficiency
-                u: simulationUnits.filter(u => !!u && !u.isDying).map((u) => {
+                // Structured Unit Data (Map for O(1) analysis)
+                units: simulationUnits.filter(u => !!u && !u.isDying).reduce((acc: any, u) => {
                     const data = unitDataRef.current.get(u.id);
-                    return [
-                        u.id.substring(u.id.indexOf('-')+1), // Short ID
-                        u.type === 'player' ? 0 : 1,         // Binary type
-                        Math.round((data?.position[0] || 0) * 10) / 10,
-                        Math.round((data?.position[2] || 0) * 10) / 10,
-                        Math.round((data?.rotation[1] || 0) * 100) / 100,
-                        u.status === 'marching' ? 0 : (u.status === 'attacking' ? 1 : 2),
-                        Math.round(u.hp)
-                    ];
-                }),
-            });
+                    if (data) {
+                        acc[u.id] = {
+                            hp: Math.round(data.hp),
+                            pos: [parseFloat(data.position[0].toFixed(2)), parseFloat(data.position[2].toFixed(2))],
+                            rot: parseFloat(data.rotation[1].toFixed(2)),
+                            state: data.status,
+                            class: data.unitClass,
+                            team: data.type === 'player' ? 'player' : 'enemy',
+                            target: u.targetId || null
+                        };
+                    }
+                    return acc;
+                }, {}),
+                events: [...frameEventsRef.current]
+            };
+            
+            replayBufferRef.current.push(snapshot);
+            frameEventsRef.current.length = 0;
 
             if (replayBufferRef.current.length > 1500) replayBufferRef.current.shift();
             lastLogTimeRef.current = now;
@@ -525,7 +620,14 @@ export const useBattleSystem = () => {
             const uData = unitDataRef.current.get(u.id);
             if (!uData) continue;
 
-            if (u.hp <= 0) { u.isDying = true; u.deathTime = now; continue; }
+            if (u.hp <= 0) { 
+                u.isDying = true; 
+                u.deathTime = now; 
+                uData.isDying = true;
+                const v = vehicles.current.get(u.id);
+                if (v) { v.maxSpeed = 0; v.velocity.set(0, 0, 0); }
+                continue; 
+            }
 
             // Human Behavior: Victory Pause after kill
             if (now < uData.victoryPauseUntil) {
@@ -539,199 +641,188 @@ export const useBattleSystem = () => {
             let currentTarget: ActiveUnit | null = null;
             let isAttackingTarget = false;
 
+            // --- DECENTRALIZED AI FALLBACK ---
+            // Decision-making (target searching) is now handled by Army Components.
+            // This hook only handles the physical consequences of those decisions.
             const distToBaseSq = Math.pow(uData.position[2] - (u.type === "player" ? ENEMY_BASE_Z : PLAYER_BASE_Z), 2);
             const attackRangeSq = u.range * u.range;
+            const canReachBase = distToBaseSq < attackRangeSq;
+            uData.isAttackingBase = false;
 
-            // Base attack logic
-            if (distToBaseSq < attackRangeSq) {
-                uData.status = "attacking"; uData.isAttackingBase = true; isAttackingTarget = true;
-                // Fix: dynamic base attack cooldown based on globalAttackCooldown bound to SimTime
+
+            // Commit Combat State
+            const currentTarget_lookup = u.targetId ? unitIndexRef.current.get(u.targetId) : null;
+            currentTarget = currentTarget_lookup || null;
+            
+            // DECISION: Attack Unit (Highest Priority) or Base (Fallback)
+            if (currentTarget) {
+                // Do not assume we are actively attacking until we verify distance!
+                uData.isAttackingBase = false;
+            } else if (canReachBase) {
+                // FALLBACK TO BASE
+                isAttackingTarget = false; // We use isAttackingTarget = true for UNITS only in downstream lookups
+                uData.isAttackingBase = true;
+                uData.status = "attacking";
+                
+                // --- COMMIT BASE DAMAGE ---
                 const baseAttackCooldown = u.isBoss ? settingsRef.current.globalAttackCooldown * 0.7 : settingsRef.current.globalAttackCooldown;
                 if (simNow - uData.lastAttackTime > baseAttackCooldown) {
-                    // Apply global damage multiplier to base attack
                     const effectiveAttack = u.attack * settingsRef.current.globalDamageMultiplier;
-                    const { damage } = calcDamage(
-                        effectiveAttack,
-                        settingsRef.current.critChance,
-                        towerConfigRef.current.criticalMultiplier ?? 2.0,
-                    );
+                    const { damage } = calcDamage(effectiveAttack, settingsRef.current.critChance, towerConfigRef.current.criticalMultiplier ?? 2.0);
                     if (u.type === "player") {
                         enemyBaseHpRef.current = Math.max(0, enemyBaseHpRef.current - damage);
-                        if (enemyBaseHpRef.current === 0 && gameStateRef.current === "PLAYING")
-                            addKillEvent(u.userName, towerConfigRef.current.enemy.name, "base");
+                        if (enemyBaseHpRef.current === 0 && gameStateRef.current === "PLAYING") addKillEvent(u.userName, towerConfigRef.current.enemy.name, "base");
                         useStore.getState().setBaseHp(playerBaseHpRef.current, enemyBaseHpRef.current);
                         accumulateDamage("enemy-base", damage, [0, 5, ENEMY_BASE_Z], towerConfigRef.current.player.color);
                     } else {
                         playerBaseHpRef.current = Math.max(0, playerBaseHpRef.current - damage);
-                        if (playerBaseHpRef.current === 0 && gameStateRef.current === "PLAYING")
-                            addKillEvent(u.userName, towerConfigRef.current.player.name, "base");
+                        if (playerBaseHpRef.current === 0 && gameStateRef.current === "PLAYING") addKillEvent(u.userName, towerConfigRef.current.player.name, "base");
                         useStore.getState().setBaseHp(playerBaseHpRef.current, enemyBaseHpRef.current);
                         accumulateDamage("player-base", damage, [0, 5, PLAYER_BASE_Z], towerConfigRef.current.enemy.color);
                     }
-                    uData.lastAttackTime = simNow; // Update using sim time
+                    uData.lastAttackTime = simNow;
                     statsRef.current.damageDealt[u.userName] = (statsRef.current.damageDealt[u.userName] || 0) + damage;
+                    frameEventsRef.current.push({ a: u.userName, c: u.unitClass, tgt: "base", dmg: Math.round(damage) });
                 }
             }
 
-            // Target selection with sensor-based perception + lane discipline
-            const isAttacking = uData.status === "attacking";
-            const shouldSearch = !isThrottled && (!isAttacking || (i + frameParityRef.current) % 30 === 0);
-
-            if (shouldSearch) {
-                const targets = u.type === "player" ? eUnits : pUnits;
-                let maxTargetScore = -Infinity; let bestTarget = null;
-
-                for (let j = 0; j < targets.length; j++) {
-                    const target = targets[j];
-                    const tData = unitDataRef.current.get(target.id);
-                    if (!tData || target.hp <= 0) continue;
-
-                    const dx = uData.position[0] - tData.position[0];
-                    const dz = uData.position[2] - tData.position[2];
-                    const dSq = dx * dx + dz * dz;
-
-                    // Sensor perception: ignore far enemies (unless Boss)
-                    if (dSq > settingsRef.current.perceptionRadiusSq && !target.isBoss) continue;
-
-                    let score = 5000 / (dSq + 1);
-                    const myBaseZ = u.type === 'player' ? -(towerConfigRef.current.baseDistance || 24) : (towerConfigRef.current.baseDistance || 24);
-                    const targetDistToBase = Math.abs(tData.position[2] - myBaseZ);
-
-                    // Frontline Discipline: penalise cross-lane targeting
-                    score -= Math.abs(uData.laneOffset - tData.position[0]) * settingsRef.current.lanePenalty;
-
-                    if (targetDistToBase < 12) score += settingsRef.current.baseProximityBonus * (1 - targetDistToBase / 12);
-                    if (tData.isAttackingBase && Math.abs(uData.laneOffset) < settingsRef.current.baseDefenseThreshold)
-                        score += settingsRef.current.baseAttackResponseBonus;
-                    if (target.isBoss) score += settingsRef.current.bossPriorityBonus;
-                    score += settingsRef.current.lowHpBonus * (1 - target.hp / (target.maxHp || 1));
-
-                    if (score > maxTargetScore) { maxTargetScore = score; bestTarget = target; }
-                }
-                u.targetId = bestTarget?.id;
-            }
-
-            // Fix #5: O(1) map lookup instead of O(n) Array.find()
-            const currentTarget_lookup = u.targetId ? unitIndexRef.current.get(u.targetId) : null;
-            currentTarget = currentTarget_lookup || null;
+            // Target validation
             if (currentTarget && (currentTarget.hp <= 0 || currentTarget.isDying)) {
-                currentTarget = null; u.targetId = undefined;
+                u.targetId = undefined;
+                currentTarget = null;
+                isAttackingTarget = false;
             }
 
-            // Combat attack
+            // Unit attack engagement
             if (currentTarget) {
                 const tData = unitDataRef.current.get(currentTarget.id);
                 if (tData) {
                     const dSq = (uData.position[0] - tData.position[0]) ** 2 + (uData.position[2] - tData.position[2]) ** 2;
                     const dynamicRangeSq = (u.range + (u.id.charCodeAt(0) % 5) * 0.1) ** 2;
-                    if (dSq < dynamicRangeSq) {
+                    if (dSq < dynamicRangeSq || uData.status === 'attacking') {
+                        // Trust Army component's engagement decision if its within a reasonable tolerance
+                        // or if the distance check passes
                         uData.status = "attacking"; uData.isAttackingBase = false; isAttackingTarget = true;
-                        // Fix: dynamic attack speed logic bound to Simulation Time
-                        const unitAttackCooldown = u.isBoss ? settingsRef.current.globalAttackCooldown * 0.7 : settingsRef.current.globalAttackCooldown;
+                        const classMultiplier = u.unitClass === 'mage' ? 2.0 : 1.0;
+                        const unitAttackCooldown = (u.isBoss ? settingsRef.current.globalAttackCooldown * 0.7 : settingsRef.current.globalAttackCooldown) * classMultiplier;
                         if (simNow - uData.lastAttackTime > unitAttackCooldown) {
-                            // Apply global damage multiplier to base attack
+                            // Apply global damage multiplier
                             const effectiveAttack = u.attack * settingsRef.current.globalDamageMultiplier;
                             const { damage: finalDmg } = calcDamage(
                                 effectiveAttack,
                                 settingsRef.current.critChance,
                                 towerConfigRef.current.criticalMultiplier ?? 2.0,
                             );
-                            currentTarget.hp -= finalDmg;
-                            tData.hp = currentTarget.hp;
-                            tData.lastDamageTime = now;
-                            accumulateDamage(currentTarget.id, finalDmg, tData.position, u.type === "player" ? towerConfig.player.color : towerConfig.enemy.color);
+
+                            const teamColor = u.type === "player" ? towerConfig.player.color : towerConfig.enemy.color;
+
+                            if (u.unitClass === 'mage') {
+                                // Combat Sync: Logic for delayed hit (Hit Delay)
+                                // FIXED: Use simulationTimeRef for perfect sync with visuals
+                                pendingDamageRef.current.push({
+                                    targetId: currentTarget.id,
+                                    damage: finalDmg,
+                                    hitTime: simNow + MAGE_PROJECTILE_TIME_MS, 
+                                    position: [...tData.position] as [number, number, number],
+                                    color: teamColor,
+                                    attackerName: u.userName,
+                                    attackerClass: u.unitClass,
+                                    attackerId: u.id // NEW: Track for victory pause
+                                });
+
+                                // SPATIAL FX: Direct sync with MageSpellEffect via Ref
+                                const availableSlot = spellsRef.current.find(s => !s.active);
+                                if (availableSlot) {
+                                    availableSlot.active = true;
+                                    availableSlot.progress = 0; // Explicit reset
+                                    availableSlot.fromX = uData.position[0];
+
+                                    availableSlot.fromY = 1.0;
+                                    availableSlot.fromZ = uData.position[2];
+                                    availableSlot.toX = tData.position[0];
+                                    availableSlot.toY = 1.0;
+                                    availableSlot.toZ = tData.position[2];
+                                    availableSlot.startTime = simNow;
+                                    availableSlot.color = teamColor;
+                                    availableSlot.targetId = currentTarget.id;
+                                }
+
+                            } else {
+
+                                // Melee units hit instantly
+                                currentTarget.hp -= finalDmg;
+                                tData.hp = currentTarget.hp;
+                                tData.lastDamageTime = now;
+                                accumulateDamage(currentTarget.id, finalDmg, tData.position, teamColor);
+                                
+                                frameEventsRef.current.push({
+                                    a: u.userName,
+                                    c: u.unitClass,
+                                    tgt: currentTarget.userName,
+                                    dmg: Math.round(finalDmg),
+                                    kill: currentTarget.hp <= 0 ? 1 : 0
+                                });
+
+                                if (currentTarget.hp <= 0) {
+                                    // Melee units clear target immediately on kill
+                                    u.targetId = undefined;
+                                    uData.victoryPauseUntil = now + settingsRef.current.victoryPauseMs;
+                                    uData.status = "idle";
+                                    
+                                    // Melee kill tracking
+                                    if (u.type === 'player') {
+                                        statsRef.current.playerKills[u.userName] = (statsRef.current.playerKills[u.userName] || 0) + 1;
+                                    } else {
+                                        statsRef.current.enemyKills[u.userName] = (statsRef.current.enemyKills[u.userName] || 0) + 1;
+                                    }
+                                    
+                                    addKillEvent(u.userName, currentTarget.userName, currentTarget.isBoss ? "boss" : "unit");
+                                }
+                            }
                             uData.lastAttackTime = simNow;
                             statsRef.current.damageDealt[u.userName] = (statsRef.current.damageDealt[u.userName] || 0) + finalDmg;
-
-                            if (currentTarget.hp <= 0) {
-                                uData.victoryPauseUntil = now + settingsRef.current.victoryPauseMs;
-                                uData.status = "idle";
-                                addKillEvent(u.userName, currentTarget.userName, currentTarget.isBoss ? "boss" : "unit");
+                            
+                            // SYNC: Update the team-specific damage maps for analytics
+                            if (u.type === 'player') {
+                                statsRef.current.playerDamage[u.userName] = (statsRef.current.playerDamage[u.userName] || 0) + finalDmg;
+                            } else {
+                                statsRef.current.enemyDamage[u.userName] = (statsRef.current.enemyDamage[u.userName] || 0) + finalDmg;
                             }
                         }
+
                     }
                 }
             }
 
-            if (!isAttackingTarget) uData.status = "marching";
+            // Engine fallback (marching) is now handled by Army components
 
-            // Steering: Seek target rim or march in lane
+            // --- DECENTRALIZED STEERING & POSITION SYNC ---
             const vehicle = vehicles.current.get(u.id);
             if (vehicle) {
-                const seek = vehicle.steering.behaviors.find((b) => b instanceof YUKA.SeekBehavior) as YUKA.SeekBehavior;
-                if (seek && !isThrottled) {
-                    if (currentTarget) {
-                        const tData = unitDataRef.current.get(currentTarget.id);
-                        if (tData) {
-                            const dx = uData.position[0] - tData.position[0];
-                            const dz = uData.position[2] - tData.position[2];
-                            const dist = Math.sqrt(dx * dx + dz * dz) || 0.001;
-                            const currentEncirclementRadius = settingsRef.current.encirclementRadius;
-                            const currentEncirclementJitter = settingsRef.current.encirclementJitter;
-                            const variableRadius = currentEncirclementRadius + (Math.sin(uData.jitterOffset) * currentEncirclementJitter);
-                            seek.target.set(
-                                tData.position[0] + (dx / dist) * variableRadius,
-                                -0.4,
-                                tData.position[2] + (dz / dist) * variableRadius,
-                            );
-                        }
-                    } else {
-                        const swagger = Math.sin(now * 0.001 + uData.jitterOffset) * settingsRef.current.laneSwaggerAmp;
-                        const laneTargetX = uData.laneOffset + swagger;
-                        const currentX = vehicle.position.x;
-                        const targetZ = u.type === "player" ? -(towerConfigRef.current.baseDistance || 24) : (towerConfigRef.current.baseDistance || 24);
-                        const spring = Math.abs(currentX - laneTargetX) > settingsRef.current.laneDriftThreshold ? settingsRef.current.laneSpringFar : settingsRef.current.laneSpringNear;
-                        seek.target.set(laneTargetX + (currentX - laneTargetX) * (1 - spring), -0.4, targetZ);
-                    }
-                }
-                // Dynamic Social Dynamics
-                const separation = vehicle.steering.behaviors.find((b) => b instanceof YUKA.SeparationBehavior) as any;
-                if (separation) {
-                    separation.radius = settingsRef.current.separationRadius;
-                    separation.weight = settingsRef.current.separationStrength * 15; // Scale strength to meaningful weights
-                }
+                // The actual steering (Seek targets, Kiting, Speed) is now handled 
+                // by individual army components. The engine purely facilitates 
+                // spatial indexing and rotation calculations.
 
-                // Dynamic Speed Sync: Recalculate maxSpeed if global settings changed
-                const baseActualSpeed = u.speed;
-                const targetMaxSpeed = uData.status === "attacking" ? 0 : (baseActualSpeed * settingsRef.current.globalSpeedMultiplier);
-                if (vehicle.maxSpeed !== targetMaxSpeed) {
-                    vehicle.maxSpeed = targetMaxSpeed;
-                }
-                
                 const limitEdgeZ = (towerConfigRef.current.baseDistance || 24) - 2;
-                // Fix Base Attacker positioning based on targeted base
                 if (vehicle.position.z < -limitEdgeZ) vehicle.position.z = -limitEdgeZ;
                 if (vehicle.position.z > limitEdgeZ) vehicle.position.z = limitEdgeZ;
 
-                if (uData.status === "attacking") vehicle.velocity.set(0, 0, 0);
+                // Armies now handle their own stopping logic (velocity/speed)
+
+
+
                 uData.position[0] = vehicle.position.x;
                 uData.position[2] = vehicle.position.z;
 
-                const velSq = vehicle.velocity.x ** 2 + vehicle.velocity.z ** 2;
-                if (uData.status === 'marching' && velSq > 0.01) {
-                    uData.rotation[1] = Math.atan2(vehicle.velocity.x, vehicle.velocity.z);
-                } else if (uData.status === 'attacking') {
-                    if (uData.isAttackingBase) {
-                        const baseZ = u.type === 'player' ? ENEMY_BASE_Z : PLAYER_BASE_Z;
-                        const targetRot = Math.atan2(0 - uData.position[0], baseZ - uData.position[2]);
-                        uData.rotation[1] = THREE.MathUtils.lerp(uData.rotation[1], targetRot, settingsRef.current.rotationSmoothing);
-                    } else if (currentTarget) {
-                        const tData = unitDataRef.current.get(currentTarget.id);
-                        if (tData) {
-                            const targetRot = Math.atan2(tData.position[0] - uData.position[0], tData.position[2] - uData.position[2]);
-                            uData.rotation[1] = THREE.MathUtils.lerp(uData.rotation[1], targetRot, settingsRef.current.rotationSmoothing);
-                        }
-                    }
-                } else {
-                    const idleRot = u.type === 'player' ? 0 : Math.PI;
-                    uData.rotation[1] = THREE.MathUtils.lerp(uData.rotation[1], idleRot, settingsRef.current.rotationSmoothing * 0.5);
-                }
+                // NOTE: Rotation is now completely decentralized and handled in FighterArmy/TankArmy/MageArmy.
             }
         }
+
 
         // ---- PASS 2: Social Dynamics / Spatial Partitioning (Optimized) ----
         if (frameParityRef.current % 2 === 0) {
             const GRID_SIZE = 4; // Slightly larger grid for better batching
+
             const buckets = bucketsMapRef.current;
             buckets.clear();
 
@@ -775,9 +866,16 @@ export const useBattleSystem = () => {
         function solveSocialDynamics(uA: any, uDataA: any, uB: any) {
             if (uB.isDying || uA.type !== uB.type) return;
             const uDataB = unitDataRef.current.get(uB.id)!;
-            const dx = uDataA.position[0] - uDataB.position[0];
-            const dz = uDataA.position[2] - uDataB.position[2];
-            const distSq = dx * dx + dz * dz;
+            let dx = uDataA.position[0] - uDataB.position[0];
+            let dz = uDataA.position[2] - uDataB.position[2];
+            let distSq = dx * dx + dz * dz;
+
+            // If exactly overlapping, nudge them apart randomly to prevent clustering
+            if (distSq < 0.0001) {
+                dx = (Math.random() - 0.5) * 0.1;
+                dz = (Math.random() - 0.5) * 0.1;
+                distSq = dx * dx + dz * dz;
+            }
             
             const currentSeparationRadius = settingsRef.current.separationRadius;
             const comfortZone = (uA.isBoss ? 2.5 : currentSeparationRadius) + (uB.isBoss ? 2.5 : currentSeparationRadius);
@@ -785,11 +883,25 @@ export const useBattleSystem = () => {
             if (distSq < comfortZone * comfortZone) {
                 const dist = Math.sqrt(distSq) || 0.001;
                 const overlap = comfortZone - dist;
-                const pushStrength = settingsRef.current.separationStrength * (1.0 - dist / comfortZone);
-                const nx = dx / dist; const nz = dz / dist;
-                const force = overlap * pushStrength;
-                uDataA.position[0] += nx * force; uDataA.position[2] += nz * force;
-                uDataB.position[0] -= nx * force; uDataB.position[2] -= nz * force;
+                
+                // STABILITY: Attacking units act as solid pillars (weight 0.0) unless they are kiting
+                const weightA = (uDataA.status === 'attacking' && !uDataA.isKiting) ? 0.0 : 1.0;
+                const weightB = (uDataB.status === 'attacking' && !uDataB.isKiting) ? 0.0 : 1.0;
+                
+                const totalWeight = weightA + weightB;
+                if (totalWeight > 0) {
+                    // SMOOTHING: Increase separation radius but lower the force curve to prevent violent bouncing
+                    const pushStrength = settingsRef.current.separationStrength * (1.0 - dist / comfortZone) * 0.5;
+                    const nx = dx / dist; const nz = dz / dist;
+                    const force = overlap * pushStrength;
+                    
+                    const forceA = force * (weightA / totalWeight);
+                    const forceB = force * (weightB / totalWeight);
+
+
+                    uDataA.position[0] += nx * forceA; uDataA.position[2] += nz * forceA;
+                    uDataB.position[0] -= nx * forceB; uDataB.position[2] -= nz * forceB;
+                }
                 const vA = vehicles.current.get(uA.id);
                 const vB = vehicles.current.get(uB.id);
                 if (vA) { vA.position.x = uDataA.position[0]; vA.position.z = uDataA.position[2]; }
@@ -831,6 +943,8 @@ export const useBattleSystem = () => {
                 damageDealt: { ...statsRef.current.damageDealt },
                 playerDamage: { ...statsRef.current.playerDamage },
                 enemyDamage: { ...statsRef.current.enemyDamage },
+                playerKills: { ...statsRef.current.playerKills },
+                enemyKills: { ...statsRef.current.enemyKills },
             });
         }
 
@@ -876,22 +990,37 @@ export const useBattleSystem = () => {
         debug,
         setDebug,
         unitRegistry: unitDataRef,
+        vehicles: vehicles,
+        unitIndex: unitIndexRef,
         updateSettingsRef: (newSettings: any) => { settingsRef.current = { ...settingsRef.current, ...newSettings }; },
         syncPerformance,
+        spellsRef: spellsRef,
         stats: statsRef.current,
+
+
         replayStats: [...replayBufferRef.current],
         downloadReplay: () => {
-            const data = JSON.stringify(replayBufferRef.current);
+            const manifest = {
+                title: "Supreme Battle Replay",
+                timestamp: new Date().toISOString(),
+                schema: {
+                    unit: { h: "hp", p: "[x,z]", r: "rotation", s: "status", c: "class", t: "type (0:ply, 1:enm)" },
+                    event: { a: "attacker", c: "class", tgt: "target", dmg: "damage", kill: "is_kill" }
+                },
+                data: replayBufferRef.current
+            };
+            const data = JSON.stringify(manifest, null, 2);
             const blob = new Blob([data], { type: "application/json" });
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
             a.href = url;
-            a.download = `battle_replay_${Date.now()}.json`;
+            a.download = `battle_analysis_${Date.now()}.json`;
             a.click();
         },
         triggerAirstrike,
         updateSimulation,
         damageQueue: damageQueueRef,
         settingsRef,
+        simTimeRef: simulationTimeRef,
     };
 };

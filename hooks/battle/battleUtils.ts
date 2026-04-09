@@ -19,8 +19,8 @@ export const getUnitStats = (
     hp: Math.floor(100 * Math.pow(2.2, level - 1) * config.hpMultiplier * settings.globalHpMultiplier),
     maxHp: Math.floor(100 * Math.pow(2.2, level - 1) * config.hpMultiplier * settings.globalHpMultiplier),
     attack: Math.floor(25 * Math.pow(1.8, level - 1) * config.attackMultiplier * settings.globalDamageMultiplier),
-    speed: 2.2 * config.speedMultiplier * settings.globalSpeedMultiplier,
-    range: 2.5 * settings.unitScale, // Range should reflect physical size
+    speed: 3.2 * config.speedMultiplier * settings.globalSpeedMultiplier,
+    range: 3.0 * settings.unitScale, // Slightly increased base range for better engagement
     level,
 });
 
