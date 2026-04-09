@@ -67,6 +67,16 @@ const TerrainMaterial = new THREE.ShaderMaterial({
       float t = smoothstep(0.0, 20.0, vElevation);
       vec3 finalColor = mix(baseColor, peakColor, t);
       
+      // Battlefield Road / Path (Z-axis focal point)
+      float roadMask = smoothstep(6.0, 3.0, abs(vUv.x - 0.5) * 100.0);
+      vec3 roadColor = vec3(0.5, 0.45, 0.4); // Dirt/Soil color
+      finalColor = mix(finalColor, roadColor, roadMask * 0.4);
+      
+      // Subtle Grid / Tactical look
+      float grid = (sin(vUv.x * 200.0) * sin(vUv.y * 200.0));
+      grid = smoothstep(0.98, 1.0, grid);
+      finalColor += grid * 0.05;
+
       gl_FragColor = vec4(finalColor, 1.0);
     }
   `,
@@ -80,10 +90,91 @@ const Terrain = ({ baseDistance }: { baseDistance: number }) => {
 
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.6, 0]} receiveShadow>
-      <planeGeometry args={[300, 300, 80, 80]} />
+      <planeGeometry args={[400, 400, 100, 100]} />
       <primitive object={TerrainMaterial} attach="material" />
     </mesh>
   );
+};
+
+// --- 2. Environment Rocks ---
+const ROCK_COUNT = 150;
+const Rock = () => {
+  const meshRef = useRef<THREE.InstancedMesh>(null);
+  const dummy = useMemo(() => new THREE.Object3D(), []);
+
+  useEffect(() => {
+    if (!meshRef.current) return;
+    for (let i = 0; i < ROCK_COUNT; i++) {
+        const r = 30 + Math.random() * 80;
+        const angle = Math.random() * Math.PI * 2;
+        const x = r * Math.cos(angle);
+        const z = r * Math.sin(angle);
+        
+        // Don't spawn on road
+        if (Math.abs(x) < 12) continue;
+
+        dummy.position.set(x, -0.2, z);
+        dummy.rotation.set(Math.random(), Math.random(), Math.random());
+        dummy.scale.setScalar(0.5 + Math.random() * 2.5);
+        dummy.updateMatrix();
+        meshRef.current.setMatrixAt(i, dummy.matrix);
+    }
+    meshRef.current.instanceMatrix.needsUpdate = true;
+  }, []);
+
+  return (
+    <instancedMesh ref={meshRef} args={[null as any, null as any, ROCK_COUNT]} castShadow receiveShadow>
+      <icosahedronGeometry args={[1, 0]} />
+      <meshStandardMaterial color="#666666" roughness={0.8} />
+    </instancedMesh>
+  );
+};
+
+// --- 3. Environment Trees ---
+const TREE_COUNT = 300;
+const Forest = () => {
+    const trunkRef = useRef<THREE.InstancedMesh>(null);
+    const topRef = useRef<THREE.InstancedMesh>(null);
+    const dummy = useMemo(() => new THREE.Object3D(), []);
+
+    useEffect(() => {
+        if (!trunkRef.current || !topRef.current) return;
+        for (let i = 0; i < TREE_COUNT; i++) {
+            const r = 40 + Math.random() * 110;
+            const angle = Math.random() * Math.PI * 2;
+            const x = r * Math.cos(angle);
+            const z = r * Math.sin(angle);
+            
+            if (Math.abs(x) < 15) continue;
+
+            const s = 1.0 + Math.random() * 2.0;
+
+            dummy.position.set(x, 1, z);
+            dummy.scale.set(s, s, s);
+            dummy.updateMatrix();
+            trunkRef.current.setMatrixAt(i, dummy.matrix);
+
+            dummy.position.set(x, 4 * s, z);
+            dummy.scale.set(s * 2, s * 3, s * 2);
+            dummy.updateMatrix();
+            topRef.current.setMatrixAt(i, dummy.matrix);
+        }
+        trunkRef.current.instanceMatrix.needsUpdate = true;
+        topRef.current.instanceMatrix.needsUpdate = true;
+    }, []);
+
+    return (
+        <group>
+            <instancedMesh ref={trunkRef} args={[null as any, null as any, TREE_COUNT]} castShadow>
+                <cylinderGeometry args={[0.2, 0.4, 4, 6]} />
+                <meshStandardMaterial color="#4d2915" />
+            </instancedMesh>
+            <instancedMesh ref={topRef} args={[null as any, null as any, TREE_COUNT]} castShadow>
+                <coneGeometry args={[1, 2, 6]} />
+                <meshStandardMaterial color="#1a3d1a" />
+            </instancedMesh>
+        </group>
+    );
 };
 
 
@@ -280,6 +371,8 @@ export const StormEnvironment = ({ baseDistance = 24 }: { baseDistance?: number 
       
       <Terrain baseDistance={baseDistance} />
       <Grass baseDistance={baseDistance} />
+      <Rock />
+      <Forest />
       {/* <Rain /> */}
       {/* <Lightning /> */}
       
