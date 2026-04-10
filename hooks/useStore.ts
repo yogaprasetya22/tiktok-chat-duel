@@ -36,10 +36,6 @@ interface BattleState {
   armyCounts: { player: number; enemy: number };
   setArmyCounts: (player: number, enemy: number) => void;
   
-  // Performance Monitor (Diagnostics)
-  perfSnapshot: any;
-  setPerfSnapshot: (snap: any) => void;
-
   // Dynamic Simulation Settings
   settings: SimulationSettings;
   updateSettings: (partial: Partial<SimulationSettings>) => void;
@@ -83,9 +79,6 @@ export const useStore = create<BattleState>((set) => ({
   armyCounts: { player: 0, enemy: 0 },
   setArmyCounts: (player, enemy) => set({ armyCounts: { player, enemy } }),
   
-  perfSnapshot: null,
-  setPerfSnapshot: (perfSnapshot) => set({ perfSnapshot }),
-
   settings: INITIAL_SETTINGS,
   updateSettings: (partial) => set((state) => ({ 
     settings: { ...state.settings, ...partial } 

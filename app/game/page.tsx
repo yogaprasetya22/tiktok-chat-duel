@@ -7,15 +7,13 @@ import { useBattleSystem } from "../../hooks/useBattleSystem";
 import { useStore } from "../../hooks/useStore";
 import { GameCanvas } from "../../components/game/GameCanvas";
 import { UIOverlay } from "../../components/game/UIOverlay";
-import { BattleMonitor } from "../../components/game/BattleMonitor";
-import { Brain, MessageCircle, Heart, Gift, Radio, Shield, Sword, Skull, BarChart3, Activity, X, Zap } from "lucide-react";
+import { Brain, MessageCircle, Heart, Gift, Radio, Shield, Sword, Skull, X, Zap } from "lucide-react";
 import { TrainingPanel } from "../../components/game/TrainingPanel";
 
 export default function GamePage() {
   const [mounted, setMounted] = useState(false);
   const [isCinematic, setIsCinematic] = useState(false);
   const [showChat, setShowChat] = useState(true);
-  const [showMonitor, setShowMonitor] = useState(false);
   const [targetUsername, setTargetUsername] = useState("");
   const [activeUsername, setActiveUsername] = useState("");
   const [testingMode, setTestingMode] = useState(false);
@@ -45,8 +43,6 @@ export default function GamePage() {
     syncPerformance,
     unitRegistry,
     stats,
-    replayStats,
-    downloadReplay,
     triggerAirstrike,
     updateSimulation,
     damageQueue,
@@ -192,7 +188,7 @@ export default function GamePage() {
     mvpData,
     testingMode,
     onToggleTesting: () => setTestingMode(!testingMode),
-    onDownloadReplay: downloadReplay,
+    onDownloadReplay: () => {}, // Disabled
     isFullscreen,
     onToggleFullscreen: () => setIsFullscreen(!isFullscreen),
     updateSettingsRef,
@@ -386,26 +382,6 @@ export default function GamePage() {
         </main>
       </div>
 
-      {/* Floating Battle Monitor Toggle */}
-      <button
-        onClick={() => setShowMonitor(!showMonitor)}
-        className="fixed bottom-6 right-6 z-[1000] p-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl shadow-2xl shadow-indigo-500/20 transition-all active:scale-95 group border border-white/20"
-      >
-        <div className="flex items-center gap-2">
-          {showMonitor ? <X size={20} /> : <BarChart3 size={20} />}
-          <span className="text-xs font-black uppercase tracking-widest overflow-hidden max-w-0 group-hover:max-w-[100px] transition-all duration-300">
-            Monitor
-          </span>
-        </div>
-      </button>
-
-      {showMonitor && (
-        <BattleMonitor 
-          rawData={replayStats} 
-          mode="live"
-          onClose={() => setShowMonitor(false)} 
-        />
-      )}
     </div>
   );
 }

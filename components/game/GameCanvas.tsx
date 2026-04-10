@@ -23,7 +23,6 @@ import { Chessboard } from "./Chessboard";
 import { VFXProvider, useVFX } from "./VFXManager";
 import { BattleArmy } from "./BattleArmy";
 import { StormEnvironment } from "./StormEnvironment";
-import { DamageHUDBatcher } from "./DamageHUDBatcher";
 import { ActiveUnit, TowerConfig, DamageText, MapObstacle } from "../../hooks/useBattleSystem";
 import { useStore } from "../../hooks/useStore";
 import React, { useState, useEffect, useRef } from "react";
@@ -82,26 +81,6 @@ const CameraDirector = () => {
   return null;
 };
 
-// --- Performance Probe for Deep Diagnostics ---
-const PerformanceProbe = ({ syncPerformance }: { syncPerformance: (data: any) => void }) => {
-  const { gl } = useThree();
-  const lastTime = useRef(performance.now());
-  const frameCount = useRef(0);
-
-  useFrame(() => {
-    frameCount.current++;
-    if (frameCount.current % 30 === 0) { // Update every 30 frames to save CPU
-      const now = performance.now();
-      syncPerformance({
-        drawCalls: gl.info.render.calls,
-        triangles: gl.info.render.triangles,
-        drift: (now - lastTime.current) / 30
-      });
-      lastTime.current = now;
-    }
-  });
-  return null;
-};
 
 interface GameCanvasProps {
   towerConfig: TowerConfig;
@@ -227,7 +206,6 @@ export const GameCanvas = React.memo(({
         }}
         className="select-none touch-none "
       >
-        <PerformanceProbe syncPerformance={syncPerformance} />
         <PerformanceMonitor onIncline={() => setDpr(Math.min(dpr + 0.1, 1.0))} onDecline={() => setDpr(Math.max(dpr - 0.1, 0.7))} />
         <AdaptiveEvents />
         <AdaptiveDpr pixelated={true} />
@@ -260,7 +238,6 @@ export const GameCanvas = React.memo(({
           />
 
 
-          <DamageHUDBatcher damageQueue={damageQueue} />
 
           <Base
             maxHp={towerConfig.baseHp}

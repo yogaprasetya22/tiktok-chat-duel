@@ -374,15 +374,15 @@ export const StormEnvironment = ({ baseDistance = 24 }: { baseDistance?: number 
         mieDirectionalG={0.8} 
       />
       <hemisphereLight 
-        intensity={weather === 'CLEAR' ? 1.2 : 0.4} 
-        color={weather === 'THUNDER' ? "#a855f7" : "#ffffff"} 
-        groundColor="#666666" 
+        intensity={weather === 'CLEAR' ? 1.2 : 0.8} 
+        color={weather === 'THUNDER' ? "#cfe2ff" : "#ffffff"} 
+        groundColor="#444444" 
       />
-      <ambientLight intensity={weather === 'CLEAR' ? 0.5 : 0.2} />
+      <ambientLight intensity={weather === 'CLEAR' ? 0.6 : 0.5} />
       <directionalLight 
-        position={[0, 100, 0]} 
-        intensity={weather === 'CLEAR' ? 4.0 : 0.5} 
-        color="#ffffff" 
+        position={[20, 100, 20]} 
+        intensity={weather === 'CLEAR' ? 4.5 : 1.5} 
+        color={weather === 'RAIN' ? "#d1e9ff" : "#ffffff"} 
         castShadow={false}
       />
       
@@ -395,7 +395,8 @@ export const StormEnvironment = ({ baseDistance = 24 }: { baseDistance?: number 
       {weather === 'THUNDER' && <Lightning />}
       
       {/* Daylight fog - push it back so battlefield is clear */}
-      <fog attach="fog" args={[weather === 'CLEAR' ? "#f0f5ff" : "#1a1a1a", 40, weather === 'CLEAR' ? 250 : 120]} />
+      {/* Better Fog to keep battlefield clear but edges moody */}
+      <fog attach="fog" args={[weather === 'CLEAR' ? "#f0f5ff" : "#2a2a2a", weather === 'CLEAR' ? 60 : 40, weather === 'CLEAR' ? 300 : 180]} />
     </group>
   );
 };

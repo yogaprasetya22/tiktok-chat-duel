@@ -128,14 +128,6 @@ export const UIOverlay = ({
             <Camera className="w-5 h-5" />
           </button>
           <button 
-            onClick={onDownloadReplay}
-            className="p-3 bg-zinc-900/80 backdrop-blur-md rounded-xl border border-white/10 text-white/50 hover:text-white transition-colors group relative"
-            title="Download Replay for AI Analysis"
-          >
-            <Download className="w-5 h-5 group-hover:scale-110 transition-transform" />
-            <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-zinc-900 animate-pulse" />
-          </button>
-          <button 
             onClick={() => setIsSettingsOpen(!isSettingsOpen)}
             className={`p-3 backdrop-blur-md rounded-xl border border-white/10 transition-all shadow-xl ${isSettingsOpen ? 'bg-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.5)]' : 'bg-zinc-900/80 text-white/50 hover:text-white'}`}
             title="Update Configuration"

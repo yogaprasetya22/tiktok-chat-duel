@@ -22,7 +22,7 @@ interface BattleArmyProps {
   vehicles: React.RefObject<Map<string, any>>;
   unitIndex: React.RefObject<Map<string, any>>;
   spellsRef: React.RefObject<SpellEntry[]>;
-  vfxRef: React.RefObject<any>;
+  vfxRef?: React.RefObject<any>;
 }
 
 
