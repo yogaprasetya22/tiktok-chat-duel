@@ -88,19 +88,32 @@ export function AssassinArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, v
         const uData = rawMap.get(id);
         if (!uData) return;
 
-        // Targeting
+        // Targeting (Priority: Mage/Marksman > Fighter > Tank)
         if (frameCountRef.current % 10 === 0 || !u.targetId) {
-            let bestDistSq = uData.perceptionRadiusSq || 4225;
+            let bestScore = -Infinity;
             let bestTargetId = undefined;
             rawMap.forEach((potential, pid) => {
                 if (pid === id || potential.hp <= 0 || potential.isDying) return;
                 if (potential.type === u.type) return;
-                if (mode === 'TRAINING' && u.type === 'player' && potential.userName !== 'Training') return;
+                
                 const dx = uData.position[0] - potential.position[0];
                 const dz = uData.position[2] - potential.position[2];
                 const dSq = dx * dx + dz * dz;
-                if (dSq < bestDistSq) {
-                    bestDistSq = dSq;
+                
+                const perceptionThresholdSq = uData.perceptionRadiusSq || 14400; // Increased range
+                if (dSq > perceptionThresholdSq) return;
+
+                // Priority Scoring
+                let score = -Math.sqrt(dSq); // Proximity penalty (negative score)
+                
+                if (potential.unitClass === 'mage' || potential.unitClass === 'marksman') {
+                    score += 5000; // High priority items
+                } else if (potential.unitClass === 'tank') {
+                    score -= 500; // Low priority
+                }
+
+                if (score > bestScore) {
+                    bestScore = score;
                     bestTargetId = pid;
                 }
             });
@@ -125,14 +138,25 @@ export function AssassinArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, v
             uData.status = distToBaseSq < 9 ? 'attacking' : 'marching';
         }
 
-        // VFX (Melee Slashes)
+        // Decision: Teleport Detection (Visuals)
+        const lastBlink = u.lastBlinkTime || 0;
+        const prevBlink = lastVFXRef.current.get(id + '-blink') || 0;
+        if (lastBlink > prevBlink) {
+            // Spawn ninja "smoke" at old and new position
+            // Since we don't have the old position easily, we spawn it at the current one
+            // which was just updated by the engine.
+            spawnVFX([uData.position[0], 0.5, uData.position[2]], 'death', '#333333');
+            lastVFXRef.current.set(id + '-blink', lastBlink);
+        }
+
+        // Decision: Melee Slashes
         const currentAtk = u.lastAttackTime || 0;
-        const prevAtk = lastVFXRef.current.get(id) || 0;
+        const prevAtk = lastVFXRef.current.get(id + '-atk') || 0;
         if (currentAtk > prevAtk) {
             const forwardX = Math.sin(uData.rotation[1]) * 1.2;
             const forwardZ = Math.cos(uData.rotation[1]) * 1.2;
             spawnVFX([uData.position[0] + forwardX, 1.2, uData.position[2] + forwardZ], 'slash', '#ffffff');
-            lastVFXRef.current.set(id, currentAtk);
+            lastVFXRef.current.set(id + '-atk', currentAtk);
         }
 
         // Steering
@@ -217,7 +241,9 @@ export function AssassinArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, v
       const poolIdx = poolMapRef.current.get(id);
       if (poolIdx === undefined) return;
       const pItem = characterPool[poolIdx];
-      pItem.group.visible = true;
+      
+      const isUntargetable = u.untargetableUntil > (simTimeRef.current * 1000);
+      pItem.group.visible = !isUntargetable;
 
       const baseScale = u.isBoss ? 4.0 : (1.3 + (u.level || 1) * 0.1);
       pItem.group.scale.setScalar(baseScale * settings.unitScale);
@@ -242,17 +268,21 @@ export function AssassinArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, v
 
       const tp = uData.position;
       const cp = pItem.group.position;
+      const lerpFactor = 1.0 - Math.exp(-20 * delta);
       if (!pItem.initialized) {
         cp.set(tp[0], tp[1], tp[2]);
         pItem.rotation = uData.rotation[1];
         pItem.group.rotation.y = pItem.rotation;
         pItem.initialized = true;
       } else {
-        cp.x += (tp[0]-cp.x)*0.25; cp.y += (tp[1]-cp.y)*0.25; cp.z += (tp[2]-cp.z)*0.25;
+        cp.x = THREE.MathUtils.lerp(cp.x, tp[0], lerpFactor);
+        cp.y = THREE.MathUtils.lerp(cp.y, tp[1], lerpFactor);
+        cp.z = THREE.MathUtils.lerp(cp.z, tp[2], lerpFactor);
+        
         let diff = uData.rotation[1] - pItem.rotation;
         while (diff < -Math.PI) diff += Math.PI * 2;
         while (diff > Math.PI) diff -= Math.PI * 2;
-        pItem.rotation += diff * 0.15;
+        pItem.rotation += diff * (1.0 - Math.exp(-15 * delta));
         pItem.group.rotation.y = pItem.rotation;
       }
 

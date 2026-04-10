@@ -45,7 +45,11 @@ import {
     ENEMY_BASE_Z,
     PLAYER_BASE_Z,
     CLASS_CONFIG,
-    WEATHER_CONFIG
+    WEATHER_CONFIG,
+    CORPSE_DESPAWN_MS,
+    ASSASSIN_BLINK_DISTANCE,
+    ASSASSIN_BLINK_COOLDOWN,
+    ASSASSIN_INVUL_MS
 } from "./battle/constants";
 
 import {
@@ -90,6 +94,17 @@ export const useBattleSystem = () => {
         unitsSpawned: {},
         playerHits: {},
         enemyHits: {},
+        classStats: {
+            fighter: { damageDealt: 0, damageTaken: 0, kills: 0, unitsSpawned: 0, healing: 0 },
+            tank: { damageDealt: 0, damageTaken: 0, kills: 0, unitsSpawned: 0, healing: 0 },
+            mage: { damageDealt: 0, damageTaken: 0, kills: 0, unitsSpawned: 0, healing: 0 },
+            marksman: { damageDealt: 0, damageTaken: 0, kills: 0, unitsSpawned: 0, healing: 0 },
+            assassin: { damageDealt: 0, damageTaken: 0, kills: 0, unitsSpawned: 0, healing: 0 },
+        },
+        teamSummary: {
+            player: { totalDamage: 0, totalKills: 0, unitsLost: 0 },
+            enemy: { totalDamage: 0, totalKills: 0, unitsLost: 0 },
+        }
     });
 
     const replayBufferRef = useRef<any[]>([]);
@@ -296,6 +311,17 @@ export const useBattleSystem = () => {
                 unitsSpawned: {},
                 playerHits: {},
                 enemyHits: {},
+                classStats: {
+                    fighter: { damageDealt: 0, damageTaken: 0, kills: 0, unitsSpawned: 0, healing: 0 },
+                    tank: { damageDealt: 0, damageTaken: 0, kills: 0, unitsSpawned: 0, healing: 0 },
+                    mage: { damageDealt: 0, damageTaken: 0, kills: 0, unitsSpawned: 0, healing: 0 },
+                    marksman: { damageDealt: 0, damageTaken: 0, kills: 0, unitsSpawned: 0, healing: 0 },
+                    assassin: { damageDealt: 0, damageTaken: 0, kills: 0, unitsSpawned: 0, healing: 0 },
+                },
+                teamSummary: {
+                    player: { totalDamage: 0, totalKills: 0, unitsLost: 0 },
+                    enemy: { totalDamage: 0, totalKills: 0, unitsLost: 0 },
+                }
             };
     }, [towerConfig.baseHp, entityManager]);
 
@@ -348,7 +374,8 @@ export const useBattleSystem = () => {
             const isTestingBot =
                 userName === towerConfigRef.current.player.name ||
                 userName === towerConfigRef.current.enemy.name;
-            if (!isBoss && !isTestingBot && (useStore.getState().gameMode !== 'TRAINING') && (statsRef.current.unitsSpawned[userName] || 0) >= 3)
+            const userActiveUnits = unitsRef.current.filter(u => u && u.userName === userName && !u.isDying).length;
+            if (!isBoss && !isTestingBot && (useStore.getState().gameMode !== 'TRAINING') && userActiveUnits >= 3)
                 return;
 
 
@@ -482,6 +509,9 @@ export const useBattleSystem = () => {
                     lastAttackTime: 0,
                     animationOffset: Math.random() * 100,
                     lastDamageTime: 0,
+                    lastBlinkTime: 0,
+                    isCriticalReady: false,
+                    untargetableUntil: 0,
                     victoryPauseUntil: 0,
                 };
                 unitDataRef.current.set(unitId, runtimeData);
@@ -562,18 +592,42 @@ export const useBattleSystem = () => {
                     } else {
                         const target = unitIndexRef.current.get(h.targetId);
                         if (target && target.hp > 0 && !target.isDying) {
-                            const tData = unitDataRef.current.get(target.id);
+                            const tData = unitDataRef.current.get(h.targetId);
                             if (tData) {
+                                // Check if target is untargetable (Assassin Vanish)
+                                if (tData.untargetableUntil > simNow) return; 
+
                                 target.hp -= h.damage;
                                 tData.hp = target.hp;
                                 tData.lastDamageTime = now;
+                            
+                            // Analytics: Class & Team Tracking
+                            const attackerClass = h.attackerClass || 'fighter';
+                            const victimClass = target.unitClass || 'fighter';
+                            const stats = statsRef.current;
+                            
+                            if (stats.classStats[attackerClass]) stats.classStats[attackerClass].damageDealt += h.damage;
+                            if (stats.classStats[victimClass]) stats.classStats[victimClass].damageTaken += h.damage;
+                            
+                            if (h.attackerName) {
+                                if (h.attackerId.startsWith('p')) { // Check attacker team
+                                    stats.teamSummary.player.totalDamage += h.damage;
+                                } else {
+                                    stats.teamSummary.enemy.totalDamage += h.damage;
+                                }
+                            }
 
-                                // Lifesteal/SpellVamp for delayed hits
+                                // Lifesteal/SpellVamp for delayed hits (Ranged)
                                 const attacker = unitIndexRef.current.get(h.attackerId);
-                                if (attacker && attacker.spellVamp > 0) {
-                                    attacker.hp = Math.min(attacker.maxHp, attacker.hp + h.damage * attacker.spellVamp);
-                                    const aData = unitDataRef.current.get(h.attackerId);
-                                    if (aData) aData.hp = attacker.hp;
+                                if (attacker) {
+                                    const isMage = h.attackerClass === 'mage';
+                                    const healMult = isMage ? attacker.spellVamp : attacker.lifesteal;
+                                    
+                                    if (healMult > 0) {
+                                        attacker.hp = Math.min(attacker.maxHp, attacker.hp + h.damage * healMult);
+                                        const aData = unitDataRef.current.get(h.attackerId);
+                                        if (aData) aData.hp = attacker.hp;
+                                    }
                                 }
 
                                 accumulateDamage(target.id, h.damage, tData.position, h.color);
@@ -643,10 +697,25 @@ export const useBattleSystem = () => {
             setUpdateTick((prev) => prev + 1);
         }
 
-        if (now % 2000 < 50) {
+        if (now - lastReactSyncRef.current > 1000) {
             setDamageTexts((dTexts) =>
                 dTexts.length === 0 ? dTexts : dTexts.filter((t) => now - t.timestamp < 1000),
             );
+            
+            // ---- PASS 1.5: Garbage Collection (Cleanup Corpses) ----
+            for (let i = simulationUnits.length - 1; i >= 0; i--) {
+                const u = simulationUnits[i];
+                if (u && u.isDying && u.deathTime && now - u.deathTime > CORPSE_DESPAWN_MS) {
+                    const v = vehicles.current.get(u.id);
+                    if (v) entityManager.remove(v);
+                    
+                    vehicles.current.delete(u.id);
+                    unitDataRef.current.delete(u.id);
+                    unitIndexRef.current.delete(u.id);
+                    unitsRef.current.splice(i, 1);
+                }
+            }
+            lastReactSyncRef.current = now;
         }
 
         const pUnits = pUnitsPoolRef.current;
@@ -767,28 +836,48 @@ export const useBattleSystem = () => {
             if (currentTarget) {
                 const tData = unitDataRef.current.get(currentTarget.id);
                 if (tData) {
-                                const dSq = (uData.position[0] - tData.position[0]) ** 2 + (uData.position[2] - tData.position[2]) ** 2;
+                    const dSq = (uData.position[0] - tData.position[0]) ** 2 + (uData.position[2] - tData.position[2]) ** 2;
                     const dynamicRangeSq = (u.range + (u.id.charCodeAt(0) % 5) * 0.1) ** 2;
+
+                    // --- ASSASSIN TELEPORT LOGIC ---
+                    if (u.unitClass === 'assassin' && (simNow - uData.lastBlinkTime > ASSASSIN_BLINK_COOLDOWN)) {
+                        if (dSq < ASSASSIN_BLINK_DISTANCE * ASSASSIN_BLINK_DISTANCE && dSq > 2.0 * 2.0) {
+                            const v = vehicles.current.get(u.id);
+                            if (v) {
+                                // Calculate teleport position (nudge behind target)
+                                const dx = tData.position[0] - uData.position[0];
+                                const dz = tData.position[2] - uData.position[2];
+                                const dist = Math.sqrt(dx * dx + dz * dz);
+                                const nx = dx / dist; const nz = dz / dist;
+                                
+                                const blinkX = tData.position[0] - nx * 0.7;
+                                const blinkZ = tData.position[2] - nz * 0.7;
+                                
+                                v.position.set(blinkX, -0.4, blinkZ);
+                                uData.position = [blinkX, -0.4, blinkZ];
+                                uData.lastBlinkTime = simNow;
+                                uData.isCriticalReady = true;
+                                uData.untargetableUntil = simNow + ASSASSIN_INVUL_MS; // Ninja Vanish effect
+                                uData.status = "attacking";
+                            }
+                        }
+                    }
+
                     if (dSq < dynamicRangeSq || uData.status === 'attacking') {
-                        // Trust Army component's engagement decision if its within a reasonable tolerance
-                        // or if the distance check passes
                         uData.status = "attacking"; uData.isAttackingBase = false; isAttackingTarget = true;
+                        
                         const weatherAdjCooldown = u.attackCooldown * weatherCooldownMult;
                         const finalAtkCooldown = weatherAdjCooldown / weatherAtkSpeedMult;
+                        
                         if (simNow - uData.lastAttackTime > finalAtkCooldown) {
-                            // Apply global damage multiplier
-                            const { damage: rawDmg, isCrit } = calcDamage(
-                                u,
-                                currentTarget,
-                                u.unitClass === 'mage',
-                            );
-                            const finalDmg = rawDmg * weatherDmgMult;
-
                             const teamColor = u.type === "player" ? towerConfig.player.color : towerConfig.enemy.color;
+                            let finalDmg = 0;
 
                             if (u.unitClass === 'mage' || u.unitClass === 'marksman') {
-                                // Projectile Logic for Ranged Classes
-                                const travelTime = u.unitClass === 'mage' ? MAGE_PROJECTILE_TIME_MS : 200; // Marksman bullets are faster
+                                const { damage: rawDmg } = calcDamage(u, currentTarget, u.unitClass === 'mage');
+                                finalDmg = rawDmg * weatherDmgMult;
+                                const travelTime = u.unitClass === 'mage' ? MAGE_PROJECTILE_TIME_MS : 200;
+                                
                                 pendingDamageRef.current.push({
                                     targetId: currentTarget.id,
                                     damage: finalDmg,
@@ -800,7 +889,6 @@ export const useBattleSystem = () => {
                                     attackerId: u.id
                                 });
                                 
-                                // Visual Projectile Sync
                                 const availableSlot = spellsRef.current.find(s => !s.active);
                                 if (availableSlot) {
                                     availableSlot.active = true;
@@ -812,60 +900,67 @@ export const useBattleSystem = () => {
                                     availableSlot.toY = 1.0;
                                     availableSlot.toZ = tData.position[2];
                                     availableSlot.startTime = simNow;
-                                    availableSlot.color = u.unitClass === 'marksman' ? '#ffcc00' : teamColor; // Yellow bullets
+                                    availableSlot.color = u.unitClass === 'marksman' ? '#ffcc00' : teamColor;
                                     availableSlot.targetId = currentTarget.id;
                                     (availableSlot as any).isBullet = u.unitClass === 'marksman';
                                 }
                             } else {
+                                // MELEE HIT
+                                // Check if target is untargetable
+                                if (tData.untargetableUntil > simNow) {
+                                    // Hit missed due to target being untargetable
+                                    uData.lastAttackTime = simNow;
+                                    return;
+                                }
 
-                                // Melee units hit instantly
+                                let { damage: rawDmg } = calcDamage(u, currentTarget, false);
+                                
+                                if (uData.isCriticalReady) {
+                                    rawDmg = u.attack * u.critDamage * 1.5; // Assassin's deadly crit
+                                    uData.isCriticalReady = false;
+                                }
+                                
+                                finalDmg = rawDmg * weatherDmgMult;
                                 currentTarget.hp -= finalDmg;
                                 tData.hp = currentTarget.hp;
                                 tData.lastDamageTime = now;
 
-                                // Lifesteal for melee
-                                if (u.lifesteal > 0) {
-                                    u.hp = Math.min(u.maxHp, u.hp + finalDmg * u.lifesteal);
+                                const healMult = u.lifesteal + (u.spellVamp * 0.5); 
+                                if (healMult > 0) {
+                                    u.hp = Math.min(u.maxHp, u.hp + finalDmg * healMult);
                                     uData.hp = u.hp;
                                 }
 
                                 accumulateDamage(currentTarget.id, finalDmg, tData.position, teamColor);
-                                
-                                frameEventsRef.current.push({
-                                    a: u.userName,
-                                    c: u.unitClass,
-                                    tgt: currentTarget.userName,
-                                    dmg: Math.round(finalDmg),
-                                    kill: currentTarget.hp <= 0 ? 1 : 0
-                                });
+                                frameEventsRef.current.push({ a: u.userName, c: u.unitClass, tgt: currentTarget.userName, dmg: Math.round(finalDmg), kill: currentTarget.hp <= 0 ? 1 : 0 });
 
                                 if (currentTarget.hp <= 0) {
-                                    // Melee units clear target immediately on kill
                                     u.targetId = undefined;
                                     uData.victoryPauseUntil = now + settingsRef.current.victoryPauseMs;
                                     uData.status = "idle";
-                                    
-                                    // Melee kill tracking
-                                    if (u.type === 'player') {
-                                        statsRef.current.playerKills[u.userName] = (statsRef.current.playerKills[u.userName] || 0) + 1;
-                                    } else {
-                                        statsRef.current.enemyKills[u.userName] = (statsRef.current.enemyKills[u.userName] || 0) + 1;
-                                    }
-                                    
                                     addKillEvent(u.userName, currentTarget.userName, currentTarget.isBoss ? "boss" : "unit");
+
+                                    // Analytics: Death tracking
+                                    const stats = statsRef.current;
+                                    if (stats.classStats[u.unitClass]) stats.classStats[u.unitClass].kills += 1;
+                                    if (u.type === 'player') {
+                                        stats.teamSummary.player.totalKills += 1;
+                                        stats.teamSummary.enemy.unitsLost += 1;
+                                    } else {
+                                        stats.teamSummary.enemy.totalKills += 1;
+                                        stats.teamSummary.player.unitsLost += 1;
+                                    }
                                 }
                             }
+                            
                             uData.lastAttackTime = simNow;
                             statsRef.current.damageDealt[u.userName] = (statsRef.current.damageDealt[u.userName] || 0) + finalDmg;
-                            
-                            // SYNC: Update the team-specific damage maps for analytics
                             if (u.type === 'player') {
                                 statsRef.current.playerDamage[u.userName] = (statsRef.current.playerDamage[u.userName] || 0) + finalDmg;
                             } else {
                                 statsRef.current.enemyDamage[u.userName] = (statsRef.current.enemyDamage[u.userName] || 0) + finalDmg;
                             }
                         }
-
                     }
                 }
             }
@@ -896,7 +991,8 @@ export const useBattleSystem = () => {
 
 
         // ---- PASS 2: Social Dynamics / Spatial Partitioning (Optimized) ----
-        if (frameParityRef.current % 2 === 0) {
+        // Running every frame now for maximum smoothness during collisions
+        if (true) { 
             const GRID_SIZE = 4; // Slightly larger grid for better batching
 
             const buckets = bucketsMapRef.current;
@@ -976,11 +1072,13 @@ export const useBattleSystem = () => {
 
                     uDataA.position[0] += nx * forceA; uDataA.position[2] += nz * forceA;
                     uDataB.position[0] -= nx * forceB; uDataB.position[2] -= nz * forceB;
+
+                    // Sync back to vehicle instantly to prevent physics "fighting"
+                    const vA = vehicles.current.get(uA.id);
+                    const vB = vehicles.current.get(uB.id);
+                    if (vA) { vA.position.x = uDataA.position[0]; vA.position.z = uDataA.position[2]; }
+                    if (vB) { vB.position.x = uDataB.position[0]; vB.position.z = uDataB.position[2]; }
                 }
-                const vA = vehicles.current.get(uA.id);
-                const vB = vehicles.current.get(uB.id);
-                if (vA) { vA.position.x = uDataA.position[0]; vA.position.z = uDataA.position[2]; }
-                if (vB) { vB.position.x = uDataB.position[0]; vB.position.z = uDataB.position[2]; }
             }
         }
 

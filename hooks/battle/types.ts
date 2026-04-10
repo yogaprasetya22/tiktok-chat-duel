@@ -25,6 +25,34 @@ export interface UnitStats {
     level?: number;
 }
 
+export interface ClassStatusStats {
+    hp: number;
+    hp_regen: number;
+    atk: number;
+    physical_defense: number;
+    magic_defense: number;
+    physical_pen: number;
+    magic_pen: number;
+    lifesteal: number;
+    spell_vamp: number;
+    move_speed_mult: number;
+    attack_speed_mult: number;
+    crit_chance: number;
+    crit_damage: number;
+    range: number;
+    tenacity: number;
+    cooldown_reduction: number;
+    ai_behavior: {
+        separation: number;
+        encirclement: number;
+        swagger: number;
+        perception_radius: number;
+        chase_range: number;
+    };
+}
+
+export type ClassConfig = Record<"fighter" | "tank" | "mage" | "marksman" | "assassin", ClassStatusStats>;
+
 export interface TeamConfig {
     name: string;
     color: string;
@@ -73,6 +101,9 @@ export interface ActiveUnit extends UnitStats {
     animationOffset: number;
     attackCooldown: number;
     critChance: number;
+    lastBlinkTime?: number;
+    isCriticalReady?: boolean;
+    untargetableUntil?: number;
 }
 
 export interface MapObstacle {
@@ -98,6 +129,19 @@ export interface BattleStats {
     unitsSpawned: Record<string, number>;
     playerHits: Record<string, number>;
     enemyHits: Record<string, number>;
+    
+    // Detailed Analytics
+    classStats: Record<string, {
+        damageDealt: number;
+        damageTaken: number;
+        kills: number;
+        unitsSpawned: number;
+        healing: number;
+    }>;
+    teamSummary: {
+        player: { totalDamage: number; totalKills: number; unitsLost: number };
+        enemy: { totalDamage: number; totalKills: number; unitsLost: number };
+    };
 }
 
 /** Internal runtime data for each unit, stored in unitDataRef */
@@ -118,6 +162,9 @@ export interface UnitRuntimeData {
     isAttackingBase?: boolean;
     animationOffset: number;
     lastDamageTime: number;
+    lastBlinkTime: number;
+    isCriticalReady: boolean;
+    untargetableUntil: number;
     victoryPauseUntil: number;
     jitterOffset: number;
     isDying?: boolean;

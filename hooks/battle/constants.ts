@@ -1,4 +1,4 @@
-import { SimulationSettings } from "./types";
+import { SimulationSettings, ClassConfig } from "./types";
 
 // ============================================================
 // BATTLE SYSTEM - WORLD & AI CONSTANTS
@@ -9,23 +9,23 @@ export let PLAYER_BASE_Z = 24;
 export let ENEMY_BASE_Z = -22;
 export let LANE_OFFSETS = [-15, -7.5, 0, 7.5, 15];
 
-export let CLASS_CONFIG = {
+export let CLASS_CONFIG: ClassConfig = {
     fighter: {
-        hp: 5.0,
-        hp_regen: 0.15,
-        atk: 2.0,
-        physical_defense: 45,
-        magic_defense: 35,
-        physical_pen: 10,
+        hp: 5.5,
+        hp_regen: 0.18,
+        atk: 2.2,
+        physical_defense: 50,
+        magic_defense: 40,
+        physical_pen: 12,
         magic_pen: 0,
-        lifesteal: 0.2,
+        lifesteal: 0.25,
         spell_vamp: 0.1,
-        move_speed_mult: 1.05, // Kecepatan standar
-        attack_speed_mult: 1.0, // Kecepatan pukul standar
+        move_speed_mult: 1.05,
+        attack_speed_mult: 1.1,
         crit_chance: 0.15,
         crit_damage: 2.0,
         range: 1.2,
-        tenacity: 0.15,
+        tenacity: 0.2,
         cooldown_reduction: 0.1,
         ai_behavior: {
             separation: 1.0,
@@ -36,21 +36,21 @@ export let CLASS_CONFIG = {
         },
     },
     tank: {
-        hp: 8.5, // Tebal tapi tidak abadi
-        hp_regen: 0.3,
-        atk: 1.1,
-        physical_defense: 85,
-        magic_defense: 70,
+        hp: 10.0,
+        hp_regen: 0.35,
+        atk: 1.3,
+        physical_defense: 95,
+        magic_defense: 80,
         physical_pen: 0,
         magic_pen: 0,
         lifesteal: 0.0,
         spell_vamp: 0.0,
-        move_speed_mult: 0.95, // Sedikit lambat
-        attack_speed_mult: 1.2, // Pukulan agak berat
+        move_speed_mult: 0.95,
+        attack_speed_mult: 0.8,
         crit_chance: 0.05,
         crit_damage: 1.5,
         range: 1.0,
-        tenacity: 0.4,
+        tenacity: 0.5,
         cooldown_reduction: 0.15,
         ai_behavior: {
             separation: 1.5,
@@ -61,49 +61,49 @@ export let CLASS_CONFIG = {
         },
     },
     mage: {
-        hp: 3.2, // Sudah tidak "setipis kertas" lagi
-        hp_regen: 0.05,
-        atk: 2.8, // Burst damage
-        physical_defense: 20,
-        magic_defense: 25,
+        hp: 3.5,
+        hp_regen: 0.08,
+        atk: 3.5,
+        physical_defense: 25,
+        magic_defense: 35,
         physical_pen: 0,
-        magic_pen: 25,
+        magic_pen: 35,
         lifesteal: 0.0,
-        spell_vamp: 0.2,
+        spell_vamp: 0.25,
         move_speed_mult: 1.0,
-        attack_speed_mult: 0.5, // Slow, heavy casts
+        attack_speed_mult: 0.6,
         crit_chance: 0.05,
         crit_damage: 1.5,
-        range: 6.0,
+        range: 6.5,
         tenacity: 0.0,
-        cooldown_reduction: 0.2,
+        cooldown_reduction: 0.3,
         ai_behavior: {
-            separation: 2.0,
+            separation: 2.5,
             encirclement: 1.5,
             swagger: 0.4,
-            perception_radius: 80 * 80,
+            perception_radius: 85 * 85,
             chase_range: 8.0,
         },
     },
     marksman: {
         hp: 2.8,
         hp_regen: 0.05,
-        atk: 1.6,
-        physical_defense: 15,
-        magic_defense: 15,
-        physical_pen: 15,
+        atk: 2.2,
+        physical_defense: 20,
+        magic_defense: 20,
+        physical_pen: 20,
         magic_pen: 0,
-        lifesteal: 0.15,
+        lifesteal: 0.2,
         spell_vamp: 0.0,
-        move_speed_mult: 1.0,
-        attack_speed_mult: 0.8, // Serangan cepat
+        move_speed_mult: 1.05,
+        attack_speed_mult: 1.6,
         crit_chance: 0.35,
-        crit_damage: 2.3,
-        range: 7.5,
+        crit_damage: 2.5,
+        range: 8.5,
         tenacity: 0.0,
-        cooldown_reduction: 0.05,
+        cooldown_reduction: 0.1,
         ai_behavior: {
-            separation: 2.2,
+            separation: 2.8,
             encirclement: 1.0,
             swagger: 0.3,
             perception_radius: 90 * 90,
@@ -111,28 +111,28 @@ export let CLASS_CONFIG = {
         },
     },
     assassin: {
-        hp: 3.5,
-        hp_regen: 0.1,
-        atk: 3.2,
-        physical_defense: 25,
-        magic_defense: 25,
-        physical_pen: 25,
+        hp: 3.8,
+        hp_regen: 0.12,
+        atk: 4.2,
+        physical_defense: 30,
+        magic_defense: 30,
+        physical_pen: 35,
         magic_pen: 0,
-        lifesteal: 0.1,
-        spell_vamp: 0.15,
-        move_speed_mult: 1.2, // Lincah tapi masuk akal
-        attack_speed_mult: 0.9,
-        crit_chance: 0.25,
-        crit_damage: 2.2,
-        range: 1.1,
-        tenacity: 0.05,
-        cooldown_reduction: 0.1,
+        lifesteal: 2.15,
+        spell_vamp: 1.2,
+        move_speed_mult: 1.25,
+        attack_speed_mult: 1.25,
+        crit_chance: 0.3,
+        crit_damage: 2.5,
+        range: 1.2,
+        tenacity: 0.1,
+        cooldown_reduction: 0.2,
         ai_behavior: {
             separation: 1.2,
-            encirclement: 2.5,
-            swagger: 0.6,
-            perception_radius: 70 * 70,
-            chase_range: 15.0,
+            encirclement: 2.2,
+            swagger: 1.0,
+            perception_radius: 120, // Assassin searches very far for squishies
+            chase_range: 150,
         },
     },
 };
@@ -182,40 +182,44 @@ export let INITIAL_SETTINGS: SimulationSettings = {
 };
 
 // --- MAGE PROJECTILE SYNC ---
-export const MAGE_PROJECTILE_TIME_MS = 350; // Faster travel for "rocket" feel
+export const MAGE_PROJECTILE_TIME_MS = 350;
+export const CORPSE_DESPAWN_MS = 5000; // Time in ms before a corpse is removed from the field
+export const ASSASSIN_BLINK_DISTANCE = 18.0; // Increased range for "far" feel
+export const ASSASSIN_BLINK_COOLDOWN = 6000;
+export const ASSASSIN_INVUL_MS = 800;
 
 // --- WEATHER SYSTEM CONFIG ---
 export const WEATHER_CONFIG = {
     CLEAR: { name: "Cerah", color: "#facc15", boostText: "Normal" },
-    RAIN: { 
-        name: "Hujan", 
-        color: "#60a5fa", 
+    RAIN: {
+        name: "Hujan",
+        color: "#60a5fa",
         boostText: "Mage: +Atk Speed, MM: -Atk Speed",
         multipliers: {
             mage: { attack_speed_mult: 1.3 },
             marksman: { attack_speed_mult: 0.75 },
-            globalSpeedMultiplier: 0.9
-        }
+            globalSpeedMultiplier: 0.9,
+        },
     },
-    STORM: { 
-        name: "Badai Angin", 
-        color: "#94a3b8", 
+    STORM: {
+        name: "Badai Angin",
+        color: "#94a3b8",
         boostText: "Assassin: +Speed, MM: -Speed",
         multipliers: {
             assassin: { move_speed_mult: 1.35 },
             marksman: { move_speed_mult: 0.7 },
-            globalAttackCooldown: 1.15
-        }
+            globalAttackCooldown: 1.15,
+        },
     },
-    THUNDER: { 
-        name: "Hujan Petir", 
-        color: "#a855f7", 
+    THUNDER: {
+        name: "Hujan Petir",
+        color: "#a855f7",
         boostText: "Mage: ++Damage, Fighter: +Atk",
         multipliers: {
             mage: { atk: 1.3, attack_speed_mult: 1.2 },
             fighter: { atk: 1.2 },
             tank: { physical_defense: 1.2 },
-            globalDamageMultiplier: 1.15
-        }
-    }
+            globalDamageMultiplier: 1.15,
+        },
+    },
 };

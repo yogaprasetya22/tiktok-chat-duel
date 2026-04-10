@@ -263,17 +263,21 @@ export function FighterArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, ve
 
       const tp = uData.position;
       const cp = pItem.group.position;
+      const lerpFactor = 1.0 - Math.exp(-20 * delta);
       if (!pItem.initialized) {
         cp.set(tp[0], tp[1], tp[2]);
         pItem.rotation = uData.rotation[1];
         pItem.group.rotation.y = pItem.rotation;
         pItem.initialized = true;
       } else {
-        cp.x += (tp[0]-cp.x)*0.25; cp.y += (tp[1]-cp.y)*0.25; cp.z += (tp[2]-cp.z)*0.25;
+        cp.x = THREE.MathUtils.lerp(cp.x, tp[0], lerpFactor);
+        cp.y = THREE.MathUtils.lerp(cp.y, tp[1], lerpFactor);
+        cp.z = THREE.MathUtils.lerp(cp.z, tp[2], lerpFactor);
+
         let diff = uData.rotation[1] - pItem.rotation;
         while (diff < -Math.PI) diff += Math.PI * 2;
         while (diff > Math.PI) diff -= Math.PI * 2;
-        pItem.rotation += diff * 0.15;
+        pItem.rotation += diff * (1.0 - Math.exp(-15 * delta));
         pItem.group.rotation.y = pItem.rotation;
       }
 
