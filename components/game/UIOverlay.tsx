@@ -1,6 +1,6 @@
 import { TowerConfig, KillEvent } from "../../hooks/useBattleSystem";
 import { Maximize2, Minimize2, Palette, Settings2, Sword, Zap, RefreshCw, Trophy, Skull, Users, MessageSquare, Gift, CheckCircle2, Circle, Radio, Camera, Loader2, AlertTriangle, Download, Target, ChevronRight, CloudRain, Wind, CloudLightning, Sun, Shield } from "lucide-react";
-import { useState } from "react";
+import React, { useState } from "react";
 import { KillFeed } from "../ui/KillFeed";
 import { MVPScreen } from "../ui/MVPScreen";
 import { useStore } from "../../hooks/useStore";
@@ -35,6 +35,112 @@ interface UIOverlayProps {
   updateSettingsRef?: (settings: any) => void;
   standalone?: boolean;
 }
+
+// Optimization: Memoize KillFeed to prevent full UI re-renders
+const MemoizedKillFeed = React.memo(({ killEvents, towerConfig }: { killEvents: any[], towerConfig: any }) => {
+  return (
+    <div className="absolute top-28 left-6 w-72 flex flex-col gap-1.5 items-start pointer-events-none z-[1100]">
+      {killEvents.slice(-3).map((event, i) => event && event.id && (
+        <div key={event.id} className="animate-in slide-in-from-left-4 fade-in duration-500 bg-zinc-950/80 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/10 flex items-center gap-3 shadow-xl">
+          <span className="text-white font-black italic text-[10px] tracking-tighter" style={{ color: towerConfig.player.color }}>{event.killer}</span>
+          <Sword className="w-3 h-3 text-rose-500" />
+          <span className="text-white/60 font-bold text-[9px] tracking-tight">{event.victim}</span>
+        </div>
+      ))}
+    </div>
+  );
+});
+
+// Optimization: Memoize Leaderboard to prevent full UI re-renders
+const MemoizedLeaderboard = React.memo(({ stats, team, color, name }: { stats: any, team: 'player' | 'enemy', color: string, name: string }) => {
+  const isPlayer = team === 'player';
+  const kills = isPlayer ? stats.playerKills : stats.enemyKills;
+  
+  return (
+    <div className={`absolute top-32 ${isPlayer ? 'left-8' : 'right-8'} w-64 pointer-events-auto z-[1100]`}>
+      <div className={`bg-zinc-950/40 backdrop-blur-3xl rounded-[32px] border border-white/10 p-6 shadow-2xl space-y-6 animate-in ${isPlayer ? 'slide-in-from-left-12' : 'slide-in-from-right-12'} duration-1000`}>
+        <div className="flex items-center justify-between border-b border-white/5 pb-4">
+          {isPlayer ? (
+            <>
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-indigo-500/20 rounded-xl">
+                    <Trophy className="w-4 h-4 text-indigo-400" />
+                </div>
+                <span className="text-xs font-black text-white uppercase tracking-widest italic">{name} RANK</span>
+              </div>
+              <div className="px-2 py-0.5 bg-indigo-500/10 rounded text-[8px] font-black text-indigo-400 tracking-tighter">ELITE HUD</div>
+            </>
+          ) : (
+            <>
+              <div className="px-2 py-0.5 rounded text-[8px] font-black tracking-tighter" style={{ backgroundColor: `${color}22`, color: color }}>ENEMY HUD</div>
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-black text-white uppercase tracking-widest italic">{name} RANK</span>
+                <div className="p-2 rounded-xl" style={{ backgroundColor: `${color}22` }}>
+                    <Trophy className="w-4 h-4" style={{ color: color }} />
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+        
+        <div className="space-y-4">
+          {Object.entries(kills || {})
+            .sort(([, a]: any, [, b]: any) => b - a)
+            .slice(0, 5)
+            .map(([username, value], i) => (
+            <div key={username} className={`flex items-center justify-between group animate-in ${isPlayer ? 'slide-in-from-left-4' : 'slide-in-from-right-4'} fade-in`} style={{ animationDelay: `${i * 100}ms` }}>
+              {isPlayer ? (
+                <>
+                  <div className="flex items-center gap-4">
+                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-black italic text-xs transition-transform group-hover:scale-110 ${
+                      i === 0 ? 'text-white shadow-[0_0_20px_rgba(0,0,0,0.5)] animate-bounce' : 'bg-white/5 text-white/40 border border-white/5'
+                    }`}
+                    style={{ backgroundColor: i === 0 ? color : undefined }}>
+                      {i + 1}
+                    </div>
+                    <div className="flex flex-col">
+                        <span className="text-sm font-black text-white/90 group-hover:text-white truncate max-w-[110px] tracking-tight transition-colors">{username}</span>
+                        <span className="text-[8px] font-bold text-white/30 uppercase tracking-[0.1em]">Verified Player</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end">
+                      <span className="text-sm font-black italic tracking-tighter" style={{ color: i === 0 ? color : '#ffffff' }}>{(value as number)}</span>
+                      <span className="text-[7px] font-black text-white/20 uppercase">KILLS</span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex flex-col items-start min-w-[40px]">
+                      <span className="text-sm font-black italic tracking-tighter" style={{ color: i === 0 ? color : '#ffffff' }}>{(value as number)}</span>
+                      <span className="text-[7px] font-black text-white/20 uppercase">KILLS</span>
+                  </div>
+                  <div className="flex items-center gap-4 flex-1 justify-end overflow-hidden">
+                      <div className="flex flex-col items-end min-w-0">
+                        <span className="text-sm font-black text-white/90 group-hover:text-white truncate w-full text-right tracking-tight transition-colors">{username}</span>
+                        <span className="text-[8px] font-bold text-white/30 uppercase tracking-[0.1em]">Rival Player</span>
+                      </div>
+                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-black italic text-xs transition-transform group-hover:scale-110 flex-shrink-0 ${
+                      i === 0 ? 'text-white shadow-[0_0_20px_rgba(0,0,0,0.5)] animate-bounce' : 'bg-white/5 text-white/40 border border-white/5'
+                    }`}
+                    style={{ backgroundColor: i === 0 ? color : undefined }}>
+                      {i + 1}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          ))}
+          {Object.keys(kills || {}).length === 0 && (
+            <div className="py-12 text-center space-y-3 opacity-20">
+              <Skull className="w-10 h-10 mx-auto" />
+              <p className="text-[10px] uppercase tracking-[0.3em] text-white font-black">Scanning Arena...</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+});
 
 export const UIOverlay = ({
   towerConfig,
@@ -589,109 +695,15 @@ export const UIOverlay = ({
                 </div>
 
                 {/* 2. TOP LEFT: Compact Kill Feed */}
-                <div className="absolute top-28 left-6 w-72 flex flex-col gap-1.5 items-start pointer-events-none z-[1100]">
-                  {killEvents.slice(-3).map((event, i) => event && event.id && (
-                    <div key={event.id} className="animate-in slide-in-from-left-4 fade-in duration-500 bg-zinc-950/80 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/10 flex items-center gap-3 shadow-xl">
-                      <span className="text-white font-black italic text-[10px] tracking-tighter" style={{ color: towerConfig.player.color }}>{event.killer}</span>
-                      <Sword className="w-3 h-3 text-rose-500" />
-                      <span className="text-white/60 font-bold text-[9px] tracking-tight">{event.victim}</span>
-                    </div>
-                  ))}
-                </div>
+                <MemoizedKillFeed killEvents={killEvents} towerConfig={towerConfig} />
 
-                 {/* 2. LEFT SIDE: Compact Leaderboard */}
-                <div className="absolute top-32 left-8 w-64 pointer-events-auto z-[1100]">
-                  <div className="bg-zinc-950/40 backdrop-blur-3xl rounded-[32px] border border-white/10 p-6 shadow-2xl space-y-6 animate-in slide-in-from-left-12 duration-1000">
-                    <div className="flex items-center justify-between border-b border-white/5 pb-4">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 bg-indigo-500/20 rounded-xl">
-                           <Trophy className="w-4 h-4 text-indigo-400" />
-                        </div>
-                        <span className="text-xs font-black text-white uppercase tracking-widest italic">{towerConfig.player.name} RANK</span>
-                      </div>
-                      <div className="px-2 py-0.5 bg-indigo-500/10 rounded text-[8px] font-black text-indigo-400 tracking-tighter">ELITE HUD</div>
-                    </div>
-                    
-                    <div className="space-y-4">
-                      {Object.entries(liveStats.playerKills || {})
-                        .sort(([, a]: any, [, b]: any) => b - a)
-                        .slice(0, 5)
-                        .map(([username, value], i) => (
-                        <div key={username} className="flex items-center justify-between group animate-in slide-in-from-left-4 fade-in" style={{ animationDelay: `${i * 100}ms` }}>
-                          <div className="flex items-center gap-4">
-                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-black italic text-xs transition-transform group-hover:scale-110 ${
-                              i === 0 ? 'text-white shadow-[0_0_20px_rgba(0,0,0,0.5)] animate-bounce' : 'bg-white/5 text-white/40 border border-white/5'
-                            }`}
-                            style={{ backgroundColor: i === 0 ? towerConfig.player.color : undefined }}>
-                              {i + 1}
-                            </div>
-                            <div className="flex flex-col">
-                               <span className="text-sm font-black text-white/90 group-hover:text-white truncate max-w-[110px] tracking-tight transition-colors">{username}</span>
-                               <span className="text-[8px] font-bold text-white/30 uppercase tracking-[0.1em]">Verified Player</span>
-                            </div>
-                          </div>
-                          <div className="flex flex-col items-end">
-                             <span className="text-sm font-black italic tracking-tighter" style={{ color: i === 0 ? towerConfig.player.color : '#ffffff' }}>{(value as number)}</span>
-                             <span className="text-[7px] font-black text-white/20 uppercase">KILLS</span>
-                          </div>
-                        </div>
-                      ))}
-                      {Object.keys(liveStats.playerKills || {}).length === 0 && (
-                        <div className="py-12 text-center space-y-3 opacity-20">
-                          <Skull className="w-10 h-10 mx-auto" />
-                          <p className="text-[10px] uppercase tracking-[0.3em] text-white font-black">Scanning Arena...</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* 3. RIGHT SIDE: Compact Leaderboard */}
-                <div className="absolute top-32 right-8 w-64 pointer-events-auto z-[1100]">
-                  <div className="bg-zinc-950/40 backdrop-blur-3xl rounded-[32px] border border-white/10 p-6 shadow-2xl space-y-6 animate-in slide-in-from-right-12 duration-1000">
-                    <div className="flex items-center justify-between border-b border-white/5 pb-4">
-                       <div className="px-2 py-0.5 rounded text-[8px] font-black tracking-tighter" style={{ backgroundColor: `${towerConfig.enemy.color}22`, color: towerConfig.enemy.color }}>ENEMY HUD</div>
-                      <div className="flex items-center gap-3">
-                        <span className="text-xs font-black text-white uppercase tracking-widest italic">{towerConfig.enemy.name} RANK</span>
-                        <div className="p-2 rounded-xl" style={{ backgroundColor: `${towerConfig.enemy.color}22` }}>
-                           <Trophy className="w-4 h-4" style={{ color: towerConfig.enemy.color }} />
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="space-y-4">
-                      {Object.entries(liveStats.enemyKills || {})
-                        .sort(([, a]: any, [, b]: any) => b - a)
-                        .slice(0, 5)
-                        .map(([username, value], i) => (
-                        <div key={username} className="flex items-center justify-between group animate-in slide-in-from-right-4 fade-in" style={{ animationDelay: `${i * 100}ms` }}>
-                          <div className="flex flex-col items-start min-w-[40px]">
-                             <span className="text-sm font-black italic tracking-tighter" style={{ color: i === 0 ? towerConfig.enemy.color : '#ffffff' }}>{(value as number)}</span>
-                             <span className="text-[7px] font-black text-white/20 uppercase">KILLS</span>
-                          </div>
-                          <div className="flex items-center gap-4 flex-1 justify-end overflow-hidden">
-                             <div className="flex flex-col items-end min-w-0">
-                                <span className="text-sm font-black text-white/90 group-hover:text-white truncate w-full text-right tracking-tight transition-colors">{username}</span>
-                                <span className="text-[8px] font-bold text-white/30 uppercase tracking-[0.1em]">Rival Player</span>
-                             </div>
-                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-black italic text-xs transition-transform group-hover:scale-110 flex-shrink-0 ${
-                              i === 0 ? 'text-white shadow-[0_0_20px_rgba(0,0,0,0.5)] animate-bounce' : 'bg-white/5 text-white/40 border border-white/5'
-                            }`}
-                            style={{ backgroundColor: i === 0 ? towerConfig.enemy.color : undefined }}>
-                              {i + 1}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                      {Object.keys(liveStats.enemyKills || {}).length === 0 && (
-                        <div className="py-12 text-center space-y-3 opacity-20">
-                          <Skull className="w-10 h-10 mx-auto" />
-                          <p className="text-[10px] uppercase tracking-[0.3em] text-white font-black">Scanning Arena...</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
+                 {/* 2. LEFT & RIGHT: Leaderboards (Hidden in Potato Mode) */}
+                {!settings.potatoMode && (
+                  <>
+                    <MemoizedLeaderboard stats={liveStats} team="player" color={towerConfig.player.color} name={towerConfig.player.name} />
+                    <MemoizedLeaderboard stats={liveStats} team="enemy" color={towerConfig.enemy.color} name={towerConfig.enemy.name} />
+                  </>
+                )}
               </div>
             )}
 

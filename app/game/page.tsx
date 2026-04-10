@@ -29,7 +29,6 @@ export default function GamePage() {
   const { messages, connected, error, loading, disconnect } = useTikTokLive(activeUsername);
 
   const {
-    damageTexts,
     towerConfig,
     setTowerConfig,
     updateSettingsRef,
@@ -50,6 +49,8 @@ export default function GamePage() {
     vehicles,
     unitIndex,
     spellsRef,
+    downloadPerfLogs,
+    clearVFXCache,
   } = useBattleSystem();
 
 
@@ -295,7 +296,6 @@ export default function GamePage() {
                   <GameCanvas
                     towerConfig={towerConfig}
                     setTowerConfig={setTowerConfig}
-                    damageTexts={damageTexts}
                     isCinematic={isCinematic}
                     setMapObstacles={setMapObstacles}
                     mapObstacles={mapObstacles}
@@ -309,6 +309,8 @@ export default function GamePage() {
                     vehicles={vehicles}
                     unitIndex={unitIndex}
                     spellsRef={spellsRef}
+                    downloadPerfLogs={downloadPerfLogs}
+                    clearVFXCache={clearVFXCache}
                   />
 
 

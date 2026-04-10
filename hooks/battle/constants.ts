@@ -179,6 +179,15 @@ export let INITIAL_SETTINGS: SimulationSettings = {
     timeScale: 1.0,
     unitScale: 0.5,
     vfxIntensity: 1.0,
+
+    // Performance & Diagnostics
+    potatoMode: false,
+    telemetry: {
+        engineMs: 0,
+        unitCount: 0,
+        vfxCount: 0,
+        bucketCount: 0
+    }
 };
 
 // --- MAGE PROJECTILE SYNC ---

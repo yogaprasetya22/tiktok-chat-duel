@@ -49,6 +49,35 @@ const getLevelBadge = (level: number): string => {
   return '';
 };
 
+// Optimization: Sub-component for individual name labels to avoid full list updates
+const UnitNameLabel = React.memo(({ unit, isVisible, camera }: { unit: any, isVisible: boolean, camera: any }) => {
+    const textRef = useRef<any>(null);
+    useFrame(() => {
+        if (!textRef.current || !isVisible) return;
+        textRef.current.position.set(unit.position[0], (unit.isBoss ? 7.0 : 3.2) + (unit.isBoss ? 1.6 : 0.65), unit.position[2]);
+        textRef.current.quaternion.copy(camera.quaternion);
+    });
+    const col = useMemo(() => getLevelColor(unit.level || 1), [unit.level]);
+    const label = useMemo(() => getLevelBadge(unit.level || 1) + (unit.userName || 'Pasukan'), [unit.level, unit.userName]);
+
+    return (
+        <Text
+            ref={textRef}
+            visible={isVisible}
+            color={col}
+            fontSize={unit.isBoss ? 0.85 : 0.38}
+            outlineWidth={0.05}
+            outlineColor="#000000"
+            anchorX="center"
+            anchorY="middle"
+            renderOrder={10}
+            depthOffset={-2}
+        >
+            {label}
+        </Text>
+    );
+});
+
 const MLHealthBarShader = {
   uniforms: { time: { value: 0 } },
   vertexShader: `
@@ -258,58 +287,72 @@ export function BattleArmy({ unitRegistry, towerConfig, updateSimulation, settin
     if (maxHpAttr) maxHpAttr.needsUpdate = true;
 
     // 6. Name Labels Logic
+    const isPotato = !!settingsRef.current.potatoMode;
+
     namePoolMap.current.forEach((slot, unitId) => {
       const mesh = nameTextRefs.current[slot];
       if (!mesh) return;
       const unit = rawMap.get(unitId);
-      if (unit && unit.hp > 0 && unit.dSq < HUD_DETAIL_DIST_SQ) {
+      if (unit && unit.hp > 0 && unit.dSq < HUD_DETAIL_DIST_SQ && !isPotato) {
         mesh.position.set(unit.position![0], (unit.isBoss ? 7.0 : 3.2) + (unit.isBoss ? 1.6 : 0.65), unit.position![2]);
         mesh.quaternion.copy(state.camera.quaternion);
         mesh.visible = true;
       } else { mesh.visible = false; }
     });
 
-    if (time - lastNameCullTime.current > 0.1) { // Reduced throttle for better responsiveness 
+    if (time - lastNameCullTime.current > 0.1) { 
       lastNameCullTime.current = time;
       namePoolMap.current.forEach((slot, uid) => {
         const u = rawMap.get(uid);
-        const gone = !u || u.hp <=0 || u.dSq > HUD_DETAIL_DIST_SQ;
+        const gone = !u || u.hp <=0 || u.dSq > HUD_DETAIL_DIST_SQ || isPotato;
         if (gone) {
           if (nameTextRefs.current[slot]) nameTextRefs.current[slot].visible = false;
           nameAvailableSlots.current.push(slot);
           namePoolMap.current.delete(uid);
         }
       });
-      activeUnits.forEach((u: any) => {
-        const id = u.id;
-        if (!u || u.hp <= 0 || namePoolMap.current.has(id) || namePoolMap.current.size >= NAME_POOL_SIZE || nameAvailableSlots.current.length === 0) return;
-        if (u.dSq > HUD_DETAIL_DIST_SQ) return;
-        const slot = nameAvailableSlots.current.shift()!;
-        namePoolMap.current.set(id, slot);
-        const mesh = nameTextRefs.current[slot];
-        if (mesh) {
-          const badge = getLevelBadge(u.level || 1);
-          const label = badge + u.userName;
-          if (nameSlotContent.current[slot] !== label) { mesh.text = label; nameSlotContent.current[slot] = label; }
-          const col = getLevelColor(u.level || 1);
-          if (nameSlotColor.current[slot] !== col) { mesh.color = col; nameSlotColor.current[slot] = col; }
-          mesh.fontSize = u.isBoss ? 0.85 : 0.38;
-          mesh.visible = true;
-        }
-      });
+      if (!isPotato) {
+        activeUnits.forEach((u: any) => {
+          const id = u.id;
+          if (!u || u.hp <= 0 || namePoolMap.current.has(id) || namePoolMap.current.size >= NAME_POOL_SIZE || nameAvailableSlots.current.length === 0) return;
+          if (u.dSq > HUD_DETAIL_DIST_SQ) return;
+          const slot = nameAvailableSlots.current.shift()!;
+          namePoolMap.current.set(id, slot);
+          const mesh = nameTextRefs.current[slot];
+          if (mesh) {
+            const badge = getLevelBadge(u.level || 1);
+            const label = badge + u.userName;
+            if (nameSlotContent.current[slot] !== label) { mesh.text = label; nameSlotContent.current[slot] = label; }
+            const col = getLevelColor(u.level || 1);
+            if (nameSlotColor.current[slot] !== col) { mesh.color = col; nameSlotColor.current[slot] = col; }
+            mesh.fontSize = u.isBoss ? 0.85 : 0.38;
+            mesh.visible = true;
+          }
+        });
+      }
     }
 
     // 7. Cleanup Unused HUD Slots
     const prevMax = lastHudIdxRef.current;
-    const clearTo = Math.max(hudIdx, prevMax);
-    lastHudIdxRef.current = hudIdx;
-    
-    tempObject.position.set(0, -100, 0); tempObject.scale.set(0, 0, 0); tempObject.updateMatrix();
-    for (let i = hudIdx; i < clearTo; i++) {
-        shadowRef.current.setMatrixAt(i, tempObject.matrix);
-        healthBgRef.current.setMatrixAt(i, tempObject.matrix);
-        healthFillRef.current.setMatrixAt(i, tempObject.matrix);
-        notchRef.current.setMatrixAt(i, tempObject.matrix);
+    if (settingsRef.current.potatoMode) {
+        tempObject.position.set(0, -100, 0); tempObject.scale.set(0, 0, 0); tempObject.updateMatrix();
+        for (let i = 0; i < MAX_UNITS; i++) {
+            healthBgRef.current.setMatrixAt(i, tempObject.matrix);
+            healthFillRef.current.setMatrixAt(i, tempObject.matrix);
+            shadowRef.current.setMatrixAt(i, tempObject.matrix);
+        }
+        lastHudIdxRef.current = 0;
+    } else {
+        const clearTo = Math.max(hudIdx, prevMax);
+        lastHudIdxRef.current = hudIdx;
+        
+        tempObject.position.set(0, -100, 0); tempObject.scale.set(0, 0, 0); tempObject.updateMatrix();
+        for (let i = hudIdx; i < clearTo; i++) {
+            shadowRef.current.setMatrixAt(i, tempObject.matrix);
+            healthBgRef.current.setMatrixAt(i, tempObject.matrix);
+            healthFillRef.current.setMatrixAt(i, tempObject.matrix);
+            notchRef.current.setMatrixAt(i, tempObject.matrix);
+        }
     }
 
     healthBgRef.current.instanceMatrix.needsUpdate = true;

@@ -1,0 +1,6572 @@
+{
+  "summary": {
+    "report_time": "2026-04-10T10:34:12.933Z",
+    "total_samples": 722,
+    "low_fps_incidents": 658,
+    "cpu_spike_incidents": 0,
+    "primary_suspect": "GPU/RENDERING (Too many objects)",
+    "advice": "Turn on Potato Mode or reduce Unit Scale"
+  },
+  "metadata": {
+    "towerConfig": {
+      "player": {
+        "name": "Pihak A",
+        "color": "#0066FF",
+        "active": true,
+        "commentKeyword": "indo",
+        "commentType": "contains",
+        "giftKeyword": "rose"
+      },
+      "enemy": {
+        "name": "Pihak B",
+        "color": "#FF0033",
+        "active": true,
+        "commentKeyword": "malay",
+        "commentType": "contains",
+        "giftKeyword": "coffee"
+      },
+      "baseHp": 1000,
+      "baseDistance": 24,
+      "maxUnits": 50,
+      "unitConfig": {
+        "hpMultiplier": 1,
+        "speedMultiplier": 1,
+        "attackMultiplier": 1
+      }
+    },
+    "settings": {
+      "globalHpMultiplier": 1,
+      "globalSpeedMultiplier": 2.1,
+      "globalDamageMultiplier": 1,
+      "globalAttackCooldown": 800,
+      "critChance": 0.6,
+      "perceptionRadiusSq": 3600,
+      "separationRadius": 0.95,
+      "separationStrength": 0.08,
+      "encirclementRadius": 0.75,
+      "encirclementJitter": 0.15,
+      "rotationSmoothing": 0.12,
+      "laneSwaggerAmp": 0.25,
+      "victoryPauseMs": 650,
+      "lanePenalty": 800,
+      "baseProximityBonus": 8000,
+      "baseDefenseThreshold": 8,
+      "baseAttackResponseBonus": 30000,
+      "bossPriorityBonus": 15000,
+      "lowHpBonus": 4000,
+      "laneSpringFar": 0.7,
+      "laneSpringNear": 0.4,
+      "laneDriftThreshold": 2,
+      "timeScale": 0.7,
+      "unitScale": 0.5,
+      "vfxIntensity": 1,
+      "potatoMode": false,
+      "telemetry": {
+        "engineMs": 0.3,
+        "unitCount": 76,
+        "vfxCount": 0,
+        "bucketCount": 10
+      }
+    }
+  },
+  "data_points": [
+    {
+      "timestamp": "10:32:41.033",
+      "fps": 8,
+      "cpu_ms": 0,
+      "unit_count": 0,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:41.101",
+      "fps": 15,
+      "cpu_ms": 0.1,
+      "unit_count": 0,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:41.134",
+      "fps": 30,
+      "cpu_ms": 0,
+      "unit_count": 0,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:41.215",
+      "fps": 43,
+      "cpu_ms": 0,
+      "unit_count": 0,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:41.438",
+      "fps": 12,
+      "cpu_ms": 0.1,
+      "unit_count": 0,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:41.461",
+      "fps": 43,
+      "cpu_ms": 0,
+      "unit_count": 0,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:41.523",
+      "fps": 16,
+      "cpu_ms": 0,
+      "unit_count": 0,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:41.614",
+      "fps": 15,
+      "cpu_ms": 0,
+      "unit_count": 0,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:41.782",
+      "fps": 11,
+      "cpu_ms": 0,
+      "unit_count": 0,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:42.054",
+      "fps": 52,
+      "cpu_ms": 0.1,
+      "unit_count": 0,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:42.339",
+      "fps": 11,
+      "cpu_ms": 0.1,
+      "unit_count": 0,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:42.415",
+      "fps": 13,
+      "cpu_ms": 0.2,
+      "unit_count": 0,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:43.038",
+      "fps": 12,
+      "cpu_ms": 0,
+      "unit_count": 0,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:43.122",
+      "fps": 17,
+      "cpu_ms": 0,
+      "unit_count": 0,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:43.207",
+      "fps": 16,
+      "cpu_ms": 0,
+      "unit_count": 0,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:43.248",
+      "fps": 24,
+      "cpu_ms": 0,
+      "unit_count": 0,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:43.306",
+      "fps": 17,
+      "cpu_ms": 0,
+      "unit_count": 0,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:43.770",
+      "fps": 17,
+      "cpu_ms": 0,
+      "unit_count": 0,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:43.959",
+      "fps": 11,
+      "cpu_ms": 0.2,
+      "unit_count": 1,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:44.211",
+      "fps": 15,
+      "cpu_ms": 0.1,
+      "unit_count": 2,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:44.376",
+      "fps": 17,
+      "cpu_ms": 0.1,
+      "unit_count": 3,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:44.560",
+      "fps": 14,
+      "cpu_ms": 0.1,
+      "unit_count": 4,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:44.721",
+      "fps": 17,
+      "cpu_ms": 0.1,
+      "unit_count": 5,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:45.012",
+      "fps": 14,
+      "cpu_ms": 0.2,
+      "unit_count": 6,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:45.071",
+      "fps": 48,
+      "cpu_ms": 0.1,
+      "unit_count": 7,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:45.128",
+      "fps": 17,
+      "cpu_ms": 0.1,
+      "unit_count": 7,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:45.226",
+      "fps": 44,
+      "cpu_ms": 0,
+      "unit_count": 8,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:45.288",
+      "fps": 16,
+      "cpu_ms": 0.1,
+      "unit_count": 8,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:45.379",
+      "fps": 15,
+      "cpu_ms": 0.1,
+      "unit_count": 8,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:45.548",
+      "fps": 16,
+      "cpu_ms": 0.2,
+      "unit_count": 9,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:45.828",
+      "fps": 36,
+      "cpu_ms": 0.2,
+      "unit_count": 11,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:45.881",
+      "fps": 19,
+      "cpu_ms": 0,
+      "unit_count": 11,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:45.944",
+      "fps": 33,
+      "cpu_ms": 0.2,
+      "unit_count": 11,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:45.977",
+      "fps": 30,
+      "cpu_ms": 0,
+      "unit_count": 11,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:46.054",
+      "fps": 18,
+      "cpu_ms": 0.3,
+      "unit_count": 12,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:46.133",
+      "fps": 13,
+      "cpu_ms": 0.1,
+      "unit_count": 12,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:46.215",
+      "fps": 17,
+      "cpu_ms": 0.2,
+      "unit_count": 12,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:46.296",
+      "fps": 18,
+      "cpu_ms": 0,
+      "unit_count": 13,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:46.383",
+      "fps": 17,
+      "cpu_ms": 0.2,
+      "unit_count": 13,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:46.463",
+      "fps": 18,
+      "cpu_ms": 0.1,
+      "unit_count": 14,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:46.680",
+      "fps": 44,
+      "cpu_ms": 0.1,
+      "unit_count": 15,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:46.736",
+      "fps": 18,
+      "cpu_ms": 0.2,
+      "unit_count": 15,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:47.188",
+      "fps": 10,
+      "cpu_ms": 0.1,
+      "unit_count": 17,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:47.211",
+      "fps": 43,
+      "cpu_ms": 0.1,
+      "unit_count": 18,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:47.269",
+      "fps": 17,
+      "cpu_ms": 0.1,
+      "unit_count": 18,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:47.529",
+      "fps": 42,
+      "cpu_ms": 0.1,
+      "unit_count": 19,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:47.682",
+      "fps": 15,
+      "cpu_ms": 0.1,
+      "unit_count": 19,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:47.817",
+      "fps": 18,
+      "cpu_ms": 0,
+      "unit_count": 20,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:47.842",
+      "fps": 42,
+      "cpu_ms": 0.1,
+      "unit_count": 21,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:47.926",
+      "fps": 43,
+      "cpu_ms": 0,
+      "unit_count": 21,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:48.448",
+      "fps": 19,
+      "cpu_ms": 0.1,
+      "unit_count": 24,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:48.481",
+      "fps": 30,
+      "cpu_ms": 0,
+      "unit_count": 24,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:48.573",
+      "fps": 30,
+      "cpu_ms": 0,
+      "unit_count": 24,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:48.631",
+      "fps": 17,
+      "cpu_ms": 0.1,
+      "unit_count": 24,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:48.870",
+      "fps": 32,
+      "cpu_ms": 0.1,
+      "unit_count": 26,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:48.921",
+      "fps": 20,
+      "cpu_ms": 0.2,
+      "unit_count": 26,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:49.041",
+      "fps": 29,
+      "cpu_ms": 0.2,
+      "unit_count": 27,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:49.126",
+      "fps": 17,
+      "cpu_ms": 0,
+      "unit_count": 27,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:49.223",
+      "fps": 16,
+      "cpu_ms": 0.1,
+      "unit_count": 27,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:49.451",
+      "fps": 16,
+      "cpu_ms": 0.1,
+      "unit_count": 29,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:49.483",
+      "fps": 31,
+      "cpu_ms": 0.2,
+      "unit_count": 29,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:49.597",
+      "fps": 29,
+      "cpu_ms": 0,
+      "unit_count": 29,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:49.655",
+      "fps": 17,
+      "cpu_ms": 0.1,
+      "unit_count": 29,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:49.747",
+      "fps": 17,
+      "cpu_ms": 0.1,
+      "unit_count": 30,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:49.906",
+      "fps": 38,
+      "cpu_ms": 0,
+      "unit_count": 31,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:49.933",
+      "fps": 38,
+      "cpu_ms": 0.1,
+      "unit_count": 31,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:50.155",
+      "fps": 17,
+      "cpu_ms": 0.1,
+      "unit_count": 32,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:50.191",
+      "fps": 28,
+      "cpu_ms": 0,
+      "unit_count": 32,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:50.269",
+      "fps": 13,
+      "cpu_ms": 0.2,
+      "unit_count": 33,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:50.537",
+      "fps": 31,
+      "cpu_ms": 0.1,
+      "unit_count": 34,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:50.595",
+      "fps": 17,
+      "cpu_ms": 0,
+      "unit_count": 34,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:50.631",
+      "fps": 28,
+      "cpu_ms": 0.2,
+      "unit_count": 35,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:50.809",
+      "fps": 12,
+      "cpu_ms": 0.4,
+      "unit_count": 35,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:51.178",
+      "fps": 37,
+      "cpu_ms": 0.5,
+      "unit_count": 37,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:51.415",
+      "fps": 27,
+      "cpu_ms": 0.4,
+      "unit_count": 39,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:51.570",
+      "fps": 15,
+      "cpu_ms": 0.5,
+      "unit_count": 39,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:51.842",
+      "fps": 18,
+      "cpu_ms": 0.3,
+      "unit_count": 40,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:52.138",
+      "fps": 36,
+      "cpu_ms": 0,
+      "unit_count": 42,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:52.246",
+      "fps": 34,
+      "cpu_ms": 0.4,
+      "unit_count": 43,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:52.411",
+      "fps": 15,
+      "cpu_ms": 0.2,
+      "unit_count": 43,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:52.516",
+      "fps": 15,
+      "cpu_ms": 0.3,
+      "unit_count": 43,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:52.641",
+      "fps": 29,
+      "cpu_ms": 0.2,
+      "unit_count": 44,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:52.820",
+      "fps": 11,
+      "cpu_ms": 0.3,
+      "unit_count": 45,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:52.952",
+      "fps": 29,
+      "cpu_ms": 0.1,
+      "unit_count": 45,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:53.080",
+      "fps": 18,
+      "cpu_ms": 0.2,
+      "unit_count": 45,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:53.110",
+      "fps": 33,
+      "cpu_ms": 0.2,
+      "unit_count": 45,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:53.336",
+      "fps": 15,
+      "cpu_ms": 0.1,
+      "unit_count": 45,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:53.536",
+      "fps": 15,
+      "cpu_ms": 0.2,
+      "unit_count": 46,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:53.651",
+      "fps": 35,
+      "cpu_ms": 0.1,
+      "unit_count": 46,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:53.686",
+      "fps": 30,
+      "cpu_ms": 0.2,
+      "unit_count": 46,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:53.793",
+      "fps": 28,
+      "cpu_ms": 0.2,
+      "unit_count": 46,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:53.905",
+      "fps": 21,
+      "cpu_ms": 0.3,
+      "unit_count": 46,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:54.010",
+      "fps": 29,
+      "cpu_ms": 0.3,
+      "unit_count": 46,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:54.159",
+      "fps": 12,
+      "cpu_ms": 0.3,
+      "unit_count": 46,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:54.198",
+      "fps": 26,
+      "cpu_ms": 0.1,
+      "unit_count": 46,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:54.481",
+      "fps": 29,
+      "cpu_ms": 0.2,
+      "unit_count": 46,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:54.633",
+      "fps": 11,
+      "cpu_ms": 0.4,
+      "unit_count": 47,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:55.527",
+      "fps": 27,
+      "cpu_ms": 0.1,
+      "unit_count": 50,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:55.618",
+      "fps": 30,
+      "cpu_ms": 0.4,
+      "unit_count": 51,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:55.798",
+      "fps": 12,
+      "cpu_ms": 0.2,
+      "unit_count": 51,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:55.954",
+      "fps": 27,
+      "cpu_ms": 0.3,
+      "unit_count": 51,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:56.038",
+      "fps": 12,
+      "cpu_ms": 0.1,
+      "unit_count": 51,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:56.074",
+      "fps": 28,
+      "cpu_ms": 0.2,
+      "unit_count": 51,
+      "vfx_count": 3,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:56.184",
+      "fps": 20,
+      "cpu_ms": 0.5,
+      "unit_count": 51,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:56.358",
+      "fps": 21,
+      "cpu_ms": 0.2,
+      "unit_count": 51,
+      "vfx_count": 3,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:56.428",
+      "fps": 14,
+      "cpu_ms": 0.1,
+      "unit_count": 52,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:56.466",
+      "fps": 27,
+      "cpu_ms": 0.2,
+      "unit_count": 52,
+      "vfx_count": 4,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:56.524",
+      "fps": 17,
+      "cpu_ms": 0.1,
+      "unit_count": 52,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:56.562",
+      "fps": 27,
+      "cpu_ms": 0.3,
+      "unit_count": 52,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:56.659",
+      "fps": 27,
+      "cpu_ms": 0.2,
+      "unit_count": 53,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:56.721",
+      "fps": 16,
+      "cpu_ms": 0.1,
+      "unit_count": 53,
+      "vfx_count": 3,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:56.767",
+      "fps": 22,
+      "cpu_ms": 0.2,
+      "unit_count": 53,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:56.826",
+      "fps": 17,
+      "cpu_ms": 0.1,
+      "unit_count": 53,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:56.977",
+      "fps": 30,
+      "cpu_ms": 0.3,
+      "unit_count": 53,
+      "vfx_count": 4,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:57.161",
+      "fps": 29,
+      "cpu_ms": 0.2,
+      "unit_count": 53,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:57.399",
+      "fps": 25,
+      "cpu_ms": 0.2,
+      "unit_count": 53,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:57.490",
+      "fps": 41,
+      "cpu_ms": 0.1,
+      "unit_count": 53,
+      "vfx_count": 4,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:57.700",
+      "fps": 16,
+      "cpu_ms": 0.1,
+      "unit_count": 50,
+      "vfx_count": 3,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:57.892",
+      "fps": 12,
+      "cpu_ms": 0.4,
+      "unit_count": 50,
+      "vfx_count": 7,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:58.163",
+      "fps": 23,
+      "cpu_ms": 0.4,
+      "unit_count": 50,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:58.191",
+      "fps": 35,
+      "cpu_ms": 0.1,
+      "unit_count": 50,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:58.306",
+      "fps": 27,
+      "cpu_ms": 0.1,
+      "unit_count": 51,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:58.333",
+      "fps": 37,
+      "cpu_ms": 0.3,
+      "unit_count": 51,
+      "vfx_count": 2,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:58.514",
+      "fps": 11,
+      "cpu_ms": 0.3,
+      "unit_count": 52,
+      "vfx_count": 3,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:58.612",
+      "fps": 10,
+      "cpu_ms": 0.1,
+      "unit_count": 52,
+      "vfx_count": 5,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:58.720",
+      "fps": 17,
+      "cpu_ms": 0.1,
+      "unit_count": 53,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:58.827",
+      "fps": 16,
+      "cpu_ms": 0.2,
+      "unit_count": 54,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:58.864",
+      "fps": 27,
+      "cpu_ms": 0.1,
+      "unit_count": 54,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:58.955",
+      "fps": 29,
+      "cpu_ms": 0.1,
+      "unit_count": 54,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:59.030",
+      "fps": 13,
+      "cpu_ms": 0.4,
+      "unit_count": 54,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:59.122",
+      "fps": 11,
+      "cpu_ms": 0.1,
+      "unit_count": 52,
+      "vfx_count": 3,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:59.219",
+      "fps": 35,
+      "cpu_ms": 0.2,
+      "unit_count": 53,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:59.515",
+      "fps": 16,
+      "cpu_ms": 0.1,
+      "unit_count": 53,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:59.563",
+      "fps": 21,
+      "cpu_ms": 0.4,
+      "unit_count": 53,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:59.743",
+      "fps": 16,
+      "cpu_ms": 0.1,
+      "unit_count": 54,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:59.778",
+      "fps": 29,
+      "cpu_ms": 0.1,
+      "unit_count": 54,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:32:59.972",
+      "fps": 14,
+      "cpu_ms": 0.1,
+      "unit_count": 54,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:00.219",
+      "fps": 37,
+      "cpu_ms": 0.1,
+      "unit_count": 54,
+      "vfx_count": 3,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:00.256",
+      "fps": 28,
+      "cpu_ms": 0.2,
+      "unit_count": 54,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:00.349",
+      "fps": 20,
+      "cpu_ms": 0.2,
+      "unit_count": 54,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:00.378",
+      "fps": 34,
+      "cpu_ms": 0.2,
+      "unit_count": 54,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:00.492",
+      "fps": 24,
+      "cpu_ms": 0.3,
+      "unit_count": 54,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:00.595",
+      "fps": 29,
+      "cpu_ms": 0.3,
+      "unit_count": 54,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:00.687",
+      "fps": 11,
+      "cpu_ms": 0.3,
+      "unit_count": 49,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:00.814",
+      "fps": 28,
+      "cpu_ms": 0.3,
+      "unit_count": 49,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:00.872",
+      "fps": 17,
+      "cpu_ms": 0.2,
+      "unit_count": 49,
+      "vfx_count": 4,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:00.964",
+      "fps": 18,
+      "cpu_ms": 0.4,
+      "unit_count": 49,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:00.998",
+      "fps": 29,
+      "cpu_ms": 0.1,
+      "unit_count": 49,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:01.054",
+      "fps": 18,
+      "cpu_ms": 0.2,
+      "unit_count": 50,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:01.215",
+      "fps": 17,
+      "cpu_ms": 0.1,
+      "unit_count": 50,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:01.380",
+      "fps": 24,
+      "cpu_ms": 0.1,
+      "unit_count": 50,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:01.406",
+      "fps": 37,
+      "cpu_ms": 0.2,
+      "unit_count": 51,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:01.442",
+      "fps": 28,
+      "cpu_ms": 0.2,
+      "unit_count": 51,
+      "vfx_count": 3,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:01.507",
+      "fps": 26,
+      "cpu_ms": 0.2,
+      "unit_count": 51,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:01.606",
+      "fps": 31,
+      "cpu_ms": 0.1,
+      "unit_count": 51,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:01.767",
+      "fps": 11,
+      "cpu_ms": 0.2,
+      "unit_count": 51,
+      "vfx_count": 3,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:01.901",
+      "fps": 16,
+      "cpu_ms": 0.2,
+      "unit_count": 51,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:02.047",
+      "fps": 19,
+      "cpu_ms": 0.1,
+      "unit_count": 52,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:02.095",
+      "fps": 21,
+      "cpu_ms": 0.2,
+      "unit_count": 52,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:02.290",
+      "fps": 40,
+      "cpu_ms": 0.2,
+      "unit_count": 50,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:02.377",
+      "fps": 27,
+      "cpu_ms": 0.1,
+      "unit_count": 50,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:02.434",
+      "fps": 31,
+      "cpu_ms": 0.2,
+      "unit_count": 50,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:02.458",
+      "fps": 41,
+      "cpu_ms": 0.2,
+      "unit_count": 50,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:02.893",
+      "fps": 17,
+      "cpu_ms": 0.1,
+      "unit_count": 51,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:03.031",
+      "fps": 29,
+      "cpu_ms": 0.1,
+      "unit_count": 51,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:03.089",
+      "fps": 17,
+      "cpu_ms": 0.1,
+      "unit_count": 51,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:03.124",
+      "fps": 29,
+      "cpu_ms": 0.1,
+      "unit_count": 51,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:03.235",
+      "fps": 32,
+      "cpu_ms": 0.3,
+      "unit_count": 52,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:03.323",
+      "fps": 38,
+      "cpu_ms": 0.1,
+      "unit_count": 52,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:03.387",
+      "fps": 37,
+      "cpu_ms": 0.2,
+      "unit_count": 52,
+      "vfx_count": 1,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:03.507",
+      "fps": 26,
+      "cpu_ms": 0.1,
+      "unit_count": 52,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:03.534",
+      "fps": 35,
+      "cpu_ms": 0.1,
+      "unit_count": 52,
+      "vfx_count": 1,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:03.574",
+      "fps": 26,
+      "cpu_ms": 0.2,
+      "unit_count": 52,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:03.603",
+      "fps": 34,
+      "cpu_ms": 0.2,
+      "unit_count": 52,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:03.763",
+      "fps": 17,
+      "cpu_ms": 0.2,
+      "unit_count": 47,
+      "vfx_count": 3,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:03.952",
+      "fps": 28,
+      "cpu_ms": 0.2,
+      "unit_count": 47,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:04.022",
+      "fps": 14,
+      "cpu_ms": 0.1,
+      "unit_count": 47,
+      "vfx_count": 7,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:04.317",
+      "fps": 11,
+      "cpu_ms": 0.2,
+      "unit_count": 47,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:04.525",
+      "fps": 27,
+      "cpu_ms": 0.4,
+      "unit_count": 48,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:04.626",
+      "fps": 28,
+      "cpu_ms": 0.2,
+      "unit_count": 48,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:04.721",
+      "fps": 15,
+      "cpu_ms": 0.1,
+      "unit_count": 48,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:04.902",
+      "fps": 12,
+      "cpu_ms": 0.2,
+      "unit_count": 48,
+      "vfx_count": 3,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:05.032",
+      "fps": 24,
+      "cpu_ms": 0.1,
+      "unit_count": 48,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:05.090",
+      "fps": 17,
+      "cpu_ms": 0.2,
+      "unit_count": 48,
+      "vfx_count": 4,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:05.124",
+      "fps": 29,
+      "cpu_ms": 0.1,
+      "unit_count": 48,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:05.224",
+      "fps": 27,
+      "cpu_ms": 0.2,
+      "unit_count": 48,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:05.286",
+      "fps": 16,
+      "cpu_ms": 0.1,
+      "unit_count": 47,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:05.321",
+      "fps": 28,
+      "cpu_ms": 0.2,
+      "unit_count": 47,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:05.388",
+      "fps": 15,
+      "cpu_ms": 0.1,
+      "unit_count": 47,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:05.452",
+      "fps": 26,
+      "cpu_ms": 0.1,
+      "unit_count": 47,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:05.505",
+      "fps": 19,
+      "cpu_ms": 0.2,
+      "unit_count": 47,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:05.649",
+      "fps": 15,
+      "cpu_ms": 0.2,
+      "unit_count": 47,
+      "vfx_count": 4,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:05.688",
+      "fps": 26,
+      "cpu_ms": 0.2,
+      "unit_count": 47,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:06.098",
+      "fps": 12,
+      "cpu_ms": 0.1,
+      "unit_count": 49,
+      "vfx_count": 3,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:06.132",
+      "fps": 30,
+      "cpu_ms": 0.1,
+      "unit_count": 49,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:06.519",
+      "fps": 34,
+      "cpu_ms": 0.1,
+      "unit_count": 50,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:06.554",
+      "fps": 29,
+      "cpu_ms": 0.1,
+      "unit_count": 50,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:06.643",
+      "fps": 24,
+      "cpu_ms": 0.2,
+      "unit_count": 51,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:06.773",
+      "fps": 18,
+      "cpu_ms": 0.2,
+      "unit_count": 51,
+      "vfx_count": 3,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:07.097",
+      "fps": 17,
+      "cpu_ms": 0.1,
+      "unit_count": 50,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:07.246",
+      "fps": 18,
+      "cpu_ms": 0.1,
+      "unit_count": 51,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:07.333",
+      "fps": 19,
+      "cpu_ms": 0.2,
+      "unit_count": 51,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:07.367",
+      "fps": 30,
+      "cpu_ms": 0.2,
+      "unit_count": 51,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:07.417",
+      "fps": 20,
+      "cpu_ms": 0.2,
+      "unit_count": 51,
+      "vfx_count": 3,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:07.682",
+      "fps": 39,
+      "cpu_ms": 0.2,
+      "unit_count": 52,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:07.719",
+      "fps": 28,
+      "cpu_ms": 0.2,
+      "unit_count": 52,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:07.778",
+      "fps": 17,
+      "cpu_ms": 0.1,
+      "unit_count": 52,
+      "vfx_count": 4,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:07.895",
+      "fps": 32,
+      "cpu_ms": 0.3,
+      "unit_count": 52,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:08.070",
+      "fps": 18,
+      "cpu_ms": 0.1,
+      "unit_count": 52,
+      "vfx_count": 3,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:08.101",
+      "fps": 32,
+      "cpu_ms": 0.1,
+      "unit_count": 52,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:08.157",
+      "fps": 18,
+      "cpu_ms": 0.2,
+      "unit_count": 52,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:08.189",
+      "fps": 31,
+      "cpu_ms": 0.1,
+      "unit_count": 52,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:08.242",
+      "fps": 19,
+      "cpu_ms": 0.2,
+      "unit_count": 52,
+      "vfx_count": 4,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:08.361",
+      "fps": 32,
+      "cpu_ms": 0.2,
+      "unit_count": 49,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:08.862",
+      "fps": 30,
+      "cpu_ms": 0.1,
+      "unit_count": 49,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:09.028",
+      "fps": 12,
+      "cpu_ms": 0.2,
+      "unit_count": 49,
+      "vfx_count": 6,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:09.058",
+      "fps": 32,
+      "cpu_ms": 0.1,
+      "unit_count": 49,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:09.116",
+      "fps": 18,
+      "cpu_ms": 0.3,
+      "unit_count": 49,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:09.193",
+      "fps": 13,
+      "cpu_ms": 0.3,
+      "unit_count": 49,
+      "vfx_count": 3,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:09.442",
+      "fps": 23,
+      "cpu_ms": 0.2,
+      "unit_count": 50,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:09.465",
+      "fps": 43,
+      "cpu_ms": 0.1,
+      "unit_count": 50,
+      "vfx_count": 2,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:09.870",
+      "fps": 30,
+      "cpu_ms": 0.1,
+      "unit_count": 50,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:09.958",
+      "fps": 30,
+      "cpu_ms": 0.1,
+      "unit_count": 50,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:10.096",
+      "fps": 12,
+      "cpu_ms": 0.1,
+      "unit_count": 51,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:10.132",
+      "fps": 28,
+      "cpu_ms": 0.2,
+      "unit_count": 51,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:10.222",
+      "fps": 12,
+      "cpu_ms": 0.1,
+      "unit_count": 51,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:10.255",
+      "fps": 24,
+      "cpu_ms": 0.2,
+      "unit_count": 52,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:10.411",
+      "fps": 18,
+      "cpu_ms": 0.1,
+      "unit_count": 52,
+      "vfx_count": 6,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:10.471",
+      "fps": 30,
+      "cpu_ms": 0.2,
+      "unit_count": 52,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:10.511",
+      "fps": 25,
+      "cpu_ms": 0.1,
+      "unit_count": 52,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:10.580",
+      "fps": 23,
+      "cpu_ms": 0.1,
+      "unit_count": 52,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:10.670",
+      "fps": 18,
+      "cpu_ms": 0.1,
+      "unit_count": 53,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:10.703",
+      "fps": 30,
+      "cpu_ms": 0.2,
+      "unit_count": 53,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:10.781",
+      "fps": 23,
+      "cpu_ms": 0.1,
+      "unit_count": 53,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:10.811",
+      "fps": 32,
+      "cpu_ms": 0.1,
+      "unit_count": 53,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:11.199",
+      "fps": 28,
+      "cpu_ms": 0.1,
+      "unit_count": 54,
+      "vfx_count": 3,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:11.261",
+      "fps": 16,
+      "cpu_ms": 0.1,
+      "unit_count": 54,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:11.345",
+      "fps": 19,
+      "cpu_ms": 0.1,
+      "unit_count": 49,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:11.427",
+      "fps": 20,
+      "cpu_ms": 0.2,
+      "unit_count": 49,
+      "vfx_count": 4,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:11.699",
+      "fps": 20,
+      "cpu_ms": 0.1,
+      "unit_count": 49,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:11.784",
+      "fps": 22,
+      "cpu_ms": 0.1,
+      "unit_count": 49,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:11.825",
+      "fps": 25,
+      "cpu_ms": 0.1,
+      "unit_count": 49,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:12.204",
+      "fps": 11,
+      "cpu_ms": 0.2,
+      "unit_count": 50,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:12.314",
+      "fps": 31,
+      "cpu_ms": 0.1,
+      "unit_count": 51,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:12.370",
+      "fps": 18,
+      "cpu_ms": 0.2,
+      "unit_count": 51,
+      "vfx_count": 3,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:12.393",
+      "fps": 43,
+      "cpu_ms": 0.3,
+      "unit_count": 51,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:12.484",
+      "fps": 18,
+      "cpu_ms": 0.2,
+      "unit_count": 52,
+      "vfx_count": 4,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:12.684",
+      "fps": 21,
+      "cpu_ms": 0.2,
+      "unit_count": 53,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:12.728",
+      "fps": 23,
+      "cpu_ms": 0.3,
+      "unit_count": 53,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:12.976",
+      "fps": 18,
+      "cpu_ms": 0.2,
+      "unit_count": 51,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:13.016",
+      "fps": 25,
+      "cpu_ms": 0.1,
+      "unit_count": 51,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:13.069",
+      "fps": 19,
+      "cpu_ms": 0.2,
+      "unit_count": 51,
+      "vfx_count": 4,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:13.243",
+      "fps": 12,
+      "cpu_ms": 0.1,
+      "unit_count": 51,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:13.519",
+      "fps": 44,
+      "cpu_ms": 0.1,
+      "unit_count": 52,
+      "vfx_count": 2,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:13.554",
+      "fps": 29,
+      "cpu_ms": 0.1,
+      "unit_count": 52,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:13.594",
+      "fps": 25,
+      "cpu_ms": 0.2,
+      "unit_count": 52,
+      "vfx_count": 3,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:13.618",
+      "fps": 43,
+      "cpu_ms": 0.2,
+      "unit_count": 53,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:13.728",
+      "fps": 17,
+      "cpu_ms": 0.2,
+      "unit_count": 53,
+      "vfx_count": 3,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:13.837",
+      "fps": 29,
+      "cpu_ms": 0.2,
+      "unit_count": 53,
+      "vfx_count": 4,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:13.882",
+      "fps": 22,
+      "cpu_ms": 0.3,
+      "unit_count": 53,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:13.926",
+      "fps": 23,
+      "cpu_ms": 0.1,
+      "unit_count": 53,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:14.032",
+      "fps": 33,
+      "cpu_ms": 0.3,
+      "unit_count": 54,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:14.143",
+      "fps": 31,
+      "cpu_ms": 0.1,
+      "unit_count": 54,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:14.197",
+      "fps": 18,
+      "cpu_ms": 0.2,
+      "unit_count": 54,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:14.272",
+      "fps": 13,
+      "cpu_ms": 0.2,
+      "unit_count": 55,
+      "vfx_count": 3,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:14.302",
+      "fps": 33,
+      "cpu_ms": 0.1,
+      "unit_count": 55,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:14.393",
+      "fps": 32,
+      "cpu_ms": 0.2,
+      "unit_count": 53,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:14.472",
+      "fps": 13,
+      "cpu_ms": 0.3,
+      "unit_count": 54,
+      "vfx_count": 3,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:14.515",
+      "fps": 23,
+      "cpu_ms": 0.2,
+      "unit_count": 54,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:14.539",
+      "fps": 40,
+      "cpu_ms": 0.1,
+      "unit_count": 54,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:14.653",
+      "fps": 42,
+      "cpu_ms": 0.1,
+      "unit_count": 55,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:14.709",
+      "fps": 43,
+      "cpu_ms": 0.2,
+      "unit_count": 55,
+      "vfx_count": 1,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:14.782",
+      "fps": 34,
+      "cpu_ms": 0.2,
+      "unit_count": 55,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:14.817",
+      "fps": 29,
+      "cpu_ms": 0.1,
+      "unit_count": 55,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:14.840",
+      "fps": 44,
+      "cpu_ms": 0.2,
+      "unit_count": 55,
+      "vfx_count": 2,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:14.875",
+      "fps": 29,
+      "cpu_ms": 0.4,
+      "unit_count": 55,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:14.947",
+      "fps": 28,
+      "cpu_ms": 0.1,
+      "unit_count": 55,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:15.228",
+      "fps": 32,
+      "cpu_ms": 0.3,
+      "unit_count": 57,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:15.492",
+      "fps": 44,
+      "cpu_ms": 0.1,
+      "unit_count": 58,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:15.604",
+      "fps": 42,
+      "cpu_ms": 0.2,
+      "unit_count": 59,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:15.704",
+      "fps": 23,
+      "cpu_ms": 0.1,
+      "unit_count": 59,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:16.023",
+      "fps": 40,
+      "cpu_ms": 0.1,
+      "unit_count": 58,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:16.125",
+      "fps": 25,
+      "cpu_ms": 0.2,
+      "unit_count": 58,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:16.306",
+      "fps": 14,
+      "cpu_ms": 0.2,
+      "unit_count": 58,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:16.457",
+      "fps": 20,
+      "cpu_ms": 0.1,
+      "unit_count": 59,
+      "vfx_count": 3,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:16.697",
+      "fps": 10,
+      "cpu_ms": 0.2,
+      "unit_count": 60,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:16.826",
+      "fps": 35,
+      "cpu_ms": 0.3,
+      "unit_count": 60,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:16.901",
+      "fps": 13,
+      "cpu_ms": 0.2,
+      "unit_count": 60,
+      "vfx_count": 5,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:16.927",
+      "fps": 37,
+      "cpu_ms": 0.1,
+      "unit_count": 60,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:17.058",
+      "fps": 42,
+      "cpu_ms": 0.3,
+      "unit_count": 60,
+      "vfx_count": 2,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:17.128",
+      "fps": 14,
+      "cpu_ms": 0.2,
+      "unit_count": 60,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:17.222",
+      "fps": 11,
+      "cpu_ms": 0.6,
+      "unit_count": 60,
+      "vfx_count": 4,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:17.322",
+      "fps": 10,
+      "cpu_ms": 0.2,
+      "unit_count": 61,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:17.417",
+      "fps": 11,
+      "cpu_ms": 0.6,
+      "unit_count": 56,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:17.584",
+      "fps": 19,
+      "cpu_ms": 0.1,
+      "unit_count": 57,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:17.612",
+      "fps": 34,
+      "cpu_ms": 0.2,
+      "unit_count": 58,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:17.705",
+      "fps": 29,
+      "cpu_ms": 0.2,
+      "unit_count": 58,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:17.728",
+      "fps": 42,
+      "cpu_ms": 0.1,
+      "unit_count": 58,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:17.765",
+      "fps": 28,
+      "cpu_ms": 0.1,
+      "unit_count": 58,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:17.787",
+      "fps": 44,
+      "cpu_ms": 0.2,
+      "unit_count": 58,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:17.887",
+      "fps": 29,
+      "cpu_ms": 0.2,
+      "unit_count": 58,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:17.911",
+      "fps": 40,
+      "cpu_ms": 0.3,
+      "unit_count": 58,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:17.988",
+      "fps": 23,
+      "cpu_ms": 0.4,
+      "unit_count": 58,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:18.612",
+      "fps": 6,
+      "cpu_ms": 0.2,
+      "unit_count": 60,
+      "vfx_count": 4,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:19.099",
+      "fps": 12,
+      "cpu_ms": 0.3,
+      "unit_count": 57,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:19.184",
+      "fps": 12,
+      "cpu_ms": 0.3,
+      "unit_count": 57,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:19.443",
+      "fps": 7,
+      "cpu_ms": 0.2,
+      "unit_count": 58,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:20.234",
+      "fps": 27,
+      "cpu_ms": 0.1,
+      "unit_count": 63,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:20.540",
+      "fps": 33,
+      "cpu_ms": 0.4,
+      "unit_count": 57,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:20.798",
+      "fps": 33,
+      "cpu_ms": 0.2,
+      "unit_count": 58,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:20.874",
+      "fps": 39,
+      "cpu_ms": 0.1,
+      "unit_count": 58,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:21.492",
+      "fps": 10,
+      "cpu_ms": 0.1,
+      "unit_count": 59,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:21.904",
+      "fps": 44,
+      "cpu_ms": 0.2,
+      "unit_count": 61,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:21.975",
+      "fps": 43,
+      "cpu_ms": 0.2,
+      "unit_count": 61,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:22.080",
+      "fps": 31,
+      "cpu_ms": 0.1,
+      "unit_count": 59,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:22.152",
+      "fps": 30,
+      "cpu_ms": 0.1,
+      "unit_count": 59,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:22.212",
+      "fps": 32,
+      "cpu_ms": 0.1,
+      "unit_count": 59,
+      "vfx_count": 3,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:22.270",
+      "fps": 28,
+      "cpu_ms": 0.1,
+      "unit_count": 59,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:22.342",
+      "fps": 53,
+      "cpu_ms": 0.1,
+      "unit_count": 59,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:22.586",
+      "fps": 16,
+      "cpu_ms": 0.1,
+      "unit_count": 60,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:22.685",
+      "fps": 16,
+      "cpu_ms": 0.3,
+      "unit_count": 60,
+      "vfx_count": 3,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:22.713",
+      "fps": 35,
+      "cpu_ms": 0.1,
+      "unit_count": 60,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:22.896",
+      "fps": 22,
+      "cpu_ms": 0.1,
+      "unit_count": 61,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:23.078",
+      "fps": 31,
+      "cpu_ms": 0.2,
+      "unit_count": 61,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:23.098",
+      "fps": 35,
+      "cpu_ms": 0.2,
+      "unit_count": 61,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:23.152",
+      "fps": 47,
+      "cpu_ms": 0.2,
+      "unit_count": 61,
+      "vfx_count": 1,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:23.364",
+      "fps": 24,
+      "cpu_ms": 0.2,
+      "unit_count": 61,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:23.537",
+      "fps": 34,
+      "cpu_ms": 0.1,
+      "unit_count": 62,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:23.627",
+      "fps": 35,
+      "cpu_ms": 0.2,
+      "unit_count": 55,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:23.680",
+      "fps": 19,
+      "cpu_ms": 0.3,
+      "unit_count": 55,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:23.810",
+      "fps": 30,
+      "cpu_ms": 0.1,
+      "unit_count": 55,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:23.868",
+      "fps": 17,
+      "cpu_ms": 0.2,
+      "unit_count": 56,
+      "vfx_count": 3,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:23.890",
+      "fps": 44,
+      "cpu_ms": 0.2,
+      "unit_count": 56,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:23.975",
+      "fps": 21,
+      "cpu_ms": 0.1,
+      "unit_count": 56,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:24.142",
+      "fps": 25,
+      "cpu_ms": 0.2,
+      "unit_count": 57,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:24.202",
+      "fps": 28,
+      "cpu_ms": 0.3,
+      "unit_count": 57,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:24.238",
+      "fps": 28,
+      "cpu_ms": 0.3,
+      "unit_count": 57,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:24.337",
+      "fps": 30,
+      "cpu_ms": 0.1,
+      "unit_count": 57,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:24.393",
+      "fps": 29,
+      "cpu_ms": 0.1,
+      "unit_count": 57,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:24.425",
+      "fps": 32,
+      "cpu_ms": 0.2,
+      "unit_count": 58,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:24.693",
+      "fps": 8,
+      "cpu_ms": 0.1,
+      "unit_count": 58,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:24.724",
+      "fps": 32,
+      "cpu_ms": 0.1,
+      "unit_count": 59,
+      "vfx_count": 5,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:24.778",
+      "fps": 19,
+      "cpu_ms": 0.2,
+      "unit_count": 59,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:24.865",
+      "fps": 18,
+      "cpu_ms": 0.2,
+      "unit_count": 59,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:24.895",
+      "fps": 33,
+      "cpu_ms": 0.3,
+      "unit_count": 59,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:24.942",
+      "fps": 21,
+      "cpu_ms": 0.2,
+      "unit_count": 59,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:25.116",
+      "fps": 43,
+      "cpu_ms": 0.2,
+      "unit_count": 51,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:25.262",
+      "fps": 31,
+      "cpu_ms": 0.2,
+      "unit_count": 51,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:25.282",
+      "fps": 48,
+      "cpu_ms": 0.1,
+      "unit_count": 51,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:26.087",
+      "fps": 22,
+      "cpu_ms": 0.3,
+      "unit_count": 53,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:26.133",
+      "fps": 22,
+      "cpu_ms": 0.2,
+      "unit_count": 53,
+      "vfx_count": 4,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:26.265",
+      "fps": 45,
+      "cpu_ms": 0.1,
+      "unit_count": 53,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:26.298",
+      "fps": 31,
+      "cpu_ms": 0.1,
+      "unit_count": 53,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:26.320",
+      "fps": 44,
+      "cpu_ms": 0.2,
+      "unit_count": 53,
+      "vfx_count": 1,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:26.366",
+      "fps": 22,
+      "cpu_ms": 0.1,
+      "unit_count": 53,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:26.514",
+      "fps": 14,
+      "cpu_ms": 0.3,
+      "unit_count": 53,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:26.597",
+      "fps": 12,
+      "cpu_ms": 0.2,
+      "unit_count": 53,
+      "vfx_count": 3,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:26.739",
+      "fps": 17,
+      "cpu_ms": 0.3,
+      "unit_count": 49,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:26.842",
+      "fps": 10,
+      "cpu_ms": 0.2,
+      "unit_count": 49,
+      "vfx_count": 5,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:27.133",
+      "fps": 19,
+      "cpu_ms": 0.3,
+      "unit_count": 51,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:27.618",
+      "fps": 9,
+      "cpu_ms": 0.2,
+      "unit_count": 53,
+      "vfx_count": 4,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:28.107",
+      "fps": 13,
+      "cpu_ms": 0.3,
+      "unit_count": 55,
+      "vfx_count": 6,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:28.249",
+      "fps": 27,
+      "cpu_ms": 0.3,
+      "unit_count": 52,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:28.313",
+      "fps": 16,
+      "cpu_ms": 0.3,
+      "unit_count": 52,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:28.355",
+      "fps": 24,
+      "cpu_ms": 0.2,
+      "unit_count": 52,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:28.421",
+      "fps": 26,
+      "cpu_ms": 0.1,
+      "unit_count": 53,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:28.827",
+      "fps": 36,
+      "cpu_ms": 0,
+      "unit_count": 54,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:28.882",
+      "fps": 18,
+      "cpu_ms": 0.2,
+      "unit_count": 54,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:29.109",
+      "fps": 37,
+      "cpu_ms": 0.2,
+      "unit_count": 55,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:29.189",
+      "fps": 35,
+      "cpu_ms": 0.2,
+      "unit_count": 55,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:29.229",
+      "fps": 25,
+      "cpu_ms": 0.2,
+      "unit_count": 56,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:29.370",
+      "fps": 21,
+      "cpu_ms": 0.2,
+      "unit_count": 56,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:29.399",
+      "fps": 34,
+      "cpu_ms": 0.1,
+      "unit_count": 56,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:29.835",
+      "fps": 17,
+      "cpu_ms": 0.2,
+      "unit_count": 54,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:29.921",
+      "fps": 12,
+      "cpu_ms": 0.1,
+      "unit_count": 55,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:30.239",
+      "fps": 32,
+      "cpu_ms": 0.2,
+      "unit_count": 57,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:30.283",
+      "fps": 23,
+      "cpu_ms": 0.1,
+      "unit_count": 57,
+      "vfx_count": 3,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:30.338",
+      "fps": 31,
+      "cpu_ms": 0.3,
+      "unit_count": 57,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:30.381",
+      "fps": 23,
+      "cpu_ms": 0.2,
+      "unit_count": 57,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:30.507",
+      "fps": 31,
+      "cpu_ms": 0.1,
+      "unit_count": 57,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:30.766",
+      "fps": 36,
+      "cpu_ms": 0.1,
+      "unit_count": 57,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:30.816",
+      "fps": 20,
+      "cpu_ms": 0.3,
+      "unit_count": 57,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:30.842",
+      "fps": 39,
+      "cpu_ms": 0.2,
+      "unit_count": 58,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:31.001",
+      "fps": 14,
+      "cpu_ms": 0.1,
+      "unit_count": 58,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:31.101",
+      "fps": 35,
+      "cpu_ms": 0.1,
+      "unit_count": 58,
+      "vfx_count": 2,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:31.150",
+      "fps": 21,
+      "cpu_ms": 0.2,
+      "unit_count": 58,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:31.252",
+      "fps": 43,
+      "cpu_ms": 0.2,
+      "unit_count": 55,
+      "vfx_count": 2,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:31.347",
+      "fps": 24,
+      "cpu_ms": 0.3,
+      "unit_count": 55,
+      "vfx_count": 4,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:31.440",
+      "fps": 32,
+      "cpu_ms": 0.2,
+      "unit_count": 55,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:31.493",
+      "fps": 31,
+      "cpu_ms": 0.1,
+      "unit_count": 55,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:31.555",
+      "fps": 27,
+      "cpu_ms": 0.1,
+      "unit_count": 55,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:31.585",
+      "fps": 32,
+      "cpu_ms": 0.1,
+      "unit_count": 55,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:31.747",
+      "fps": 37,
+      "cpu_ms": 0.2,
+      "unit_count": 55,
+      "vfx_count": 1,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:31.805",
+      "fps": 17,
+      "cpu_ms": 0.3,
+      "unit_count": 55,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:31.835",
+      "fps": 32,
+      "cpu_ms": 0.2,
+      "unit_count": 55,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:31.989",
+      "fps": 36,
+      "cpu_ms": 0.2,
+      "unit_count": 55,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:32.038",
+      "fps": 21,
+      "cpu_ms": 0.2,
+      "unit_count": 56,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:32.065",
+      "fps": 37,
+      "cpu_ms": 0.1,
+      "unit_count": 56,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:32.343",
+      "fps": 31,
+      "cpu_ms": 0.3,
+      "unit_count": 57,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:32.397",
+      "fps": 31,
+      "cpu_ms": 0.3,
+      "unit_count": 57,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:32.589",
+      "fps": 31,
+      "cpu_ms": 0.1,
+      "unit_count": 57,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:32.981",
+      "fps": 9,
+      "cpu_ms": 0.3,
+      "unit_count": 53,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:33.579",
+      "fps": 24,
+      "cpu_ms": 0.2,
+      "unit_count": 55,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:33.775",
+      "fps": 33,
+      "cpu_ms": 0.2,
+      "unit_count": 56,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:33.826",
+      "fps": 20,
+      "cpu_ms": 0.1,
+      "unit_count": 56,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:33.904",
+      "fps": 20,
+      "cpu_ms": 0.2,
+      "unit_count": 57,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:34.018",
+      "fps": 17,
+      "cpu_ms": 0.2,
+      "unit_count": 57,
+      "vfx_count": 4,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:34.087",
+      "fps": 14,
+      "cpu_ms": 0.1,
+      "unit_count": 57,
+      "vfx_count": 3,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:34.123",
+      "fps": 29,
+      "cpu_ms": 0.2,
+      "unit_count": 57,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:34.191",
+      "fps": 15,
+      "cpu_ms": 0.2,
+      "unit_count": 57,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:34.368",
+      "fps": 17,
+      "cpu_ms": 0.2,
+      "unit_count": 52,
+      "vfx_count": 6,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:34.566",
+      "fps": 23,
+      "cpu_ms": 0.1,
+      "unit_count": 52,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:34.658",
+      "fps": 16,
+      "cpu_ms": 0.1,
+      "unit_count": 53,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:34.826",
+      "fps": 12,
+      "cpu_ms": 0.4,
+      "unit_count": 53,
+      "vfx_count": 5,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:34.910",
+      "fps": 12,
+      "cpu_ms": 0.1,
+      "unit_count": 54,
+      "vfx_count": 4,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:35.029",
+      "fps": 32,
+      "cpu_ms": 0.1,
+      "unit_count": 55,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:35.099",
+      "fps": 14,
+      "cpu_ms": 0.2,
+      "unit_count": 55,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:35.142",
+      "fps": 24,
+      "cpu_ms": 0.2,
+      "unit_count": 55,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:35.383",
+      "fps": 35,
+      "cpu_ms": 0.1,
+      "unit_count": 56,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:35.477",
+      "fps": 32,
+      "cpu_ms": 0.2,
+      "unit_count": 56,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:35.611",
+      "fps": 23,
+      "cpu_ms": 0.1,
+      "unit_count": 57,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:35.807",
+      "fps": 36,
+      "cpu_ms": 0.1,
+      "unit_count": 58,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:35.855",
+      "fps": 21,
+      "cpu_ms": 0.1,
+      "unit_count": 54,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:35.882",
+      "fps": 36,
+      "cpu_ms": 0.1,
+      "unit_count": 54,
+      "vfx_count": 1,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:35.931",
+      "fps": 21,
+      "cpu_ms": 0,
+      "unit_count": 54,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:35.960",
+      "fps": 33,
+      "cpu_ms": 0.1,
+      "unit_count": 54,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:36.070",
+      "fps": 30,
+      "cpu_ms": 0.2,
+      "unit_count": 55,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:36.159",
+      "fps": 35,
+      "cpu_ms": 0.2,
+      "unit_count": 55,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:36.304",
+      "fps": 22,
+      "cpu_ms": 0.1,
+      "unit_count": 55,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:36.570",
+      "fps": 33,
+      "cpu_ms": 0.1,
+      "unit_count": 56,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:36.592",
+      "fps": 44,
+      "cpu_ms": 0.3,
+      "unit_count": 56,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:36.781",
+      "fps": 36,
+      "cpu_ms": 0.1,
+      "unit_count": 56,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:36.887",
+      "fps": 35,
+      "cpu_ms": 0.1,
+      "unit_count": 56,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:37.335",
+      "fps": 15,
+      "cpu_ms": 0.2,
+      "unit_count": 57,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:37.677",
+      "fps": 15,
+      "cpu_ms": 0.1,
+      "unit_count": 53,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:37.732",
+      "fps": 18,
+      "cpu_ms": 0.2,
+      "unit_count": 53,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:37.842",
+      "fps": 16,
+      "cpu_ms": 0.2,
+      "unit_count": 53,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:37.980",
+      "fps": 20,
+      "cpu_ms": 0.2,
+      "unit_count": 53,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:38.369",
+      "fps": 20,
+      "cpu_ms": 0.2,
+      "unit_count": 55,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:38.444",
+      "fps": 21,
+      "cpu_ms": 0.1,
+      "unit_count": 55,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:38.541",
+      "fps": 44,
+      "cpu_ms": 0,
+      "unit_count": 55,
+      "vfx_count": 1,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:38.623",
+      "fps": 33,
+      "cpu_ms": 0.1,
+      "unit_count": 56,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:38.660",
+      "fps": 27,
+      "cpu_ms": 0.2,
+      "unit_count": 56,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:38.849",
+      "fps": 34,
+      "cpu_ms": 0,
+      "unit_count": 56,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:38.902",
+      "fps": 19,
+      "cpu_ms": 0.2,
+      "unit_count": 52,
+      "vfx_count": 3,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:39.015",
+      "fps": 40,
+      "cpu_ms": 0.2,
+      "unit_count": 53,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:39.048",
+      "fps": 31,
+      "cpu_ms": 0.2,
+      "unit_count": 53,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:39.100",
+      "fps": 33,
+      "cpu_ms": 0.2,
+      "unit_count": 53,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:39.326",
+      "fps": 37,
+      "cpu_ms": 0.3,
+      "unit_count": 53,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:39.404",
+      "fps": 38,
+      "cpu_ms": 0.2,
+      "unit_count": 54,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:39.505",
+      "fps": 35,
+      "cpu_ms": 0.2,
+      "unit_count": 54,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:39.619",
+      "fps": 28,
+      "cpu_ms": 0.5,
+      "unit_count": 55,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:39.947",
+      "fps": 33,
+      "cpu_ms": 0.3,
+      "unit_count": 56,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:40.071",
+      "fps": 26,
+      "cpu_ms": 0.3,
+      "unit_count": 57,
+      "vfx_count": 4,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:40.163",
+      "fps": 33,
+      "cpu_ms": 0.2,
+      "unit_count": 57,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:40.361",
+      "fps": 30,
+      "cpu_ms": 0.2,
+      "unit_count": 57,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:40.419",
+      "fps": 17,
+      "cpu_ms": 0.2,
+      "unit_count": 52,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:40.522",
+      "fps": 15,
+      "cpu_ms": 0.2,
+      "unit_count": 53,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:40.667",
+      "fps": 27,
+      "cpu_ms": 0.1,
+      "unit_count": 54,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:40.773",
+      "fps": 13,
+      "cpu_ms": 0.1,
+      "unit_count": 54,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:40.894",
+      "fps": 40,
+      "cpu_ms": 0.1,
+      "unit_count": 54,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:40.964",
+      "fps": 40,
+      "cpu_ms": 0,
+      "unit_count": 54,
+      "vfx_count": 1,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:41.056",
+      "fps": 27,
+      "cpu_ms": 0.2,
+      "unit_count": 54,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:41.093",
+      "fps": 81,
+      "cpu_ms": 0.1,
+      "unit_count": 54,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:41.132",
+      "fps": 25,
+      "cpu_ms": 0.1,
+      "unit_count": 54,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:41.187",
+      "fps": 40,
+      "cpu_ms": 0.1,
+      "unit_count": 54,
+      "vfx_count": 1,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:41.275",
+      "fps": 16,
+      "cpu_ms": 0.2,
+      "unit_count": 55,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:41.302",
+      "fps": 35,
+      "cpu_ms": 0,
+      "unit_count": 55,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:41.431",
+      "fps": 20,
+      "cpu_ms": 0.2,
+      "unit_count": 55,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:41.518",
+      "fps": 21,
+      "cpu_ms": 0.1,
+      "unit_count": 56,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:41.593",
+      "fps": 21,
+      "cpu_ms": 0.2,
+      "unit_count": 56,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:41.697",
+      "fps": 18,
+      "cpu_ms": 0.2,
+      "unit_count": 56,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:41.859",
+      "fps": 27,
+      "cpu_ms": 0.1,
+      "unit_count": 56,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:42.006",
+      "fps": 18,
+      "cpu_ms": 0.2,
+      "unit_count": 52,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:42.057",
+      "fps": 33,
+      "cpu_ms": 0.3,
+      "unit_count": 52,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:42.099",
+      "fps": 24,
+      "cpu_ms": 0.1,
+      "unit_count": 52,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:42.175",
+      "fps": 51,
+      "cpu_ms": 0.2,
+      "unit_count": 53,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:42.255",
+      "fps": 34,
+      "cpu_ms": 0.2,
+      "unit_count": 53,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:42.382",
+      "fps": 27,
+      "cpu_ms": 0.4,
+      "unit_count": 54,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:42.433",
+      "fps": 20,
+      "cpu_ms": 0.1,
+      "unit_count": 54,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:42.513",
+      "fps": 20,
+      "cpu_ms": 0.2,
+      "unit_count": 54,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:42.615",
+      "fps": 36,
+      "cpu_ms": 0.1,
+      "unit_count": 55,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:42.665",
+      "fps": 20,
+      "cpu_ms": 0.2,
+      "unit_count": 55,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:42.691",
+      "fps": 38,
+      "cpu_ms": 0.2,
+      "unit_count": 55,
+      "vfx_count": 1,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:42.893",
+      "fps": 18,
+      "cpu_ms": 0.1,
+      "unit_count": 56,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:42.967",
+      "fps": 37,
+      "cpu_ms": 0.1,
+      "unit_count": 57,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:43.008",
+      "fps": 25,
+      "cpu_ms": 0.2,
+      "unit_count": 57,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:43.173",
+      "fps": 38,
+      "cpu_ms": 0.2,
+      "unit_count": 58,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:43.211",
+      "fps": 45,
+      "cpu_ms": 0.2,
+      "unit_count": 58,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:43.234",
+      "fps": 43,
+      "cpu_ms": 0.1,
+      "unit_count": 58,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:43.269",
+      "fps": 29,
+      "cpu_ms": 0.3,
+      "unit_count": 58,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:43.372",
+      "fps": 34,
+      "cpu_ms": 0.2,
+      "unit_count": 59,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:43.604",
+      "fps": 17,
+      "cpu_ms": 0.3,
+      "unit_count": 57,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:43.704",
+      "fps": 39,
+      "cpu_ms": 0.2,
+      "unit_count": 57,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:43.753",
+      "fps": 20,
+      "cpu_ms": 0.1,
+      "unit_count": 58,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:43.879",
+      "fps": 12,
+      "cpu_ms": 0.1,
+      "unit_count": 58,
+      "vfx_count": 5,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:43.961",
+      "fps": 20,
+      "cpu_ms": 0.1,
+      "unit_count": 59,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:44.084",
+      "fps": 35,
+      "cpu_ms": 0.2,
+      "unit_count": 59,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:44.168",
+      "fps": 27,
+      "cpu_ms": 0.1,
+      "unit_count": 60,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:44.198",
+      "fps": 32,
+      "cpu_ms": 0,
+      "unit_count": 60,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:44.228",
+      "fps": 35,
+      "cpu_ms": 0.2,
+      "unit_count": 60,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:44.451",
+      "fps": 37,
+      "cpu_ms": 0.1,
+      "unit_count": 61,
+      "vfx_count": 1,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:44.534",
+      "fps": 12,
+      "cpu_ms": 0.1,
+      "unit_count": 61,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:44.580",
+      "fps": 36,
+      "cpu_ms": 0.2,
+      "unit_count": 62,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:44.662",
+      "fps": 12,
+      "cpu_ms": 0.1,
+      "unit_count": 62,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:44.719",
+      "fps": 32,
+      "cpu_ms": 0.2,
+      "unit_count": 62,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:44.986",
+      "fps": 13,
+      "cpu_ms": 0.1,
+      "unit_count": 58,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:45.060",
+      "fps": 23,
+      "cpu_ms": 0.1,
+      "unit_count": 59,
+      "vfx_count": 5,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:45.191",
+      "fps": 30,
+      "cpu_ms": 0.1,
+      "unit_count": 60,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:45.254",
+      "fps": 28,
+      "cpu_ms": 0.2,
+      "unit_count": 60,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:45.569",
+      "fps": 17,
+      "cpu_ms": 0.1,
+      "unit_count": 62,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:45.615",
+      "fps": 38,
+      "cpu_ms": 0.1,
+      "unit_count": 62,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:45.661",
+      "fps": 22,
+      "cpu_ms": 0.1,
+      "unit_count": 62,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:45.832",
+      "fps": 29,
+      "cpu_ms": 0.1,
+      "unit_count": 63,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:45.976",
+      "fps": 18,
+      "cpu_ms": 0.3,
+      "unit_count": 64,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:46.117",
+      "fps": 19,
+      "cpu_ms": 0.1,
+      "unit_count": 64,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:46.163",
+      "fps": 36,
+      "cpu_ms": 0.1,
+      "unit_count": 65,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:46.213",
+      "fps": 34,
+      "cpu_ms": 0.1,
+      "unit_count": 65,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:46.263",
+      "fps": 33,
+      "cpu_ms": 0.2,
+      "unit_count": 65,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:46.308",
+      "fps": 37,
+      "cpu_ms": 0.1,
+      "unit_count": 65,
+      "vfx_count": 2,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:46.354",
+      "fps": 36,
+      "cpu_ms": 0.2,
+      "unit_count": 66,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:46.425",
+      "fps": 19,
+      "cpu_ms": 0.2,
+      "unit_count": 66,
+      "vfx_count": 3,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:46.511",
+      "fps": 17,
+      "cpu_ms": 0.3,
+      "unit_count": 62,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:46.732",
+      "fps": 16,
+      "cpu_ms": 0,
+      "unit_count": 63,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:46.983",
+      "fps": 15,
+      "cpu_ms": 0.1,
+      "unit_count": 65,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:47.008",
+      "fps": 39,
+      "cpu_ms": 0.1,
+      "unit_count": 65,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:47.056",
+      "fps": 21,
+      "cpu_ms": 0.3,
+      "unit_count": 65,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:47.150",
+      "fps": 35,
+      "cpu_ms": 0.1,
+      "unit_count": 66,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:47.169",
+      "fps": 51,
+      "cpu_ms": 0.1,
+      "unit_count": 66,
+      "vfx_count": 1,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:47.200",
+      "fps": 33,
+      "cpu_ms": 0.1,
+      "unit_count": 66,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:47.257",
+      "fps": 27,
+      "cpu_ms": 0.2,
+      "unit_count": 66,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:47.454",
+      "fps": 20,
+      "cpu_ms": 0.1,
+      "unit_count": 67,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:47.673",
+      "fps": 36,
+      "cpu_ms": 0.1,
+      "unit_count": 68,
+      "vfx_count": 1,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:47.848",
+      "fps": 35,
+      "cpu_ms": 0.2,
+      "unit_count": 69,
+      "vfx_count": 2,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:47.899",
+      "fps": 19,
+      "cpu_ms": 0.1,
+      "unit_count": 69,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:48.111",
+      "fps": 17,
+      "cpu_ms": 0.2,
+      "unit_count": 67,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:48.220",
+      "fps": 33,
+      "cpu_ms": 0.1,
+      "unit_count": 68,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:49.044",
+      "fps": 13,
+      "cpu_ms": 0.2,
+      "unit_count": 72,
+      "vfx_count": 4,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:49.093",
+      "fps": 21,
+      "cpu_ms": 0.2,
+      "unit_count": 72,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:49.145",
+      "fps": 38,
+      "cpu_ms": 0.2,
+      "unit_count": 73,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:49.303",
+      "fps": 26,
+      "cpu_ms": 0.2,
+      "unit_count": 73,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:49.339",
+      "fps": 28,
+      "cpu_ms": 0.2,
+      "unit_count": 73,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:49.398",
+      "fps": 40,
+      "cpu_ms": 0.2,
+      "unit_count": 74,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:49.430",
+      "fps": 32,
+      "cpu_ms": 0.1,
+      "unit_count": 74,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:49.596",
+      "fps": 31,
+      "cpu_ms": 0.1,
+      "unit_count": 70,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:49.651",
+      "fps": 31,
+      "cpu_ms": 0.2,
+      "unit_count": 70,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:49.704",
+      "fps": 33,
+      "cpu_ms": 0.3,
+      "unit_count": 70,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:49.947",
+      "fps": 34,
+      "cpu_ms": 0.5,
+      "unit_count": 72,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:50.000",
+      "fps": 19,
+      "cpu_ms": 0.2,
+      "unit_count": 72,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "CLEAR"
+    },
+    {
+      "timestamp": "10:33:50.048",
+      "fps": 21,
+      "cpu_ms": 0.5,
+      "unit_count": 72,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:50.582",
+      "fps": 22,
+      "cpu_ms": 0.2,
+      "unit_count": 75,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:50.634",
+      "fps": 35,
+      "cpu_ms": 0.3,
+      "unit_count": 75,
+      "vfx_count": 5,
+      "bottleneck": "OPTIMAL",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:50.722",
+      "fps": 21,
+      "cpu_ms": 0.1,
+      "unit_count": 76,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:50.836",
+      "fps": 30,
+      "cpu_ms": 0.4,
+      "unit_count": 76,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:50.894",
+      "fps": 17,
+      "cpu_ms": 0.2,
+      "unit_count": 76,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:51.177",
+      "fps": 12,
+      "cpu_ms": 0.1,
+      "unit_count": 71,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:51.206",
+      "fps": 33,
+      "cpu_ms": 0.1,
+      "unit_count": 71,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:51.306",
+      "fps": 16,
+      "cpu_ms": 0.2,
+      "unit_count": 71,
+      "vfx_count": 3,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:51.334",
+      "fps": 36,
+      "cpu_ms": 0.5,
+      "unit_count": 72,
+      "vfx_count": 1,
+      "bottleneck": "OPTIMAL",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:51.389",
+      "fps": 44,
+      "cpu_ms": 0.2,
+      "unit_count": 72,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:51.462",
+      "fps": 25,
+      "cpu_ms": 0.2,
+      "unit_count": 72,
+      "vfx_count": 4,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:51.499",
+      "fps": 28,
+      "cpu_ms": 0.4,
+      "unit_count": 72,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:51.540",
+      "fps": 24,
+      "cpu_ms": 0.2,
+      "unit_count": 73,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:51.592",
+      "fps": 32,
+      "cpu_ms": 0.3,
+      "unit_count": 73,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:51.741",
+      "fps": 32,
+      "cpu_ms": 0.3,
+      "unit_count": 74,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:51.797",
+      "fps": 18,
+      "cpu_ms": 0.3,
+      "unit_count": 74,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:51.902",
+      "fps": 21,
+      "cpu_ms": 0.1,
+      "unit_count": 74,
+      "vfx_count": 3,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:52.174",
+      "fps": 39,
+      "cpu_ms": 0.2,
+      "unit_count": 76,
+      "vfx_count": 1,
+      "bottleneck": "OPTIMAL",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:52.377",
+      "fps": 26,
+      "cpu_ms": 0.1,
+      "unit_count": 77,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:52.699",
+      "fps": 34,
+      "cpu_ms": 0.3,
+      "unit_count": 71,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:52.733",
+      "fps": 31,
+      "cpu_ms": 0.2,
+      "unit_count": 72,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:53.148",
+      "fps": 12,
+      "cpu_ms": 0.4,
+      "unit_count": 74,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:53.217",
+      "fps": 14,
+      "cpu_ms": 0.1,
+      "unit_count": 74,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:53.245",
+      "fps": 36,
+      "cpu_ms": 0.1,
+      "unit_count": 74,
+      "vfx_count": 3,
+      "bottleneck": "OPTIMAL",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:53.351",
+      "fps": 32,
+      "cpu_ms": 0.2,
+      "unit_count": 75,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:53.373",
+      "fps": 43,
+      "cpu_ms": 0.1,
+      "unit_count": 75,
+      "vfx_count": 1,
+      "bottleneck": "OPTIMAL",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:53.416",
+      "fps": 24,
+      "cpu_ms": 0.2,
+      "unit_count": 75,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:53.440",
+      "fps": 42,
+      "cpu_ms": 0.2,
+      "unit_count": 75,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:53.872",
+      "fps": 36,
+      "cpu_ms": 0.2,
+      "unit_count": 77,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:54.147",
+      "fps": 35,
+      "cpu_ms": 0.1,
+      "unit_count": 73,
+      "vfx_count": 7,
+      "bottleneck": "OPTIMAL",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:54.199",
+      "fps": 19,
+      "cpu_ms": 0.2,
+      "unit_count": 73,
+      "vfx_count": 4,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:54.320",
+      "fps": 22,
+      "cpu_ms": 0.3,
+      "unit_count": 74,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:54.386",
+      "fps": 21,
+      "cpu_ms": 0.1,
+      "unit_count": 74,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:54.522",
+      "fps": 21,
+      "cpu_ms": 0.2,
+      "unit_count": 75,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:54.641",
+      "fps": 27,
+      "cpu_ms": 0.2,
+      "unit_count": 75,
+      "vfx_count": 5,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:54.693",
+      "fps": 20,
+      "cpu_ms": 0.2,
+      "unit_count": 75,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:54.753",
+      "fps": 30,
+      "cpu_ms": 0.2,
+      "unit_count": 76,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:54.803",
+      "fps": 20,
+      "cpu_ms": 0.3,
+      "unit_count": 76,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:55.052",
+      "fps": 14,
+      "cpu_ms": 0.1,
+      "unit_count": 77,
+      "vfx_count": 3,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:55.087",
+      "fps": 28,
+      "cpu_ms": 0.2,
+      "unit_count": 77,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:55.169",
+      "fps": 34,
+      "cpu_ms": 0.1,
+      "unit_count": 78,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:55.251",
+      "fps": 32,
+      "cpu_ms": 0.1,
+      "unit_count": 78,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:55.435",
+      "fps": 44,
+      "cpu_ms": 0.1,
+      "unit_count": 79,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:55.520",
+      "fps": 32,
+      "cpu_ms": 0.2,
+      "unit_count": 79,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:55.583",
+      "fps": 23,
+      "cpu_ms": 0.1,
+      "unit_count": 80,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:55.697",
+      "fps": 31,
+      "cpu_ms": 0.2,
+      "unit_count": 73,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:55.747",
+      "fps": 20,
+      "cpu_ms": 0.1,
+      "unit_count": 74,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:55.801",
+      "fps": 32,
+      "cpu_ms": 0.2,
+      "unit_count": 74,
+      "vfx_count": 3,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:55.876",
+      "fps": 19,
+      "cpu_ms": 0.2,
+      "unit_count": 74,
+      "vfx_count": 3,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:55.962",
+      "fps": 12,
+      "cpu_ms": 0.2,
+      "unit_count": 75,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:56.001",
+      "fps": 25,
+      "cpu_ms": 0.3,
+      "unit_count": 75,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:56.127",
+      "fps": 27,
+      "cpu_ms": 0.5,
+      "unit_count": 76,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:56.370",
+      "fps": 23,
+      "cpu_ms": 0.2,
+      "unit_count": 77,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:56.413",
+      "fps": 24,
+      "cpu_ms": 0.2,
+      "unit_count": 77,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:56.494",
+      "fps": 25,
+      "cpu_ms": 0.3,
+      "unit_count": 77,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:56.642",
+      "fps": 27,
+      "cpu_ms": 0.2,
+      "unit_count": 78,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:56.877",
+      "fps": 20,
+      "cpu_ms": 0.3,
+      "unit_count": 79,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:56.953",
+      "fps": 13,
+      "cpu_ms": 0.2,
+      "unit_count": 80,
+      "vfx_count": 4,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:57.047",
+      "fps": 11,
+      "cpu_ms": 0.3,
+      "unit_count": 80,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:57.334",
+      "fps": 36,
+      "cpu_ms": 0.1,
+      "unit_count": 74,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:57.372",
+      "fps": 26,
+      "cpu_ms": 0,
+      "unit_count": 74,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:58.286",
+      "fps": 13,
+      "cpu_ms": 0.2,
+      "unit_count": 78,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:58.353",
+      "fps": 39,
+      "cpu_ms": 0.1,
+      "unit_count": 79,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:58.403",
+      "fps": 20,
+      "cpu_ms": 0.2,
+      "unit_count": 79,
+      "vfx_count": 5,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:58.427",
+      "fps": 44,
+      "cpu_ms": 0.3,
+      "unit_count": 79,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:58.556",
+      "fps": 22,
+      "cpu_ms": 0.1,
+      "unit_count": 80,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:58.626",
+      "fps": 22,
+      "cpu_ms": 0.1,
+      "unit_count": 80,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:58.722",
+      "fps": 44,
+      "cpu_ms": 0.2,
+      "unit_count": 74,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:58.933",
+      "fps": 31,
+      "cpu_ms": 0.1,
+      "unit_count": 75,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:58.988",
+      "fps": 45,
+      "cpu_ms": 0.2,
+      "unit_count": 76,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:59.141",
+      "fps": 13,
+      "cpu_ms": 0.2,
+      "unit_count": 77,
+      "vfx_count": 4,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:59.247",
+      "fps": 34,
+      "cpu_ms": 0.1,
+      "unit_count": 77,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:59.299",
+      "fps": 20,
+      "cpu_ms": 0.2,
+      "unit_count": 77,
+      "vfx_count": 3,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:59.395",
+      "fps": 26,
+      "cpu_ms": 0.3,
+      "unit_count": 78,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:59.529",
+      "fps": 19,
+      "cpu_ms": 0.1,
+      "unit_count": 78,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:59.639",
+      "fps": 21,
+      "cpu_ms": 0.2,
+      "unit_count": 79,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:59.661",
+      "fps": 44,
+      "cpu_ms": 0.1,
+      "unit_count": 79,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:33:59.807",
+      "fps": 29,
+      "cpu_ms": 0.2,
+      "unit_count": 80,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:00.019",
+      "fps": 22,
+      "cpu_ms": 0.2,
+      "unit_count": 81,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:00.091",
+      "fps": 14,
+      "cpu_ms": 0.2,
+      "unit_count": 81,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:00.229",
+      "fps": 34,
+      "cpu_ms": 0.1,
+      "unit_count": 75,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:00.317",
+      "fps": 33,
+      "cpu_ms": 0.1,
+      "unit_count": 75,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:00.578",
+      "fps": 26,
+      "cpu_ms": 0,
+      "unit_count": 77,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:00.673",
+      "fps": 25,
+      "cpu_ms": 0.2,
+      "unit_count": 77,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:00.799",
+      "fps": 32,
+      "cpu_ms": 0.2,
+      "unit_count": 78,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:00.851",
+      "fps": 31,
+      "cpu_ms": 0.1,
+      "unit_count": 78,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:00.904",
+      "fps": 31,
+      "cpu_ms": 0.2,
+      "unit_count": 78,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:00.930",
+      "fps": 38,
+      "cpu_ms": 0.2,
+      "unit_count": 79,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:01.004",
+      "fps": 29,
+      "cpu_ms": 0.1,
+      "unit_count": 79,
+      "vfx_count": 3,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:01.156",
+      "fps": 35,
+      "cpu_ms": 0.4,
+      "unit_count": 80,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:01.238",
+      "fps": 12,
+      "cpu_ms": 0.2,
+      "unit_count": 80,
+      "vfx_count": 4,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:01.315",
+      "fps": 20,
+      "cpu_ms": 0.2,
+      "unit_count": 80,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:01.446",
+      "fps": 34,
+      "cpu_ms": 0.3,
+      "unit_count": 82,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:01.564",
+      "fps": 22,
+      "cpu_ms": 0.2,
+      "unit_count": 82,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:01.719",
+      "fps": 22,
+      "cpu_ms": 0.3,
+      "unit_count": 74,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:01.928",
+      "fps": 28,
+      "cpu_ms": 0.2,
+      "unit_count": 74,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:01.982",
+      "fps": 32,
+      "cpu_ms": 0.1,
+      "unit_count": 74,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:02.064",
+      "fps": 35,
+      "cpu_ms": 0.2,
+      "unit_count": 74,
+      "vfx_count": 1,
+      "bottleneck": "OPTIMAL",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:02.189",
+      "fps": 14,
+      "cpu_ms": 0.2,
+      "unit_count": 76,
+      "vfx_count": 3,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:02.302",
+      "fps": 34,
+      "cpu_ms": 0.1,
+      "unit_count": 76,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:02.383",
+      "fps": 33,
+      "cpu_ms": 0.1,
+      "unit_count": 77,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:02.463",
+      "fps": 33,
+      "cpu_ms": 0.1,
+      "unit_count": 77,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:02.510",
+      "fps": 21,
+      "cpu_ms": 0.2,
+      "unit_count": 77,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:02.632",
+      "fps": 31,
+      "cpu_ms": 0.3,
+      "unit_count": 78,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:02.680",
+      "fps": 25,
+      "cpu_ms": 0.3,
+      "unit_count": 78,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:02.830",
+      "fps": 44,
+      "cpu_ms": 0.1,
+      "unit_count": 79,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:03.039",
+      "fps": 23,
+      "cpu_ms": 0.1,
+      "unit_count": 80,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:03.075",
+      "fps": 28,
+      "cpu_ms": 0.2,
+      "unit_count": 80,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:03.233",
+      "fps": 19,
+      "cpu_ms": 0.5,
+      "unit_count": 73,
+      "vfx_count": 3,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:03.315",
+      "fps": 12,
+      "cpu_ms": 0.2,
+      "unit_count": 73,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:03.425",
+      "fps": 13,
+      "cpu_ms": 0.1,
+      "unit_count": 74,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:03.454",
+      "fps": 33,
+      "cpu_ms": 0.1,
+      "unit_count": 74,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:03.626",
+      "fps": 33,
+      "cpu_ms": 0.2,
+      "unit_count": 75,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:03.721",
+      "fps": 29,
+      "cpu_ms": 0.2,
+      "unit_count": 75,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:03.836",
+      "fps": 23,
+      "cpu_ms": 0.2,
+      "unit_count": 76,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:04.883",
+      "fps": 43,
+      "cpu_ms": 0.1,
+      "unit_count": 75,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:04.918",
+      "fps": 29,
+      "cpu_ms": 0.3,
+      "unit_count": 75,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:04.971",
+      "fps": 19,
+      "cpu_ms": 0.2,
+      "unit_count": 76,
+      "vfx_count": 5,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:05.294",
+      "fps": 13,
+      "cpu_ms": 0.1,
+      "unit_count": 77,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:05.328",
+      "fps": 29,
+      "cpu_ms": 0.3,
+      "unit_count": 77,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:05.452",
+      "fps": 28,
+      "cpu_ms": 0.2,
+      "unit_count": 79,
+      "vfx_count": 4,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:05.531",
+      "fps": 34,
+      "cpu_ms": 0.3,
+      "unit_count": 79,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:05.631",
+      "fps": 37,
+      "cpu_ms": 0.1,
+      "unit_count": 79,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:05.857",
+      "fps": 19,
+      "cpu_ms": 0.3,
+      "unit_count": 81,
+      "vfx_count": 3,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:06.015",
+      "fps": 42,
+      "cpu_ms": 0.2,
+      "unit_count": 82,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:06.100",
+      "fps": 32,
+      "cpu_ms": 0.3,
+      "unit_count": 82,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:06.524",
+      "fps": 28,
+      "cpu_ms": 0.7,
+      "unit_count": 78,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:06.844",
+      "fps": 15,
+      "cpu_ms": 0.4,
+      "unit_count": 80,
+      "vfx_count": 6,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:06.973",
+      "fps": 19,
+      "cpu_ms": 0.1,
+      "unit_count": 81,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:07.020",
+      "fps": 21,
+      "cpu_ms": 0.2,
+      "unit_count": 81,
+      "vfx_count": 3,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:07.231",
+      "fps": 34,
+      "cpu_ms": 0.2,
+      "unit_count": 82,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:07.374",
+      "fps": 20,
+      "cpu_ms": 0.3,
+      "unit_count": 83,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:07.400",
+      "fps": 38,
+      "cpu_ms": 0.1,
+      "unit_count": 83,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:07.557",
+      "fps": 47,
+      "cpu_ms": 0.2,
+      "unit_count": 84,
+      "vfx_count": 1,
+      "bottleneck": "OPTIMAL",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:07.649",
+      "fps": 34,
+      "cpu_ms": 0.3,
+      "unit_count": 84,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:07.780",
+      "fps": 13,
+      "cpu_ms": 0.2,
+      "unit_count": 84,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:07.807",
+      "fps": 36,
+      "cpu_ms": 0.2,
+      "unit_count": 85,
+      "vfx_count": 1,
+      "bottleneck": "OPTIMAL",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:08.350",
+      "fps": 14,
+      "cpu_ms": 0.2,
+      "unit_count": 77,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:08.437",
+      "fps": 12,
+      "cpu_ms": 0.3,
+      "unit_count": 78,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:08.649",
+      "fps": 16,
+      "cpu_ms": 0.3,
+      "unit_count": 79,
+      "vfx_count": 3,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:08.732",
+      "fps": 12,
+      "cpu_ms": 0.2,
+      "unit_count": 79,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:08.857",
+      "fps": 27,
+      "cpu_ms": 0.2,
+      "unit_count": 81,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:09.115",
+      "fps": 24,
+      "cpu_ms": 0.2,
+      "unit_count": 83,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:09.338",
+      "fps": 14,
+      "cpu_ms": 0.2,
+      "unit_count": 83,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:09.386",
+      "fps": 33,
+      "cpu_ms": 0.1,
+      "unit_count": 84,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:09.437",
+      "fps": 20,
+      "cpu_ms": 0.2,
+      "unit_count": 84,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:09.532",
+      "fps": 20,
+      "cpu_ms": 0.4,
+      "unit_count": 84,
+      "vfx_count": 3,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:09.681",
+      "fps": 15,
+      "cpu_ms": 0.2,
+      "unit_count": 80,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:09.983",
+      "fps": 35,
+      "cpu_ms": 0.2,
+      "unit_count": 82,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:10.046",
+      "fps": 16,
+      "cpu_ms": 0.2,
+      "unit_count": 82,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:10.294",
+      "fps": 13,
+      "cpu_ms": 0.2,
+      "unit_count": 83,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:10.414",
+      "fps": 18,
+      "cpu_ms": 0.1,
+      "unit_count": 84,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:10.526",
+      "fps": 12,
+      "cpu_ms": 0.1,
+      "unit_count": 84,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:10.602",
+      "fps": 21,
+      "cpu_ms": 0.3,
+      "unit_count": 85,
+      "vfx_count": 2,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:10.643",
+      "fps": 25,
+      "cpu_ms": 0.2,
+      "unit_count": 85,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:10.702",
+      "fps": 17,
+      "cpu_ms": 0.1,
+      "unit_count": 85,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:10.775",
+      "fps": 21,
+      "cpu_ms": 0.1,
+      "unit_count": 86,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:10.803",
+      "fps": 35,
+      "cpu_ms": 0.2,
+      "unit_count": 86,
+      "vfx_count": 1,
+      "bottleneck": "OPTIMAL",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:10.918",
+      "fps": 36,
+      "cpu_ms": 0.1,
+      "unit_count": 86,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:11.005",
+      "fps": 44,
+      "cpu_ms": 0.2,
+      "unit_count": 87,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:11.036",
+      "fps": 33,
+      "cpu_ms": 0.2,
+      "unit_count": 87,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:11.143",
+      "fps": 32,
+      "cpu_ms": 0.2,
+      "unit_count": 88,
+      "vfx_count": 1,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:11.224",
+      "fps": 37,
+      "cpu_ms": 0.1,
+      "unit_count": 77,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:11.252",
+      "fps": 37,
+      "cpu_ms": 0.2,
+      "unit_count": 77,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:11.372",
+      "fps": 12,
+      "cpu_ms": 0.2,
+      "unit_count": 77,
+      "vfx_count": 3,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:11.540",
+      "fps": 21,
+      "cpu_ms": 0.2,
+      "unit_count": 78,
+      "vfx_count": 3,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:11.583",
+      "fps": 36,
+      "cpu_ms": 0.1,
+      "unit_count": 79,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:11.660",
+      "fps": 38,
+      "cpu_ms": 0.3,
+      "unit_count": 79,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:11.806",
+      "fps": 20,
+      "cpu_ms": 0.2,
+      "unit_count": 80,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:11.833",
+      "fps": 36,
+      "cpu_ms": 0.2,
+      "unit_count": 80,
+      "vfx_count": 2,
+      "bottleneck": "OPTIMAL",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:12.044",
+      "fps": 22,
+      "cpu_ms": 0.3,
+      "unit_count": 81,
+      "vfx_count": 0,
+      "bottleneck": "GPU/RENDER",
+      "env": "THUNDER"
+    },
+    {
+      "timestamp": "10:34:12.066",
+      "fps": 44,
+      "cpu_ms": 0.1,
+      "unit_count": 81,
+      "vfx_count": 0,
+      "bottleneck": "OPTIMAL",
+      "env": "THUNDER"
+    }
+  ]
+}

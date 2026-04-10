@@ -88,7 +88,7 @@ const FireballShader = {
 };
 
 // ─── Component ────────────────────────────────────────────────────────────────
-const MAX_SPELLS = 1800; // 300 spells * 6 segments
+const MAX_SPELLS = 600; // 200 spells * 3 segments
 
 
 interface Props {
@@ -192,11 +192,11 @@ export function MageSpellEffect({ spellsRef, unitRegistry, simTimeRef }: Props) 
         _color.set(s.color || '#ffffff');
 
 
-        const SEGMENTS = 6; 
+        const SEGMENTS = 3; 
         for (let j = 0; j < SEGMENTS; j++) {
             if (instanceIdx >= MAX_SPELLS) break;
 
-            const tOffset = j * -0.012; 
+            const tOffset = j * -0.015; 
             const tRaw = Math.max(0, s.progress + tOffset);
             const t = _rocketEase(tRaw);
             
@@ -219,11 +219,11 @@ export function MageSpellEffect({ spellsRef, unitRegistry, simTimeRef }: Props) 
                 _tempObj.lookAt(_pos.x + _dir.x, _pos.y + _dir.y, _pos.z + _dir.z); // use fallback direction
             }
             
-            const pulse = Math.sin(time * 30 + j) * 0.05;
+            const pulse = (j === 0) ? Math.sin(time * 30) * 0.05 : 0;
 
             const isBullet = (s as any).isBullet;
             const headScale = (isBullet ? 0.4 : 1.3) + pulse;
-            const trailScale = (isBullet ? 0.2 : (0.7 - (j * 0.12))) + pulse;
+            const trailScale = (isBullet ? 0.2 : (0.7 - (j * 0.2))) + pulse;
             
             const finalScale = (j === 0 ? headScale : Math.max(0.1, trailScale * 0.8));
             _tempObj.scale.setScalar(finalScale);

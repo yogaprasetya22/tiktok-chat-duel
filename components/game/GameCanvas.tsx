@@ -23,10 +23,11 @@ import { Chessboard } from "./Chessboard";
 import { VFXProvider, useVFX } from "./VFXManager";
 import { BattleArmy } from "./BattleArmy";
 import { StormEnvironment } from "./StormEnvironment";
+import { DamageHUDBatcher } from "./DamageHUDBatcher";
 import { ActiveUnit, TowerConfig, DamageText, MapObstacle } from "../../hooks/useBattleSystem";
 import { useStore } from "../../hooks/useStore";
 import React, { useState, useEffect, useRef } from "react";
-import { Sword, Trophy, Zap, Skull, Maximize2 } from "lucide-react";
+import { Sword, Trophy, Zap, Skull, Maximize2, Activity, RefreshCw } from "lucide-react";
 import * as THREE from 'three';
 
 // Map removed as requested. Base ground provided by OrbitControls/Sky.
@@ -84,7 +85,6 @@ const CameraDirector = () => {
 
 interface GameCanvasProps {
   towerConfig: TowerConfig;
-  damageTexts: DamageText[];
   isCinematic: boolean;
   setMapObstacles: (obs: MapObstacle[]) => void;
   mapObstacles: MapObstacle[];
@@ -99,12 +99,13 @@ interface GameCanvasProps {
   vehicles: React.RefObject<Map<string, any>>;
   unitIndex: React.RefObject<Map<string, any>>;
   spellsRef: React.RefObject<any[]>;
+  downloadPerfLogs: () => void;
+  clearVFXCache: () => void;
 }
 
 
 export const GameCanvas = React.memo(({
   towerConfig,
-  damageTexts,
   isCinematic,
   mapObstacles,
   debug,
@@ -118,6 +119,8 @@ export const GameCanvas = React.memo(({
   vehicles,
   unitIndex,
   spellsRef,
+  downloadPerfLogs,
+  clearVFXCache,
 }: GameCanvasProps) => {
 
   const [dpr, setDpr] = useState(1.0);
@@ -168,8 +171,29 @@ export const GameCanvas = React.memo(({
     unitScale: { 
       value: settingsRef.current.unitScale, min: 0.2, max: 2.0, step: 0.1, label: "Unit Visual Scale",
       onChange: (v) => { settingsRef.current.unitScale = v; }
+    },
+    potato: {
+        value: !!settingsRef.current.potatoMode, label: "Potato Mode (Extreme FPS)",
+        onChange: (v) => { settingsRef.current.potatoMode = v; }
     }
   }, { collapsed: true });
+
+  const [, setDiag] = useControls("Diagnostics", () => ({
+    engineTime: { value: 0, label: "Engine Tick (ms)", editable: false },
+    units: { value: 0, label: "Active Units", editable: false },
+    vfx: { value: 0, label: "Active Particles", editable: false },
+  }), { collapsed: true });
+
+  // Fix: Move useFrame inside a child component that sits inside <Canvas>
+  const DiagnosticsBridge = () => {
+    useFrame(() => {
+        if (settingsRef.current.telemetry) {
+            const { engineMs, unitCount, vfxCount } = settingsRef.current.telemetry;
+            setDiag({ engineTime: engineMs, units: unitCount, vfx: vfxCount });
+        }
+    });
+    return null;
+  };
 
   return (
     <div className={`w-full h-full overflow-hidden relative bg-black select-none touch-none ${isFullscreen ? '' : 'rounded-2xl border border-white/10 shadow-2xl'}`}>
@@ -188,6 +212,24 @@ export const GameCanvas = React.memo(({
           flat
           titleBar={{ title: "Supreme Engine Tuning", drag: false }}
         />
+        
+        {/* Performance Downloader */}
+        <button 
+           onClick={downloadPerfLogs}
+           title="Download Performance Analysis Report"
+           className="mt-4 w-full py-3 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 rounded-2xl flex items-center justify-center gap-3 text-indigo-400 hover:text-indigo-300 transition-all group"
+        >
+           <Activity className="w-4 h-4 group-hover:scale-110 transition-transform" />
+           <span className="text-[10px] font-black uppercase tracking-widest">Download Performance Report</span>
+        </button>
+
+        <button 
+           onClick={clearVFXCache}
+           className="mt-2 w-full py-3 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 rounded-2xl flex items-center justify-center gap-3 text-rose-400 hover:text-rose-300 transition-all group"
+        >
+           <RefreshCw className="w-4 h-4 group-hover:rotate-180 transition-transform duration-500" />
+           <span className="text-[10px] font-black uppercase tracking-widest">Clear VFX Cache</span>
+        </button>
       </div>
 
       <div className="absolute top-4 left-4 z-10 bg-black/50 p-2 rounded text-[10px] text-white backdrop-blur-md border border-white/10 pointer-events-none">
@@ -200,7 +242,9 @@ export const GameCanvas = React.memo(({
         gl={{
           antialias: false,
           powerPreference: "high-performance",
-          alpha: false
+          alpha: false,
+          stencil: false,
+          depth: true
         }}
         className="select-none touch-none "
       >
@@ -219,10 +263,16 @@ export const GameCanvas = React.memo(({
 
 
 
-        <StormEnvironment baseDistance={towerConfig.baseDistance || 24} />
+        <StormEnvironment 
+            baseDistance={towerConfig.baseDistance || 24} 
+            potatoMode={settingsRef.current.potatoMode}
+        />
+
+        <DiagnosticsBridge />
 
         <VFXProvider>
           <CameraDirector />
+          <DamageHUDBatcher damageQueue={damageQueue} />
 
           <BattleArmy
             unitRegistry={unitRegistry}

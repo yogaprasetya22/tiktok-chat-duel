@@ -21,7 +21,6 @@ export default function TrainingPage() {
   }, []);
 
   const {
-    damageTexts,
     towerConfig,
     setTowerConfig,
     updateSettingsRef,
@@ -36,6 +35,8 @@ export default function TrainingPage() {
     vehicles,
     unitIndex,
     spellsRef,
+    downloadPerfLogs,
+    clearVFXCache,
   } = useBattleSystem();
 
 
@@ -150,7 +151,6 @@ export default function TrainingPage() {
            <GameCanvas
              towerConfig={towerConfig}
              setTowerConfig={setTowerConfig}
-             damageTexts={damageTexts}
              isCinematic={false}
              setMapObstacles={() => {}}
              mapObstacles={[]}
@@ -164,6 +164,8 @@ export default function TrainingPage() {
              vehicles={vehicles}
              unitIndex={unitIndex}
              spellsRef={spellsRef}
+             downloadPerfLogs={downloadPerfLogs}
+             clearVFXCache={clearVFXCache}
            />
         </div>
 

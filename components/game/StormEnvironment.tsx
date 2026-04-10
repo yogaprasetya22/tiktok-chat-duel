@@ -84,21 +84,21 @@ const TerrainMaterial = new THREE.ShaderMaterial({
   wireframe: false,
 });
 
-const Terrain = ({ baseDistance }: { baseDistance: number }) => {
+const Terrain = ({ baseDistance, potatoMode }: { baseDistance: number; potatoMode?: boolean }) => {
   useFrame(() => {
     TerrainMaterial.uniforms.baseDist.value = baseDistance;
   });
 
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.6, 0]} receiveShadow>
-      <planeGeometry args={[400, 400, 100, 100]} />
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.6, 0]} receiveShadow={!potatoMode}>
+      <planeGeometry args={[400, 400, potatoMode ? 1 : 50, potatoMode ? 1 : 50]} />
       <primitive object={TerrainMaterial} attach="material" />
     </mesh>
   );
 };
 
 // --- 2. Environment Rocks ---
-const ROCK_COUNT = 150;
+const ROCK_COUNT = 60;
 const Rock = () => {
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const dummy = useMemo(() => new THREE.Object3D(), []);
@@ -106,12 +106,11 @@ const Rock = () => {
   useEffect(() => {
     if (!meshRef.current) return;
     for (let i = 0; i < ROCK_COUNT; i++) {
-        const r = 30 + Math.random() * 80;
+        const r = 35 + Math.random() * 70;
         const angle = Math.random() * Math.PI * 2;
         const x = r * Math.cos(angle);
         const z = r * Math.sin(angle);
         
-        // Don't spawn on road
         if (Math.abs(x) < 12) continue;
 
         dummy.position.set(x, -0.2, z);
@@ -132,16 +131,17 @@ const Rock = () => {
 };
 
 // --- 3. Environment Trees ---
-const TREE_COUNT = 300;
-const Forest = () => {
+const TREE_COUNT = 120;
+const Forest = ({ potatoMode }: { potatoMode?: boolean }) => {
     const trunkRef = useRef<THREE.InstancedMesh>(null);
     const topRef = useRef<THREE.InstancedMesh>(null);
     const dummy = useMemo(() => new THREE.Object3D(), []);
 
     useEffect(() => {
         if (!trunkRef.current || !topRef.current) return;
-        for (let i = 0; i < TREE_COUNT; i++) {
-            const r = 40 + Math.random() * 110;
+        const count = potatoMode ? Math.floor(TREE_COUNT / 2) : TREE_COUNT;
+        for (let i = 0; i < count; i++) {
+            const r = 45 + Math.random() * 100;
             const angle = Math.random() * Math.PI * 2;
             const x = r * Math.cos(angle);
             const z = r * Math.sin(angle);
@@ -179,8 +179,33 @@ const Forest = () => {
 };
 
 
-// --- 2. Heavy Rain Array ---
-const RAIN_COUNT = 5000;
+// --- 2. GPU Accelerated Rain ---
+const RAIN_COUNT = 1500;
+const RainMaterial = new THREE.ShaderMaterial({
+  uniforms: {
+    time: { value: 0 },
+  },
+  vertexShader: `
+    uniform float time;
+    void main() {
+      vec4 worldPos = instanceMatrix * vec4(position, 1.0);
+      float speed = 80.0;
+      
+      // Rain physics on GPU
+      worldPos.y -= mod(time * speed + worldPos.y, 60.0);
+      worldPos.x += mod(time * speed * 0.05, 5.0);
+      worldPos.z -= mod(time * speed * 0.05, 5.0);
+      
+      gl_Position = projectionMatrix * viewMatrix * worldPos;
+    }
+  `,
+  fragmentShader: `
+    void main() {
+      gl_FragColor = vec4(0.48, 0.54, 0.66, 0.6);
+    }
+  `,
+  transparent: true,
+});
 
 const Rain = () => {
   const meshRef = useRef<THREE.InstancedMesh>(null);
@@ -201,30 +226,14 @@ const Rain = () => {
     meshRef.current.instanceMatrix.needsUpdate = true;
   }, [dummy]);
 
-  useFrame((_, delta) => {
-    if (!meshRef.current) return;
-    const array = meshRef.current.instanceMatrix.array as Float32Array;
-    const fallSpeed = delta * 80;
-
-    for (let i = 0; i < RAIN_COUNT; i++) {
-        const idx = i * 16;
-        array[idx + 12] += fallSpeed * 0.05; // X wind drift
-        array[idx + 13] -= fallSpeed; // Y fall
-        array[idx + 14] -= fallSpeed * 0.05; // Z wind drift
-
-        if (array[idx + 13] < 0) {
-            array[idx + 12] = (Math.random() - 0.5) * 200;
-            array[idx + 13] = 60 + Math.random() * 20;
-            array[idx + 14] = (Math.random() - 0.5) * 200;
-        }
-    }
-    meshRef.current.instanceMatrix.needsUpdate = true;
+  useFrame((state) => {
+    RainMaterial.uniforms.time.value = state.clock.elapsedTime;
   });
 
   return (
     <instancedMesh ref={meshRef} args={[undefined, undefined, RAIN_COUNT]}>
       <cylinderGeometry args={[0.015, 0.015, 1.2, 3]} />
-      <meshBasicMaterial color="#7a8ba8" transparent opacity={0.6} />
+      <primitive object={RainMaterial} attach="material" />
     </instancedMesh>
   );
 };
@@ -258,7 +267,7 @@ const Lightning = () => {
 };
 
 // --- 4. Procedural Wind Swaying Grass ---
-const GRASS_COUNT = 15000;
+const GRASS_COUNT = 5000;
 const GrassMaterial = new THREE.ShaderMaterial({
   uniforms: {
     time: { value: 0 },
@@ -348,7 +357,7 @@ const Grass = ({ baseDistance }: { baseDistance: number }) => {
 
 
 // --- Main Export ---
-export const StormEnvironment = ({ baseDistance = 24 }: { baseDistance?: number }) => {
+export const StormEnvironment = ({ baseDistance = 24, potatoMode = false }: { baseDistance?: number, potatoMode?: boolean }) => {
   const weather = useStore(s => s.weather);
   const setWeather = useStore(s => s.setWeather);
 
@@ -360,9 +369,21 @@ export const StormEnvironment = ({ baseDistance = 24 }: { baseDistance?: number 
       setWeather(next);
       setTimeout(cycle, 15000 + Math.random() * 20000); // 15-35s cycle
     };
-    const timer = setTimeout(cycle, 20000);
+    const timer = setTimeout(cycle, 40000); // Slower cycle
     return () => clearTimeout(timer);
   }, [setWeather]);
+
+  if (potatoMode) {
+      return (
+        <group>
+            <color attach="background" args={["#f0f5ff"]} />
+            <hemisphereLight intensity={1.5} groundColor="#444444" />
+            <ambientLight intensity={0.8} />
+            <directionalLight position={[20, 100, 20]} intensity={1.5} castShadow={false} />
+            <Terrain baseDistance={baseDistance} potatoMode={true} />
+        </group>
+      );
+  }
 
   return (
     <group>
@@ -394,8 +415,6 @@ export const StormEnvironment = ({ baseDistance = 24 }: { baseDistance?: number 
       {(weather === 'RAIN' || weather === 'THUNDER') && <Rain />}
       {weather === 'THUNDER' && <Lightning />}
       
-      {/* Daylight fog - push it back so battlefield is clear */}
-      {/* Better Fog to keep battlefield clear but edges moody */}
       <fog attach="fog" args={[weather === 'CLEAR' ? "#f0f5ff" : "#2a2a2a", weather === 'CLEAR' ? 60 : 40, weather === 'CLEAR' ? 300 : 180]} />
     </group>
   );

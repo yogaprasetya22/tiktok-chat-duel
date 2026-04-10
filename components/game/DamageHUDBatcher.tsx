@@ -40,9 +40,15 @@ export function DamageHUDBatcher({ damageQueue }: { damageQueue: React.RefObject
     useFrame((state) => {
         const now = state.clock.elapsedTime;
 
-        // 1. Drain the queue
+        // 1. Drain the queue but limit per-frame work to avoid UI lock
         if (damageQueue.current && damageQueue.current.length > 0) {
-            while (damageQueue.current.length > 0) {
+            // If the queue is massive (spike), drop old ones to stay fresh
+            if (damageQueue.current.length > 200) {
+                damageQueue.current.splice(0, damageQueue.current.length - 80);
+            }
+
+            const processCount = Math.min(damageQueue.current.length, 12); // Max 12 new labels per frame
+            for (let i = 0; i < processCount; i++) {
                 const event = damageQueue.current.shift();
                 if (!event) continue;
 

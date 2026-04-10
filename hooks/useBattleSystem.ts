@@ -30,7 +30,6 @@ export type {
 import type {
     ActiveUnit,
     TowerConfig,
-    DamageText,
     MapObstacle,
     KillEvent,
     BattleStats,
@@ -64,7 +63,6 @@ import {
 // ----------------------------------------------------------------
 
 export const useBattleSystem = () => {
-    const [damageTexts, setDamageTexts] = useState<DamageText[]>([]);
     const [mapObstacles, setMapObstacles] = useState<MapObstacle[]>([]);
     const [debug, setDebug] = useState(true);
 
@@ -135,6 +133,9 @@ export const useBattleSystem = () => {
     const lastReactSyncRef = useRef<number>(0);
     const lastHpMultiplierRef = useRef<number>(INITIAL_SETTINGS.globalHpMultiplier);
 
+    // Performance: Analytics history for debugging (Downloadable)
+    const perfHistoryRef = useRef<{ t: number, e: number, u: number, v: number, f: number }[]>([]);
+
     // Dynamic HP Scaling is now handled in PASS 0 of updateSimulation for maximum responsiveness
     const updateSettingsRef = useCallback((key: keyof SimulationSettings, value: any) => {
         (settingsRef.current as any)[key] = value;
@@ -201,13 +202,16 @@ export const useBattleSystem = () => {
     const flushDamageBuffer = useCallback((now: number) => {
         damageBufferRef.current.forEach((data, targetId) => {
             if (now - data.lastHit > 150) {
-                damageQueueRef.current.push({
-                    value: data.total,
-                    position: data.position,
-                    isCrit: data.total > 150,
-                    color: data.color,
-                    timestamp: now,
-                });
+                // CAP: Don't let the queue explode!
+                if (damageQueueRef.current.length < 500) {
+                    damageQueueRef.current.push({
+                        value: data.total,
+                        position: data.position,
+                        isCrit: data.total > 150,
+                        color: data.color,
+                        timestamp: now,
+                    });
+                }
                 damageBufferRef.current.delete(targetId);
             }
         });
@@ -284,7 +288,6 @@ export const useBattleSystem = () => {
 
         useStore.getState().resetStore(towerConfig);
         unitsRef.current = [];
-        setDamageTexts([]);
 
             statsRef.current = {
                 damageDealt: {},
@@ -503,11 +506,15 @@ export const useBattleSystem = () => {
     // ----------------------------------------------------------------
 
     const updateSimulation = useCallback((delta: number) => {
+        const perfStart = performance.now();
+        const settings = settingsRef.current;
+        const simDelta = delta * (settings.timeScale || 1.0);
+        simulationTimeRef.current += simDelta * 1000;
+        const simNow = simulationTimeRef.current;
+        const now = Date.now();
+        
         if (gameStateRef.current !== "PLAYING") return;
 
-        const now = Date.now();
-        const settings = settingsRef.current;
-        
         // ---- PASS 0: Reactive HP Scaling (Direct Ref Check) ----
         const currentHpMult = settings.globalHpMultiplier;
         if (Math.abs(currentHpMult - lastHpMultiplierRef.current) > 0.001) {
@@ -532,12 +539,9 @@ export const useBattleSystem = () => {
             }
         });
 
-        // Dynamic Time Scale: Adjust simDelta based on settings
-        const simDelta = Math.min(0.05, delta) * settings.timeScale;
-        simulationTimeRef.current += simDelta * 1000; // Increment sim clock in ms
-        const simNow = simulationTimeRef.current;
-
-        entityManager.update(simDelta);
+        // Dynamic Time Scale: Adjust simDelta based on settings to avoid giant jumps on low FPS
+        const physicsDelta = Math.min(0.05, delta) * (settings.timeScale || 1.0);
+        entityManager.update(physicsDelta);
         flushDamageBuffer(now);
 
         // --- Process Delayed Hits (Mage Projectiles) ---
@@ -626,7 +630,6 @@ export const useBattleSystem = () => {
 
         // ---- PASS 0: Corpse Cleanup ----
         if (now - lastReactSyncRef.current > 1500) {
-            // Single loop for cleanup to maximize performance
             for (let i = unitsRef.current.length - 1; i >= 0; i--) {
                 const u = unitsRef.current[i];
                 if (u && u.isDying && u.deathTime && now - u.deathTime > CORPSE_DESPAWN_MS) {
@@ -990,6 +993,38 @@ export const useBattleSystem = () => {
             if (playerBaseHpRef.current <= 0) { gameStateRef.current = "LOST"; useStore.getState().setGameState("LOST"); }
             else if (enemyBaseHpRef.current <= 0) { gameStateRef.current = "WON"; useStore.getState().setGameState("WON"); }
         }
+
+        // TELEMETRY RECORDING
+        const perfEnd = performance.now();
+        const frameEngineMs = parseFloat((perfEnd - perfStart).toFixed(2));
+        
+        if (settings.telemetry) {
+            settings.telemetry.engineMs = frameEngineMs;
+            settings.telemetry.unitCount = unitsRef.current.length;
+            settings.telemetry.vfxCount = damageQueueRef.current.length;
+            settings.telemetry.bucketCount = bucketsMapRef.current.size;
+        }
+
+        // SMART TELEMETRY RECORDING - Focus on "The Why" (Lag Analysis Focused)
+        const currentFps = Math.round(1 / delta);
+        const isStruggling = currentFps < 45 || frameEngineMs > 4.0;
+        
+        if (perfHistoryRef.current.length < 10000) {
+            // Intelligent Sampling: Record more frequently during lag spikes, less during smooth play
+            const sampleRate = isStruggling ? 0.4 : 0.05; 
+            
+            if (Math.random() < sampleRate) {
+                perfHistoryRef.current.push({
+                    timestamp: new Date().toISOString().split('T')[1].split('Z')[0], // readable time
+                    fps: currentFps,
+                    cpu_ms: frameEngineMs,
+                    unit_count: unitsRef.current.length,
+                    vfx_count: damageQueueRef.current.length,
+                    bottleneck: frameEngineMs > 6 ? "CPU/LOGIC" : (currentFps < 35 ? "GPU/RENDER" : "OPTIMAL"),
+                    env: weatherRef.current
+                } as any);
+            }
+        }
     }, [addKillEvent, entityManager, towerConfig.unitConfig, flushDamageBuffer]);
 
     // ----------------------------------------------------------------
@@ -1011,12 +1046,47 @@ export const useBattleSystem = () => {
         };
     }, []);
 
+    const clearVFXCache = useCallback(() => {
+        damageQueueRef.current = [];
+        damageBufferRef.current.clear();
+        perfHistoryRef.current = [];
+        pendingDamageRef.current = [];
+    }, []);
+
+    const downloadPerfLogs = useCallback(() => {
+        const history = perfHistoryRef.current;
+        const lowFpsPoints = (history as any[]).filter(p => p.fps < 40).length;
+        const cpuSpikes = (history as any[]).filter(p => p.cpu_ms > 5).length;
+
+        const data = {
+            summary: {
+                report_time: new Date().toISOString(),
+                total_samples: history.length,
+                low_fps_incidents: lowFpsPoints,
+                cpu_spike_incidents: cpuSpikes,
+                primary_suspect: lowFpsPoints > cpuSpikes ? "GPU/RENDERING (Too many objects)" : "CPU (Logic/AI complexity)",
+                advice: lowFpsPoints > cpuSpikes ? "Turn on Potato Mode or reduce Unit Scale" : "Reduce Max Units or simplify AI behavior"
+            },
+            metadata: {
+                towerConfig: towerConfigRef.current,
+                settings: settingsRef.current
+            },
+            data_points: history
+        };
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `lag-analysis-focused-${Date.now()}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+    }, []);
+
     // ----------------------------------------------------------------
     // PUBLIC API
     // ----------------------------------------------------------------
 
     return {
-        damageTexts,
         towerConfig,
         setTowerConfig,
         spawnUnit,
@@ -1037,5 +1107,7 @@ export const useBattleSystem = () => {
         damageQueue: damageQueueRef,
         settingsRef,
         simTimeRef: simulationTimeRef,
+        downloadPerfLogs,
+        clearVFXCache,
     };
 };

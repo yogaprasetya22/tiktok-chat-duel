@@ -228,5 +228,14 @@ export interface SimulationSettings {
     timeScale: number; // 1.0 = normal, 0.5 = slowmo, 2.0 = fast
     unitScale: number; // Visual scale multiplier
     vfxIntensity: number;
+
+    // Performance & Diagnostics
+    potatoMode: boolean;
+    telemetry: {
+        engineMs: number;
+        unitCount: number;
+        vfxCount: number;
+        bucketCount: number;
+    };
 }
 
