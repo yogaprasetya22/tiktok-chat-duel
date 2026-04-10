@@ -40,7 +40,6 @@ export default function GamePage() {
     mapObstacles,
     debug,
     setDebug,
-    syncPerformance,
     unitRegistry,
     stats,
     triggerAirstrike,
@@ -302,7 +301,6 @@ export default function GamePage() {
                     mapObstacles={mapObstacles}
                     debug={debug}
                     unitRegistry={unitRegistry}
-                    syncPerformance={syncPerformance}
                     isFullscreen={isFullscreen}
                     updateSimulation={updateSimulation}
                     damageQueue={damageQueue}
