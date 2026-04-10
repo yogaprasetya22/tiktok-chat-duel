@@ -90,7 +90,6 @@ interface GameCanvasProps {
   mapObstacles: MapObstacle[];
   debug: boolean;
   unitRegistry: React.RefObject<Map<string, { hp: number; status: string; position: number[]; isBoss: boolean; maxHp?: number }>>;
-  syncPerformance: (data: any) => void;
   isFullscreen?: boolean;
   updateSimulation: (delta: number) => void;
   damageQueue: React.RefObject<any[]>;
@@ -110,7 +109,6 @@ export const GameCanvas = React.memo(({
   mapObstacles,
   debug,
   unitRegistry,
-  syncPerformance,
   isFullscreen,
   updateSimulation,
   damageQueue,

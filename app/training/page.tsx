@@ -27,7 +27,6 @@ export default function TrainingPage() {
     updateSettingsRef,
     spawnUnit,
     resetBattle,
-    syncPerformance,
     unitRegistry,
     stats,
     updateSimulation,
@@ -36,7 +35,6 @@ export default function TrainingPage() {
     simTimeRef,
     vehicles,
     unitIndex,
-    downloadReplay,
     spellsRef,
   } = useBattleSystem();
 
@@ -53,10 +51,16 @@ export default function TrainingPage() {
         "Spawn Fighter": button(() => spawnUnit(1, "Training", "player", false, "fighter")),
         "Spawn Tank": button(() => spawnUnit(1, "Training", "player", false, "tank")),
         "Spawn Mage": button(() => spawnUnit(1, "Training", "player", false, "mage")),
+        "Spawn Marksman": button(() => spawnUnit(1, "Training", "player", false, "marksman")),
+        "Spawn Assassin": button(() => spawnUnit(1, "Training", "player", false, "assassin")),
         "Spawn Target Dummy": button(() => spawnUnit(1, "Training", "enemy", true, "fighter")),
+        "Spawn Enemy Fighter": button(() => spawnUnit(1, "Training", "enemy", false, "fighter")),
+        "Spawn Enemy Tank": button(() => spawnUnit(1, "Training", "enemy", false, "tank")),
+        "Spawn Enemy Mage": button(() => spawnUnit(1, "Training", "enemy", false, "mage")),
+        "Spawn Enemy Marksman": button(() => spawnUnit(1, "Training", "enemy", false, "marksman")),
+        "Spawn Enemy Assassin": button(() => spawnUnit(1, "Training", "enemy", false, "assassin")),
       }),
       "Arena": folder({
-        "Download JSON Report": button(() => downloadReplay()),
         "Clear All Units": button(() => resetBattle()),
       }),
 
@@ -152,7 +156,6 @@ export default function TrainingPage() {
              mapObstacles={[]}
              debug={true} // Always show debug in training
              unitRegistry={unitRegistry}
-             syncPerformance={syncPerformance}
              isFullscreen={true}
              updateSimulation={updateSimulation}
              damageQueue={damageQueue}
@@ -170,7 +173,7 @@ export default function TrainingPage() {
              playerDamage={liveStats.playerDamage} 
              simulationTime={simTimeRef.current || 0}
              onReset={resetBattle}
-             onDownload={downloadReplay}
+             onDownload={() => {}}
            />
 
            <div className="mt-10 pt-10 border-t border-white/5 space-y-6">

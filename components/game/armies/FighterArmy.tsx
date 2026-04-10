@@ -103,7 +103,7 @@ export function FighterArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, ve
                 const dx = uData.position[0] - potential.position[0];
                 const dz = uData.position[2] - potential.position[2];
                 const dSq = dx * dx + dz * dz;
-                const chaseRangeSq = (uData.chaseRange || 60) * (uData.chaseRange || 60);
+                const chaseRangeSq = (mode === 'TRAINING' ? 1000000 : (uData.chaseRange || 60) * (uData.chaseRange || 60));
                 if (dSq < bestDistSq && dSq < chaseRangeSq) {
                     bestDistSq = dSq;
                     bestTargetId = pid;

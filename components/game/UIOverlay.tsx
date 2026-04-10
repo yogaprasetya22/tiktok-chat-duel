@@ -1,5 +1,5 @@
 import { TowerConfig, KillEvent } from "../../hooks/useBattleSystem";
-import { Maximize2, Minimize2, Palette, Settings2, Sword, Zap, RefreshCw, Trophy, Skull, Users, MessageSquare, Gift, CheckCircle2, Circle, Radio, Camera, Loader2, AlertTriangle, Download, Target, ChevronRight, CloudRain, Wind, CloudLightning, Sun } from "lucide-react";
+import { Maximize2, Minimize2, Palette, Settings2, Sword, Zap, RefreshCw, Trophy, Skull, Users, MessageSquare, Gift, CheckCircle2, Circle, Radio, Camera, Loader2, AlertTriangle, Download, Target, ChevronRight, CloudRain, Wind, CloudLightning, Sun, Shield } from "lucide-react";
 import { useState } from "react";
 import { KillFeed } from "../ui/KillFeed";
 import { MVPScreen } from "../ui/MVPScreen";
@@ -464,47 +464,72 @@ export const UIOverlay = ({
       {gameState !== "SETUP" && (
         <div className="mt-auto pointer-events-auto">
           <div className="flex-1 flex flex-col gap-4">
-            {/* Tower HP Bars & Army Counts */}
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <div className="flex justify-between items-end">
+            {/* Modern Tower HP Bars */}
+            <div className="grid grid-cols-2 gap-8 px-4">
+              {/* Team A HP */}
+              <div className="relative group">
+                <div className="flex justify-between items-end mb-2">
                   <div className="flex flex-col">
-                    <span className="text-[10px] uppercase tracking-widest text-white/40 font-bold">Base Armor A</span>
-                    <span className="text-xl font-black italic text-white flex items-center gap-2">
-                      {playerBaseHp} <span className="text-[10px] text-white/30 not-italic opacity-50">HP</span>
+                    <div className="flex items-center gap-2 mb-0.5">
+                       <Shield className="w-3 h-3 text-indigo-400" />
+                       <span className="text-[9px] uppercase tracking-[0.2em] text-white/50 font-black">{towerConfig.player.name} BASE</span>
+                    </div>
+                    <span className="text-3xl font-black italic text-white tracking-tighter tabular-nums drop-shadow-2xl">
+                      {playerBaseHp.toLocaleString()} <span className="text-[10px] text-indigo-400 not-italic uppercase tracking-tighter opacity-80">HP</span>
                     </span>
                   </div>
                   <div className="flex flex-col items-end">
-                    <span className="text-[10px] uppercase tracking-widest text-white/40 font-bold">Units</span>
-                    <span className="text-lg font-bold text-indigo-400">{armyCounts.player}</span>
+                    <div className="flex items-center gap-1.5 px-2 py-0.5 bg-indigo-500/10 rounded-md border border-indigo-500/20 mb-1">
+                       <Users className="w-2.5 h-2.5 text-indigo-400" />
+                       <span className="text-[9px] font-black text-indigo-300">{armyCounts.player} UNITS</span>
+                    </div>
                   </div>
                 </div>
-                <div className="h-3 bg-zinc-950 rounded-full border border-white/10 p-0.5 overflow-hidden">
+                <div className="h-4 bg-zinc-950/60 backdrop-blur-md rounded-full border border-white/5 p-1 overflow-hidden relative shadow-inner">
                   <div 
-                    className="h-full rounded-full transition-all duration-500 shadow-[0_0_15px_rgba(59,130,246,0.5)]"
-                    style={{ width: `${(playerBaseHp / towerConfig.baseHp) * 100}%`, backgroundColor: towerConfig.player.color }}
-                  />
+                    className="h-full rounded-full transition-all duration-700 ease-out relative"
+                    style={{ 
+                      width: `${(playerBaseHp / towerConfig.baseHp) * 100}%`, 
+                      backgroundColor: towerConfig.player.color,
+                      boxShadow: `0 0 20px ${towerConfig.player.color}44`
+                    }}
+                  >
+                    {/* Glossy Overlay */}
+                    <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent opacity-50" />
+                  </div>
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <div className="flex justify-between items-end">
-                  <div className="flex flex-col">
-                    <span className="text-[10px] uppercase tracking-widest text-white/40 font-bold">Base Armor B</span>
-                    <span className="text-xl font-black italic text-white flex items-center gap-2">
-                      {enemyBaseHp} <span className="text-[10px] text-white/30 not-italic opacity-50">HP</span>
+              {/* Team B HP */}
+              <div className="relative group">
+                <div className="flex justify-between items-end mb-2">
+                   <div className="flex flex-col items-start px-2 py-0.5 bg-rose-500/10 rounded-md border border-rose-500/20 mb-1">
+                      <div className="flex items-center gap-1.5">
+                         <Users className="w-2.5 h-2.5 text-rose-400" />
+                         <span className="text-[9px] font-black text-rose-300">{armyCounts.enemy} UNITS</span>
+                      </div>
+                   </div>
+                  <div className="flex flex-col items-end">
+                    <div className="flex items-center gap-2 mb-0.5">
+                       <span className="text-[9px] uppercase tracking-[0.2em] text-white/50 font-black">{towerConfig.enemy.name} BASE</span>
+                       <Shield className="w-3 h-3 text-rose-400" />
+                    </div>
+                    <span className="text-3xl font-black italic text-white tracking-tighter tabular-nums drop-shadow-2xl">
+                       <span className="text-[10px] text-rose-400 not-italic uppercase tracking-tighter opacity-80">HP</span> {enemyBaseHp.toLocaleString()}
                     </span>
                   </div>
-                  <div className="flex flex-col items-end">
-                    <span className="text-[10px] uppercase tracking-widest text-white/40 font-bold">Units</span>
-                    <span className="text-lg font-bold text-rose-400">{armyCounts.enemy}</span>
-                  </div>
                 </div>
-                <div className="h-3 bg-zinc-950 rounded-full border border-white/10 p-0.5 overflow-hidden">
+                <div className="h-4 bg-zinc-950/60 backdrop-blur-md rounded-full border border-white/5 p-1 overflow-hidden relative shadow-inner">
                   <div 
-                    className="h-full rounded-full transition-all duration-500 shadow-[0_0_15px_rgba(244,63,94,0.5)]"
-                    style={{ width: `${(enemyBaseHp / towerConfig.baseHp) * 100}%`, backgroundColor: towerConfig.enemy.color }}
-                  />
+                    className="h-full rounded-full transition-all duration-700 ease-out relative ml-auto"
+                    style={{ 
+                      width: `${(enemyBaseHp / towerConfig.baseHp) * 100}%`, 
+                      backgroundColor: towerConfig.enemy.color,
+                      boxShadow: `0 0 20px ${towerConfig.enemy.color}44`
+                    }}
+                  >
+                     <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent opacity-50" />
+                  </div>
                 </div>
               </div>
             </div>
@@ -514,23 +539,30 @@ export const UIOverlay = ({
               <div className="absolute inset-x-0 top-0 h-full pointer-events-none p-8 flex flex-col items-center">
                 
                 {/* 1. TOP CENTER: Global Stats Hub */}
-                <div className="absolute top-6 left-1/2 -translate-x-1/2 flex items-center gap-6 pointer-events-auto z-[1200]">
-                  <div className="bg-zinc-950/80 backdrop-blur-3xl px-8 py-3 rounded-3xl border border-white/10 shadow-2xl flex items-center divide-x divide-white/10 gap-8">
-                     <div className="flex flex-col items-center">
-                        <span className="text-[8px] font-black text-blue-400 uppercase tracking-[0.2em] mb-1">Pihak A Total Kills</span>
-                        <span className="text-2xl font-black italic text-white leading-none">
+                <div className="absolute top-6 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 pointer-events-auto z-[1200]">
+                  <div className="bg-zinc-950/60 backdrop-blur-3xl px-10 py-4 rounded-[32px] border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.5)] flex items-center divide-x divide-white/10 gap-10">
+                    <div className="flex flex-col items-center group">
+                        <span className="text-[10px] font-black uppercase tracking-[0.25em] mb-1.5 opacity-80 group-hover:opacity-100 transition-opacity" style={{ color: towerConfig.player.color }}>
+                           {towerConfig.player.name} KILLS
+                        </span>
+                        <span className="text-4xl font-black italic text-white tracking-tighter leading-none drop-shadow-[0_0_8px_rgba(255,255,255,0.3)]">
                           {Object.values(liveStats.playerKills || {}).reduce((a:any, b:any) => a + b, 0).toLocaleString()}
                         </span>
                      </div>
-                    <div className="px-6 flex flex-col items-center">
-                       <div className="bg-rose-500/20 p-2 rounded-xl mb-1">
-                          <Sword className="w-4 h-4 text-rose-500 animate-pulse" />
+                    <div className="px-10 flex flex-col items-center">
+                       <div className="relative">
+                          <div className="absolute inset-0 blur-xl opacity-20 animate-pulse" style={{ backgroundColor: towerConfig.enemy.color }} />
+                          <div className="p-3 rounded-2xl relative border" style={{ backgroundColor: `${towerConfig.enemy.color}22`, borderColor: `${towerConfig.enemy.color}44` }}>
+                             <Sword className="w-5 h-5" style={{ color: towerConfig.enemy.color }} />
+                          </div>
                        </div>
-                       <span className="text-[8px] font-black text-white/40 uppercase tracking-[0.3em]">Engagement</span>
+                       <span className="text-[9px] font-black text-white/40 uppercase tracking-[0.4em] mt-3">VS</span>
                     </div>
-                     <div className="flex flex-col items-center">
-                        <span className="text-[8px] font-black text-rose-400 uppercase tracking-[0.2em] mb-1">Pihak B Total Kills</span>
-                        <span className="text-2xl font-black italic text-white leading-none">
+                     <div className="flex flex-col items-center group">
+                        <span className="text-[10px] font-black uppercase tracking-[0.25em] mb-1.5 opacity-80 group-hover:opacity-100 transition-opacity" style={{ color: towerConfig.enemy.color }}>
+                           {towerConfig.enemy.name} KILLS
+                        </span>
+                        <span className="text-4xl font-black italic text-white tracking-tighter leading-none drop-shadow-[0_0_8px_rgba(255,255,255,0.3)]">
                           {Object.values(liveStats.enemyKills || {}).reduce((a:any, b:any) => a + b, 0).toLocaleString()}
                         </span>
                      </div>
@@ -568,36 +600,46 @@ export const UIOverlay = ({
                 </div>
 
                  {/* 2. LEFT SIDE: Compact Leaderboard */}
-                <div className="absolute top-28 left-6 w-56 pointer-events-auto z-[1100]">
-                  <div className="bg-zinc-950/80 backdrop-blur-2xl rounded-2xl border-l-4 border-l-blue-500 border border-white/10 p-4 shadow-2xl space-y-4 animate-in slide-in-from-left-12 duration-700">
-                    <div className="flex items-center gap-2 border-b border-white/5 pb-3">
-                      <Skull className="w-4 h-4 text-blue-400" />
-                      <span className="text-[10px] font-black text-white uppercase tracking-widest italic">{towerConfig.player.name} KILLS</span>
+                <div className="absolute top-32 left-8 w-64 pointer-events-auto z-[1100]">
+                  <div className="bg-zinc-950/40 backdrop-blur-3xl rounded-[32px] border border-white/10 p-6 shadow-2xl space-y-6 animate-in slide-in-from-left-12 duration-1000">
+                    <div className="flex items-center justify-between border-b border-white/5 pb-4">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-indigo-500/20 rounded-xl">
+                           <Trophy className="w-4 h-4 text-indigo-400" />
+                        </div>
+                        <span className="text-xs font-black text-white uppercase tracking-widest italic">{towerConfig.player.name} RANK</span>
+                      </div>
+                      <div className="px-2 py-0.5 bg-indigo-500/10 rounded text-[8px] font-black text-indigo-400 tracking-tighter">ELITE HUD</div>
                     </div>
                     
-                    <div className="space-y-3">
+                    <div className="space-y-4">
                       {Object.entries(liveStats.playerKills || {})
                         .sort(([, a]: any, [, b]: any) => b - a)
                         .slice(0, 5)
                         .map(([username, value], i) => (
                         <div key={username} className="flex items-center justify-between group animate-in slide-in-from-left-4 fade-in" style={{ animationDelay: `${i * 100}ms` }}>
-                          <div className="flex items-center gap-3">
-                            <div className={`w-6 h-6 rounded-lg flex items-center justify-center font-black italic text-[10px] ${
-                              i === 0 ? 'bg-blue-600 text-white shadow-[0_0_15px_rgba(37,99,235,0.5)] scale-110' : 'bg-zinc-800 text-zinc-500'
-                            }`}>
+                          <div className="flex items-center gap-4">
+                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-black italic text-xs transition-transform group-hover:scale-110 ${
+                              i === 0 ? 'text-white shadow-[0_0_20px_rgba(0,0,0,0.5)] animate-bounce' : 'bg-white/5 text-white/40 border border-white/5'
+                            }`}
+                            style={{ backgroundColor: i === 0 ? towerConfig.player.color : undefined }}>
                               {i + 1}
                             </div>
-                            <span className="text-xs font-black text-white/90 group-hover:text-white truncate max-w-[100px] tracking-tight transition-colors">{username}</span>
+                            <div className="flex flex-col">
+                               <span className="text-sm font-black text-white/90 group-hover:text-white truncate max-w-[110px] tracking-tight transition-colors">{username}</span>
+                               <span className="text-[8px] font-bold text-white/30 uppercase tracking-[0.1em]">Verified Player</span>
+                            </div>
                           </div>
                           <div className="flex flex-col items-end">
-                             <span className="text-xs font-black text-blue-400 italic">{(value as number)} KILLS</span>
+                             <span className="text-sm font-black italic tracking-tighter" style={{ color: i === 0 ? towerConfig.player.color : '#ffffff' }}>{(value as number)}</span>
+                             <span className="text-[7px] font-black text-white/20 uppercase">KILLS</span>
                           </div>
                         </div>
                       ))}
                       {Object.keys(liveStats.playerKills || {}).length === 0 && (
-                        <div className="py-8 text-center space-y-2 opacity-30">
-                          <CheckCircle2 className="w-8 h-8 mx-auto" />
-                          <p className="text-[9px] uppercase tracking-[0.2em] text-zinc-400 font-black">No Kills Yet</p>
+                        <div className="py-12 text-center space-y-3 opacity-20">
+                          <Skull className="w-10 h-10 mx-auto" />
+                          <p className="text-[10px] uppercase tracking-[0.3em] text-white font-black">Scanning Arena...</p>
                         </div>
                       )}
                     </div>
@@ -605,34 +647,46 @@ export const UIOverlay = ({
                 </div>
 
                 {/* 3. RIGHT SIDE: Compact Leaderboard */}
-                <div className="absolute top-28 right-6 w-56 pointer-events-auto z-[1100]">
-                  <div className="bg-zinc-950/80 backdrop-blur-2xl rounded-2xl border-r-4 border-r-rose-500 border border-white/10 p-4 shadow-2xl space-y-4 animate-in slide-in-from-right-12 duration-700">
-                    <div className="flex items-center gap-2 border-b border-white/5 pb-3">
-                      <Skull className="w-4 h-4 text-rose-400" />
-                      <span className="text-[10px] font-black text-white uppercase tracking-widest italic">{towerConfig.enemy.name} KILLS</span>
+                <div className="absolute top-32 right-8 w-64 pointer-events-auto z-[1100]">
+                  <div className="bg-zinc-950/40 backdrop-blur-3xl rounded-[32px] border border-white/10 p-6 shadow-2xl space-y-6 animate-in slide-in-from-right-12 duration-1000">
+                    <div className="flex items-center justify-between border-b border-white/5 pb-4">
+                       <div className="px-2 py-0.5 rounded text-[8px] font-black tracking-tighter" style={{ backgroundColor: `${towerConfig.enemy.color}22`, color: towerConfig.enemy.color }}>ENEMY HUD</div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs font-black text-white uppercase tracking-widest italic">{towerConfig.enemy.name} RANK</span>
+                        <div className="p-2 rounded-xl" style={{ backgroundColor: `${towerConfig.enemy.color}22` }}>
+                           <Trophy className="w-4 h-4" style={{ color: towerConfig.enemy.color }} />
+                        </div>
+                      </div>
                     </div>
                     
-                    <div className="space-y-3">
+                    <div className="space-y-4">
                       {Object.entries(liveStats.enemyKills || {})
                         .sort(([, a]: any, [, b]: any) => b - a)
                         .slice(0, 5)
                         .map(([username, value], i) => (
                         <div key={username} className="flex items-center justify-between group animate-in slide-in-from-right-4 fade-in" style={{ animationDelay: `${i * 100}ms` }}>
-                          <div className="flex items-center gap-3">
-                            <div className={`w-6 h-6 rounded-lg flex items-center justify-center font-black italic text-[10px] ${
-                              i === 0 ? 'bg-rose-500 text-white shadow-[0_0_15px_rgba(244,63,94,0.5)] scale-110' : 'bg-zinc-800 text-zinc-500'
-                            }`}>
+                          <div className="flex flex-col items-start min-w-[40px]">
+                             <span className="text-sm font-black italic tracking-tighter" style={{ color: i === 0 ? towerConfig.enemy.color : '#ffffff' }}>{(value as number)}</span>
+                             <span className="text-[7px] font-black text-white/20 uppercase">KILLS</span>
+                          </div>
+                          <div className="flex items-center gap-4 flex-1 justify-end overflow-hidden">
+                             <div className="flex flex-col items-end min-w-0">
+                                <span className="text-sm font-black text-white/90 group-hover:text-white truncate w-full text-right tracking-tight transition-colors">{username}</span>
+                                <span className="text-[8px] font-bold text-white/30 uppercase tracking-[0.1em]">Rival Player</span>
+                             </div>
+                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-black italic text-xs transition-transform group-hover:scale-110 flex-shrink-0 ${
+                              i === 0 ? 'text-white shadow-[0_0_20px_rgba(0,0,0,0.5)] animate-bounce' : 'bg-white/5 text-white/40 border border-white/5'
+                            }`}
+                            style={{ backgroundColor: i === 0 ? towerConfig.enemy.color : undefined }}>
                               {i + 1}
                             </div>
-                            <span className="text-xs font-black text-white/90 group-hover:text-white truncate max-w-[100px] tracking-tight transition-colors">{username}</span>
                           </div>
-                          <span className="text-xs font-black text-rose-400 italic">{(value as number)} KILLS</span>
                         </div>
                       ))}
                       {Object.keys(liveStats.enemyKills || {}).length === 0 && (
-                        <div className="py-8 text-center space-y-2 opacity-30">
-                          <CheckCircle2 className="w-8 h-8 mx-auto" />
-                          <p className="text-[9px] uppercase tracking-[0.2em] text-zinc-400 font-black">No Kills Yet</p>
+                        <div className="py-12 text-center space-y-3 opacity-20">
+                          <Skull className="w-10 h-10 mx-auto" />
+                          <p className="text-[10px] uppercase tracking-[0.3em] text-white font-black">Scanning Arena...</p>
                         </div>
                       )}
                     </div>

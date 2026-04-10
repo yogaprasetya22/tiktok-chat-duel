@@ -96,7 +96,8 @@ export function MarksmanArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, v
                 const dx = uData.position[0] - potential.position[0];
                 const dz = uData.position[2] - potential.position[2];
                 const dSq = dx * dx + dz * dz;
-                if (dSq < bestDistSq) {
+                const chaseRangeSq = mode === 'TRAINING' ? 1000000 : 6400;
+                if (dSq < (uData.perceptionRadiusSq || chaseRangeSq) && dSq < bestDistSq) {
                     bestDistSq = dSq;
                     bestTargetId = pid;
                 }

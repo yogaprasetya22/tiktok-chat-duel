@@ -95,12 +95,15 @@ export function AssassinArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, v
             rawMap.forEach((potential, pid) => {
                 if (pid === id || potential.hp <= 0 || potential.isDying) return;
                 if (potential.type === u.type) return;
+                // Training Mode: Focus ONLY on units spawned as training targets
+                if (mode === 'TRAINING' && u.type === 'player' && potential.userName !== 'Training') return;
                 
                 const dx = uData.position[0] - potential.position[0];
                 const dz = uData.position[2] - potential.position[2];
                 const dSq = dx * dx + dz * dz;
                 
-                const perceptionThresholdSq = uData.perceptionRadiusSq || 14400; // Increased range
+                // Perception is infinite in training to find targets anywhere
+                const perceptionThresholdSq = mode === 'TRAINING' ? 1000000 : (uData.perceptionRadiusSq || 14400); 
                 if (dSq > perceptionThresholdSq) return;
 
                 // Priority Scoring

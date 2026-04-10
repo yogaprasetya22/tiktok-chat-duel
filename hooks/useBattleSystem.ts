@@ -602,6 +602,19 @@ export const useBattleSystem = () => {
                                 
                                 if (target.hp <= 0) {
                                     addKillEvent(h.attackerName, target.userName, target.isBoss ? "boss" : "unit");
+                                    // Analytics: Death tracking
+                                    const stats = statsRef.current;
+                                    if (h.attackerName) {
+                                        if (h.attackerId.startsWith('p')) {
+                                            stats.playerKills[h.attackerName] = (stats.playerKills[h.attackerName] || 0) + 1;
+                                            stats.teamSummary.player.totalKills += 1;
+                                            stats.teamSummary.enemy.unitsLost += 1;
+                                        } else {
+                                            stats.enemyKills[h.attackerName] = (stats.enemyKills[h.attackerName] || 0) + 1;
+                                            stats.teamSummary.enemy.totalKills += 1;
+                                            stats.teamSummary.player.unitsLost += 1;
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -611,38 +624,19 @@ export const useBattleSystem = () => {
             }
         }
 
-        // ---- PASS 0: Sync stats with React store (Throttled & Non-Blocking) & Corpse Cleanup ----
+        // ---- PASS 0: Corpse Cleanup ----
         if (now - lastReactSyncRef.current > 1500) {
-            let _pC = 0, _eC = 0;
-            
-            // Single loop for both counting and cleanup to maximize performance
+            // Single loop for cleanup to maximize performance
             for (let i = unitsRef.current.length - 1; i >= 0; i--) {
                 const u = unitsRef.current[i];
-                if (!u) continue;
-
-                if (u.hp > 0 && !u.isDying) {
-                    if (u.type === 'player') _pC++; else _eC++;
-                } else if (u.isDying && u.deathTime && now - u.deathTime > CORPSE_DESPAWN_MS) {
-                    // Optimized cleanup
+                if (u && u.isDying && u.deathTime && now - u.deathTime > CORPSE_DESPAWN_MS) {
                     const v = vehicles.current.get(u.id);
                     if (v) entityManager.remove(v);
-                    
                     vehicles.current.delete(u.id);
                     unitDataRef.current.delete(u.id);
                     unitIndexRef.current.delete(u.id);
                     unitsRef.current.splice(i, 1);
                 }
-            }
-
-            // Sync UI in background
-            const syncStore = () => {
-                useStore.getState().setArmyCounts(_pC, _eC);
-                useStore.getState().setLiveStats({ ...statsRef.current });
-            };
-            if (typeof window !== 'undefined' && (window as any).requestIdleCallback) {
-                (window as any).requestIdleCallback(syncStore);
-            } else {
-                syncStore();
             }
             lastReactSyncRef.current = now;
         }
@@ -858,9 +852,11 @@ export const useBattleSystem = () => {
                                     const stats = statsRef.current;
                                     if (stats.classStats[u.unitClass]) stats.classStats[u.unitClass].kills += 1;
                                     if (u.type === 'player') {
+                                        stats.playerKills[u.userName] = (stats.playerKills[u.userName] || 0) + 1;
                                         stats.teamSummary.player.totalKills += 1;
                                         stats.teamSummary.enemy.unitsLost += 1;
                                     } else {
+                                        stats.enemyKills[u.userName] = (stats.enemyKills[u.userName] || 0) + 1;
                                         stats.teamSummary.enemy.totalKills += 1;
                                         stats.teamSummary.player.unitsLost += 1;
                                     }
@@ -969,31 +965,24 @@ export const useBattleSystem = () => {
             }
         }
 
-        // ---- PASS 3: Cleanup (Throttled) ----
+        // ---- PASS 3: State Sync (Throttled) ----
         if (now - lastStateUpdate.current > 500) {
             lastStateUpdate.current = now;
-            unitsRef.current = unitsRef.current.filter((u) => {
-                if (u && u.hp <= 0 && !u.isDying) {
-                    u.isDying = true; u.deathTime = Date.now();
-                    setTimeout(() => {
-                        if (!u?.id) return;
-                        const v = vehicles.current.get(u.id);
-                        if (v) entityManager.remove(v);
-                        vehicles.current.delete(u.id);
-                        unitDataRef.current.delete(u.id);
-                        unitIndexRef.current.delete(u.id);
-                        unitsRef.current = unitsRef.current.filter((unit) => unit && unit.id !== u.id);
-                    }, 1500);
-                }
-                return true;
-            });
             
             let _pC = 0, _eC = 0;
             for(let i=0; i<unitsRef.current.length; i++) {
                 const u = unitsRef.current[i];
-                if (u && !u.isDying) { if (u.type === "player") _pC++; else _eC++; }
+                if (u && !u.isDying && u.hp > 0) { if (u.type === "player") _pC++; else _eC++; }
             }
+            
             useStore.getState().setArmyCounts(_pC, _eC);
+            useStore.getState().setLiveStats({
+                damageDealt: { ...statsRef.current.damageDealt },
+                playerDamage: { ...statsRef.current.playerDamage },
+                enemyDamage: { ...statsRef.current.enemyDamage },
+                playerKills: { ...statsRef.current.playerKills },
+                enemyKills: { ...statsRef.current.enemyKills },
+            });
         }
 
         // Win/Loss check
@@ -1041,7 +1030,6 @@ export const useBattleSystem = () => {
         vehicles: vehicles,
         unitIndex: unitIndexRef,
         updateSettingsRef: (newSettings: any) => { settingsRef.current = { ...settingsRef.current, ...newSettings }; },
-        syncPerformance: () => {},
         spellsRef: spellsRef,
         stats: statsRef.current,
         triggerAirstrike,

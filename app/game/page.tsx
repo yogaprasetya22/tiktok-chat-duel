@@ -7,8 +7,8 @@ import { useBattleSystem } from "../../hooks/useBattleSystem";
 import { useStore } from "../../hooks/useStore";
 import { GameCanvas } from "../../components/game/GameCanvas";
 import { UIOverlay } from "../../components/game/UIOverlay";
-import { Brain, MessageCircle, Heart, Gift, Radio, Shield, Sword, Skull, X, Zap } from "lucide-react";
-import { TrainingPanel } from "../../components/game/TrainingPanel";
+import { Brain, MessageCircle, Heart, Gift, Radio, Shield, Sword, Skull, X, Zap, Target, RefreshCw } from "lucide-react";
+import { useControls, button, folder, Leva } from "leva";
 
 export default function GamePage() {
   const [mounted, setMounted] = useState(false);
@@ -59,6 +59,25 @@ export default function GamePage() {
   const armyCounts = useStore(s => s.armyCounts);
   const gameMode = useStore(s => s.gameMode);
   const setGameMode = useStore(s => s.setGameMode);
+
+  // --- Leva Deployment Controls (Only in Training) ---
+  useControls(
+    "deployment",
+    {
+      "Deployment": folder({
+        "Spawn Fighter": button(() => spawnUnit(1, "Training", "player", false, "fighter")),
+        "Spawn Tank": button(() => spawnUnit(1, "Training", "player", false, "tank")),
+        "Spawn Mage": button(() => spawnUnit(1, "Training", "player", false, "mage")),
+        "Spawn Marksman": button(() => spawnUnit(1, "Training", "player", false, "marksman")),
+        "Spawn Assassin": button(() => spawnUnit(1, "Training", "player", false, "assassin")),
+        "Spawn Target Dummy": button(() => spawnUnit(1, "Training", "enemy", true, "fighter")),
+      }, { render: () => gameMode === 'TRAINING' }),
+      "Arena": folder({
+        "Clear All Units": button(() => resetBattle()),
+      }, { render: () => gameMode === 'TRAINING' }),
+    },
+    [gameMode, spawnUnit, resetBattle]
+  );
 
   // Mode Testing: Rapid Spawn (0.2s) with Underdog Priority
   const countsRef = useRef({ player: 0, enemy: 0 });
@@ -264,6 +283,16 @@ export default function GamePage() {
                     `relative w-full rounded-2xl ${gameState === 'PLAYING' ? 'h-[calc(100vh-200px)]' : (gameState === 'SETUP' ? 'h-[300px] opacity-40 grayscale blur-sm' : 'h-[600px]')}`
                   }`}
                 >
+                  {gameMode === 'TRAINING' && (
+                    <div className="absolute bottom-6 left-6 z-[1200] pointer-events-auto">
+                       <Leva theme={{
+                          colors: {
+                             elevation1: '#18181b', elevation2: '#27272a', elevation3: '#3f3f46',
+                             highlight1: '#6366f1', highlight2: '#818cf8', highlight3: '#4f46e5',
+                          }
+                       }} />
+                    </div>
+                  )}
                   <GameCanvas
                     towerConfig={towerConfig}
                     setTowerConfig={setTowerConfig}
@@ -291,15 +320,6 @@ export default function GamePage() {
                       <UIOverlay {...overlayProps} standalone={false} />
                     )}
 
-                    {gameMode === 'TRAINING' && (
-                       <div className="pointer-events-auto">
-                          <TrainingPanel 
-                            onSpawnUnit={(type, side, isBoss) => spawnUnit(1, "Training", side, isBoss, type)}
-                            onReset={resetBattle}
-                            onClose={() => setGameMode('BATTLE')}
-                          />
-                       </div>
-                    )}
                   </div>
                 </div>
 
