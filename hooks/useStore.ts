@@ -48,6 +48,10 @@ interface BattleState {
   gameMode: "BATTLE" | "TRAINING";
   setGameMode: (mode: "BATTLE" | "TRAINING") => void;
 
+  // Weather System
+  weather: "CLEAR" | "RAIN" | "STORM" | "THUNDER";
+  setWeather: (weather: "CLEAR" | "RAIN" | "STORM" | "THUNDER") => void;
+
   // Reset
   resetStore: (config: TowerConfig) => void;
 }
@@ -90,8 +94,12 @@ export const useStore = create<BattleState>((set) => ({
   gameMode: "BATTLE",
   setGameMode: (gameMode) => set({ gameMode }),
 
+  weather: "CLEAR",
+  setWeather: (weather) => set({ weather }),
+
   resetStore: (config) => set({
     gameState: "PLAYING",
+    weather: "CLEAR",
     playerBaseHp: config.baseHp,
     enemyBaseHp: config.baseHp,
     liveStats: { 

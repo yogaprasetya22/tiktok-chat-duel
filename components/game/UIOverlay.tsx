@@ -1,9 +1,10 @@
 import { TowerConfig, KillEvent } from "../../hooks/useBattleSystem";
-import { Maximize2, Minimize2, Palette, Settings2, Sword, Zap, RefreshCw, Trophy, Skull, Users, MessageSquare, Gift, CheckCircle2, Circle, Radio, Camera, Loader2, AlertTriangle, Download, Target, ChevronRight } from "lucide-react";
+import { Maximize2, Minimize2, Palette, Settings2, Sword, Zap, RefreshCw, Trophy, Skull, Users, MessageSquare, Gift, CheckCircle2, Circle, Radio, Camera, Loader2, AlertTriangle, Download, Target, ChevronRight, CloudRain, Wind, CloudLightning, Sun } from "lucide-react";
 import { useState } from "react";
 import { KillFeed } from "../ui/KillFeed";
 import { MVPScreen } from "../ui/MVPScreen";
 import { useStore } from "../../hooks/useStore";
+import { WEATHER_CONFIG } from "../../hooks/battle/constants";
 import Link from "next/link";
 
 interface UIOverlayProps {
@@ -68,6 +69,7 @@ export const UIOverlay = ({
   const setIsSettingsOpen = useStore(s => s.setIsSettingsOpen);
   const settings = useStore(s => s.settings);
   const updateSettings = useStore(s => s.updateSettings);
+  const weather = useStore(s => s.weather);
   const [step, setStep] = useState(1);
   const [username, setUsername] = useState("");
 
@@ -540,6 +542,25 @@ export const UIOverlay = ({
                           {Object.values(liveStats.enemyKills || {}).reduce((a:any, b:any) => a + b, 0).toLocaleString()}
                         </span>
                      </div>
+                  </div>
+
+                  {/* Weather Indicator (Below Kills Hub) */}
+                  <div className="mt-3 flex flex-col items-center animate-in slide-in-from-top-4 duration-1000">
+                    <div className="bg-zinc-950/40 backdrop-blur-xl px-4 py-1.5 rounded-2xl border border-white/5 flex items-center gap-3">
+                       {weather === 'CLEAR' && <Sun className="w-4 h-4 text-yellow-400" />}
+                       {weather === 'RAIN' && <CloudRain className="w-4 h-4 text-blue-400" />}
+                       {weather === 'STORM' && <Wind className="w-4 h-4 text-slate-400" />}
+                       {weather === 'THUNDER' && <CloudLightning className="w-4 h-4 text-purple-400" />}
+                       
+                       <div className="flex flex-col">
+                          <span className="text-[10px] font-black uppercase tracking-widest text-white">
+                             Cuaca: {(WEATHER_CONFIG as any)[weather].name}
+                          </span>
+                          <span className="text-[8px] font-bold text-white/50 uppercase tracking-tight">
+                             {(WEATHER_CONFIG as any)[weather].boostText}
+                          </span>
+                       </div>
+                    </div>
                   </div>
                 </div>
 

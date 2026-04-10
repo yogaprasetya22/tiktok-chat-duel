@@ -44,7 +44,8 @@ import {
     MAGE_PROJECTILE_TIME_MS,
     ENEMY_BASE_Z,
     PLAYER_BASE_Z,
-    CLASS_CONFIG
+    CLASS_CONFIG,
+    WEATHER_CONFIG
 } from "./battle/constants";
 
 import {
@@ -74,6 +75,11 @@ export const useBattleSystem = () => {
     useEffect(() => {
         settingsRef.current = liveSettings;
     }, [liveSettings]);
+    const liveWeather = useStore((s) => s.weather);
+    const weatherRef = useRef<keyof typeof WEATHER_CONFIG>("CLEAR");
+    useEffect(() => {
+        weatherRef.current = liveWeather;
+    }, [liveWeather]);
 
     const statsRef = useRef<BattleStats>({
         damageDealt: {},
@@ -664,6 +670,24 @@ export const useBattleSystem = () => {
             const uData = unitDataRef.current.get(u.id);
             if (!uData) continue;
 
+            // ---- PASS 1: Weather Multipliers ----
+            const weather = weatherRef.current;
+            const wConfig = WEATHER_CONFIG[weather];
+            const wMults = (wConfig as any).multipliers || {};
+            const classMults = wMults[u.unitClass] || {};
+            
+            // Speed Multiplier
+            const weatherSpeedMult = (classMults.move_speed_mult || 1.0) * (wMults.globalSpeedMultiplier || 1.0);
+            
+            // Attack Speed Multiplier
+            const weatherAtkSpeedMult = classMults.attack_speed_mult || 1.0;
+            
+            // Damage Multiplier
+            const weatherDmgMult = (classMults.atk || 1.0) * (wMults.globalDamageMultiplier || 1.0);
+            
+            // Cooldown Multiplier
+            const weatherCooldownMult = wMults.globalAttackCooldown || 1.0;
+
             if (u.hp <= 0) { 
                 u.isDying = true; 
                 u.deathTime = now; 
@@ -709,10 +733,12 @@ export const useBattleSystem = () => {
                 uData.status = "attacking";
                 
                 // --- COMMIT BASE DAMAGE ---
-                const baseAttackCooldown = u.isBoss ? settingsRef.current.globalAttackCooldown * 0.7 : settingsRef.current.globalAttackCooldown;
+                const weatherAdjCooldown = settingsRef.current.globalAttackCooldown * weatherCooldownMult;
+                const baseAttackCooldown = (u.isBoss ? weatherAdjCooldown * 0.7 : weatherAdjCooldown) / weatherAtkSpeedMult;
                 if (simNow - uData.lastAttackTime > baseAttackCooldown) {
                     const dummyTargetStats = { physicalDefense: 0, magicDefense: 0 } as any;
-                    const { damage } = calcDamage(u, dummyTargetStats, u.unitClass === 'mage');
+                    const { damage: rawDamage } = calcDamage(u, dummyTargetStats, u.unitClass === 'mage');
+                    const damage = rawDamage * weatherDmgMult;
                     if (u.type === "player") {
                         enemyBaseHpRef.current = Math.max(0, enemyBaseHpRef.current - damage);
                         if (enemyBaseHpRef.current === 0 && gameStateRef.current === "PLAYING") addKillEvent(u.userName, towerConfigRef.current.enemy.name, "base");
@@ -747,13 +773,16 @@ export const useBattleSystem = () => {
                         // Trust Army component's engagement decision if its within a reasonable tolerance
                         // or if the distance check passes
                         uData.status = "attacking"; uData.isAttackingBase = false; isAttackingTarget = true;
-                        if (simNow - uData.lastAttackTime > u.attackCooldown) {
+                        const weatherAdjCooldown = u.attackCooldown * weatherCooldownMult;
+                        const finalAtkCooldown = weatherAdjCooldown / weatherAtkSpeedMult;
+                        if (simNow - uData.lastAttackTime > finalAtkCooldown) {
                             // Apply global damage multiplier
-                            const { damage: finalDmg, isCrit } = calcDamage(
+                            const { damage: rawDmg, isCrit } = calcDamage(
                                 u,
                                 currentTarget,
                                 u.unitClass === 'mage',
                             );
+                            const finalDmg = rawDmg * weatherDmgMult;
 
                             const teamColor = u.type === "player" ? towerConfig.player.color : towerConfig.enemy.color;
 

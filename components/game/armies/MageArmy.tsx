@@ -9,7 +9,7 @@ import { useVFX } from '../VFXManager';
 import { ActiveUnit, TowerConfig, SimulationSettings } from '../../../hooks/battle/types';
 import { useStore } from '../../../hooks/useStore';
 import { SpellEntry, SpellsRegistryRef } from '../MageSpellEffect';
-import { PLAYER_BASE_Z, ENEMY_BASE_Z } from '../../../hooks/battle/constants';
+import { ENEMY_BASE_Z, PLAYER_BASE_Z, WEATHER_CONFIG } from "../../../hooks/battle/constants";
 
 interface MageArmyProps {
   unitsMap: React.RefObject<Map<string, any>>;
@@ -144,8 +144,16 @@ export function MageArmy({ unitsMap, towerConfig, settingsRef, spellsRef, simTim
         // Steering & Rotation
         const vehicle = vehicles?.current?.get(id);
         if (vehicle) {
+            const weather = useStore.getState().weather;
+            const wConfig = WEATHER_CONFIG[weather];
+            const wMults = (wConfig as any).multipliers || {};
+            const classMults = wMults[u.unitClass] || {};
+            const weatherSpeedMult = (classMults.move_speed_mult || 1.0) * (wMults.globalSpeedMultiplier || 1.0);
+
             let isChasing = false;
             let isKiting = false;
+
+            // Chase Target with Steering
             if (u.targetId) {
                 const target = rawMap.get(u.targetId);
                 if (target) {
@@ -162,10 +170,9 @@ export function MageArmy({ unitsMap, towerConfig, settingsRef, spellsRef, simTim
                                 b.target.set(retreatX, 0, retreatZ);
                                 isKiting = true;
                             } else {
-                                // ENCIRCLEMENT for Mages (They spread out even more)
                                 const totalVal = id.split('-').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0);
                                 const angle = (totalVal % 360) * (Math.PI / 180);
-                                const encRadius = (settings.encirclementRadius || 0.75) * 2.0; 
+                                const encRadius = 1.5; 
                                 const offsetX = Math.cos(angle) * encRadius;
                                 const offsetZ = Math.sin(angle) * encRadius;
                                 b.target.set(target.position[0] + offsetX, 0, target.position[2] + offsetZ);
@@ -175,6 +182,7 @@ export function MageArmy({ unitsMap, towerConfig, settingsRef, spellsRef, simTim
                     });
                 }
             }
+
             if (!isChasing) {
                 vehicle.steering.behaviors.forEach((b: any) => {
                     if (b.constructor.name === 'SeekBehavior') {
@@ -185,7 +193,8 @@ export function MageArmy({ unitsMap, towerConfig, settingsRef, spellsRef, simTim
                     }
                 });
             }
-            vehicle.maxSpeed = (uData.status === 'attacking' || u.isDying) ? 0 : (u.speed || 3) * (settings.globalSpeedMultiplier || 1);
+            const baseSpeed = (u.speed || 3) * (settings.globalSpeedMultiplier || 1);
+            vehicle.maxSpeed = (uData.status === 'attacking' || u.isDying) ? 0 : baseSpeed * weatherSpeedMult;
             
             // Rotation
             const velSq = vehicle.velocity.x ** 2 + vehicle.velocity.z ** 2;

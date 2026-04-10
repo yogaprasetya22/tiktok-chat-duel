@@ -2,6 +2,7 @@ import React, { useRef, useMemo, useEffect } from "react";
 import { useFrame } from "@react-three/fiber";
 import { Sky } from "@react-three/drei";
 import * as THREE from "three";
+import { useStore } from "../../hooks/useStore";
 
 // --- 1. Terrain Shader ---
 const TerrainMaterial = new THREE.ShaderMaterial({
@@ -261,20 +262,19 @@ const GRASS_COUNT = 15000;
 const GrassMaterial = new THREE.ShaderMaterial({
   uniforms: {
     time: { value: 0 },
+    windStrength: { value: 1.0 },
   },
   vertexShader: `
     uniform float time;
+    uniform float windStrength;
     varying float vY;
 
     void main() {
       vY = position.y;
-      
-      // Calculate world pos using instance matrix
       vec4 worldPos = instanceMatrix * vec4(position, 1.0);
       
-      // Wind simulation based on X/Z coordinates
-      float wind = sin(time * 2.0 + worldPos.x * 0.1 + worldPos.z * 0.05) * 0.5;
-      wind += sin(time * 3.5 + worldPos.x * 0.5) * 0.2;
+      float wind = sin(time * (2.0 * windStrength) + worldPos.x * 0.1 + worldPos.z * 0.05) * 0.5 * windStrength;
+      wind += sin(time * (3.5 * windStrength) + worldPos.x * 0.5) * 0.2 * windStrength;
       
       // Only the tips of the grass sway
       if (position.y > -0.5) {
@@ -301,6 +301,7 @@ const GrassMaterial = new THREE.ShaderMaterial({
 const Grass = ({ baseDistance }: { baseDistance: number }) => {
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const dummy = useMemo(() => new THREE.Object3D(), []);
+  const weather = useStore(s => s.weather);
 
   useEffect(() => {
     if (!meshRef.current) return;
@@ -311,22 +312,21 @@ const Grass = ({ baseDistance }: { baseDistance: number }) => {
     
     let instanceIndex = 0;
     for (let i = 0; i < GRASS_COUNT * 2; i++) {
-      if (instanceIndex >= GRASS_COUNT) break;
+        if (instanceIndex >= GRASS_COUNT) break;
 
-      const r = Math.sqrt(Math.random()) * maxRadius;
-      const angle = Math.random() * Math.PI * 2;
-      const x = r * Math.cos(angle);
-      const z = r * Math.sin(angle);
-      
-      // Anti-congestion mask: don't spawn grass strictly exactly on the middle battlefield marching lanes
-      if (Math.abs(x) < 18 && Math.abs(z) < baseDistance - 2) continue;
+        const r = Math.sqrt(Math.random()) * maxRadius;
+        const angle = Math.random() * Math.PI * 2;
+        const x = r * Math.cos(angle);
+        const z = r * Math.sin(angle);
+        
+        if (Math.abs(x) < 18 && Math.abs(z) < baseDistance - 2) continue;
 
-      dummy.position.set(x, -0.6, z); // Adjust Y based on grass geometry (plane default centers at 0)
-      dummy.rotation.set(0, Math.random() * Math.PI, 0);
-      dummy.scale.set(1, 0.5 + Math.random() * 0.8, 1);
-      dummy.updateMatrix();
-      meshRef.current.setMatrixAt(instanceIndex, dummy.matrix);
-      instanceIndex++;
+        dummy.position.set(x, -0.6, z);
+        dummy.rotation.set(0, Math.random() * Math.PI, 0);
+        dummy.scale.set(1, 0.5 + Math.random() * 0.8, 1);
+        dummy.updateMatrix();
+        meshRef.current.setMatrixAt(instanceIndex, dummy.matrix);
+        instanceIndex++;
     }
     meshRef.current.count = instanceIndex;
     meshRef.current.instanceMatrix.needsUpdate = true;
@@ -334,6 +334,8 @@ const Grass = ({ baseDistance }: { baseDistance: number }) => {
 
   useFrame((state) => {
     GrassMaterial.uniforms.time.value = state.clock.elapsedTime;
+    const targetWind = (weather === 'STORM' || weather === 'THUNDER') ? 2.5 : 1.0;
+    GrassMaterial.uniforms.windStrength.value = THREE.MathUtils.lerp(GrassMaterial.uniforms.windStrength.value, targetWind, 0.05);
   });
 
   return (
@@ -347,24 +349,39 @@ const Grass = ({ baseDistance }: { baseDistance: number }) => {
 
 // --- Main Export ---
 export const StormEnvironment = ({ baseDistance = 24 }: { baseDistance?: number }) => {
+  const weather = useStore(s => s.weather);
+  const setWeather = useStore(s => s.setWeather);
+
+  // Random Weather Cycle
+  useEffect(() => {
+    const cycle = () => {
+      const weathers: ("CLEAR" | "RAIN" | "STORM" | "THUNDER")[] = ["CLEAR", "RAIN", "STORM", "THUNDER"];
+      const next = weathers[Math.floor(Math.random() * weathers.length)];
+      setWeather(next);
+      setTimeout(cycle, 15000 + Math.random() * 20000); // 15-35s cycle
+    };
+    const timer = setTimeout(cycle, 20000);
+    return () => clearTimeout(timer);
+  }, [setWeather]);
+
   return (
     <group>
       <Sky 
-        sunPosition={[0, 100, 0]} 
-        turbidity={1.0} 
-        rayleigh={0.5} 
+        sunPosition={weather === 'CLEAR' ? [0, 100, 0] : [0, -10, 0]} 
+        turbidity={weather === 'CLEAR' ? 1.0 : 10} 
+        rayleigh={weather === 'CLEAR' ? 0.5 : 2} 
         mieCoefficient={0.005} 
         mieDirectionalG={0.8} 
       />
       <hemisphereLight 
-        intensity={1.2} 
-        color="#ffffff" 
+        intensity={weather === 'CLEAR' ? 1.2 : 0.4} 
+        color={weather === 'THUNDER' ? "#a855f7" : "#ffffff"} 
         groundColor="#666666" 
       />
-      <ambientLight intensity={0.5} />
+      <ambientLight intensity={weather === 'CLEAR' ? 0.5 : 0.2} />
       <directionalLight 
         position={[0, 100, 0]} 
-        intensity={4.0} 
+        intensity={weather === 'CLEAR' ? 4.0 : 0.5} 
         color="#ffffff" 
         castShadow={false}
       />
@@ -373,11 +390,12 @@ export const StormEnvironment = ({ baseDistance = 24 }: { baseDistance?: number 
       <Grass baseDistance={baseDistance} />
       <Rock />
       <Forest />
-      {/* <Rain /> */}
-      {/* <Lightning /> */}
+      
+      {(weather === 'RAIN' || weather === 'THUNDER') && <Rain />}
+      {weather === 'THUNDER' && <Lightning />}
       
       {/* Daylight fog - push it back so battlefield is clear */}
-      <fog attach="fog" args={["#f0f5ff", 40, 250]} />
+      <fog attach="fog" args={[weather === 'CLEAR' ? "#f0f5ff" : "#1a1a1a", 40, weather === 'CLEAR' ? 250 : 120]} />
     </group>
   );
 };

@@ -8,7 +8,7 @@ import { SkeletonUtils } from 'three-stdlib';
 import { useVFX } from '../VFXManager';
 import { ActiveUnit, TowerConfig, SimulationSettings } from '../../../hooks/battle/types';
 import { useStore } from '../../../hooks/useStore';
-import { PLAYER_BASE_Z, ENEMY_BASE_Z } from '../../../hooks/battle/constants';
+import { ENEMY_BASE_Z, PLAYER_BASE_Z, WEATHER_CONFIG } from '../../../hooks/battle/constants';
 
 interface FighterArmyProps {
   unitsMap: React.RefObject<Map<string, any>>;
@@ -146,6 +146,14 @@ export function FighterArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, ve
         const vehicle = vehicles?.current?.get(id);
         if (vehicle) {
             let isChasing = false;
+
+            // Weather Speed Multiplier
+            const weather = useStore.getState().weather;
+            const wConfig = WEATHER_CONFIG[weather];
+            const wMults = (wConfig as any).multipliers || {};
+            const classMults = wMults[u.unitClass] || {};
+            const weatherSpeedMult = (classMults.move_speed_mult || 1.0) * (wMults.globalSpeedMultiplier || 1.0);
+
             // Chase Target with Encirclement Offset
             if (u.targetId) {
                 const target = rawMap.get(u.targetId);
@@ -175,7 +183,8 @@ export function FighterArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, ve
                     }
                 });
             }
-            vehicle.maxSpeed = (uData.status === 'attacking' || u.isDying) ? 0 : (u.speed || 3) * (settings.globalSpeedMultiplier || 1);
+            const baseSpeed = (u.speed || 3) * (settings.globalSpeedMultiplier || 1);
+            vehicle.maxSpeed = (uData.status === 'attacking' || u.isDying) ? 0 : baseSpeed * weatherSpeedMult;
             
             // Decentralized Rotation
             const velSq = vehicle.velocity.x ** 2 + vehicle.velocity.z ** 2;

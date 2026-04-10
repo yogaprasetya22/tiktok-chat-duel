@@ -183,3 +183,39 @@ export let INITIAL_SETTINGS: SimulationSettings = {
 
 // --- MAGE PROJECTILE SYNC ---
 export const MAGE_PROJECTILE_TIME_MS = 350; // Faster travel for "rocket" feel
+
+// --- WEATHER SYSTEM CONFIG ---
+export const WEATHER_CONFIG = {
+    CLEAR: { name: "Cerah", color: "#facc15", boostText: "Normal" },
+    RAIN: { 
+        name: "Hujan", 
+        color: "#60a5fa", 
+        boostText: "Mage: +Atk Speed, MM: -Atk Speed",
+        multipliers: {
+            mage: { attack_speed_mult: 1.3 },
+            marksman: { attack_speed_mult: 0.75 },
+            globalSpeedMultiplier: 0.9
+        }
+    },
+    STORM: { 
+        name: "Badai Angin", 
+        color: "#94a3b8", 
+        boostText: "Assassin: +Speed, MM: -Speed",
+        multipliers: {
+            assassin: { move_speed_mult: 1.35 },
+            marksman: { move_speed_mult: 0.7 },
+            globalAttackCooldown: 1.15
+        }
+    },
+    THUNDER: { 
+        name: "Hujan Petir", 
+        color: "#a855f7", 
+        boostText: "Mage: ++Damage, Fighter: +Atk",
+        multipliers: {
+            mage: { atk: 1.3, attack_speed_mult: 1.2 },
+            fighter: { atk: 1.2 },
+            tank: { physical_defense: 1.2 },
+            globalDamageMultiplier: 1.15
+        }
+    }
+};
