@@ -314,6 +314,37 @@ export const useBattleSystem = () => {
 
     const lastStateUpdate = useRef<number>(0);
 
+    // ---- PERF: Throttled Zustand Bridge ----
+    // Buffer base HP updates — only sync to React every 100ms instead of every hit
+    const lastBaseHpSyncRef = useRef<number>(0);
+    const baseHpDirtyRef = useRef(false);
+
+    const markBaseHpDirty = () => { baseHpDirtyRef.current = true; };
+    const flushBaseHpIfNeeded = (now: number) => {
+        if (baseHpDirtyRef.current && now - lastBaseHpSyncRef.current > 100) {
+            useStore.getState().setBaseHp(playerBaseHpRef.current, enemyBaseHpRef.current);
+            lastBaseHpSyncRef.current = now;
+            baseHpDirtyRef.current = false;
+        }
+    };
+
+    // Buffer kill events — accumulate and flush every 150ms
+    const killEventBufferRef = useRef<KillEvent[]>([]);
+    const lastKillFlushRef = useRef<number>(0);
+
+    const flushKillEvents = (now: number) => {
+        if (killEventBufferRef.current.length > 0 && now - lastKillFlushRef.current > 150) {
+            const store = useStore.getState();
+            const events = killEventBufferRef.current;
+            // Batch-add all buffered kills in a single setState
+            useStore.setState((state) => ({
+                killEvents: [...state.killEvents, ...events].slice(-5)
+            }));
+            killEventBufferRef.current = [];
+            lastKillFlushRef.current = now;
+        }
+    };
+
     const triggerAirstrike = useCallback((side: "player" | "enemy") => {
         const targets = unitsRef.current.filter(u => u && u.type !== side && !u.isDying);
         targets.forEach(u => {
@@ -326,7 +357,8 @@ export const useBattleSystem = () => {
 
     const addKillEvent = useCallback(
         (killer: string, victim: string, victimType: KillEvent["victimType"]) => {
-            useStore.getState().addKillEvent({
+            // Buffer instead of immediate Zustand set
+            killEventBufferRef.current.push({
                 id: Math.random().toString(36).substring(7),
                 killer,
                 victim,
@@ -559,7 +591,7 @@ export const useBattleSystem = () => {
                         } else {
                             playerBaseHpRef.current = Math.max(0, playerBaseHpRef.current - damage);
                         }
-                        useStore.getState().setBaseHp(playerBaseHpRef.current, enemyBaseHpRef.current);
+                        markBaseHpDirty(); // Buffered — syncs every 100ms
                         accumulateDamage(h.targetId, damage, h.position, h.color);
                     } else {
                         const target = unitIndexRef.current.get(h.targetId);
@@ -728,12 +760,12 @@ export const useBattleSystem = () => {
                     if (u.type === "player") {
                         enemyBaseHpRef.current = Math.max(0, enemyBaseHpRef.current - damage);
                         if (enemyBaseHpRef.current === 0 && gameStateRef.current === "PLAYING") addKillEvent(u.userName, towerConfigRef.current.enemy.name, "base");
-                        useStore.getState().setBaseHp(playerBaseHpRef.current, enemyBaseHpRef.current);
+                        markBaseHpDirty(); // Buffered — syncs every 100ms
                         accumulateDamage("enemy-base", damage, [0, 5, ENEMY_BASE_Z], towerConfigRef.current.player.color);
                     } else {
                         playerBaseHpRef.current = Math.max(0, playerBaseHpRef.current - damage);
                         if (playerBaseHpRef.current === 0 && gameStateRef.current === "PLAYING") addKillEvent(u.userName, towerConfigRef.current.player.name, "base");
-                        useStore.getState().setBaseHp(playerBaseHpRef.current, enemyBaseHpRef.current);
+                        markBaseHpDirty(); // Buffered — syncs every 100ms
                         accumulateDamage("player-base", damage, [0, 5, PLAYER_BASE_Z], towerConfigRef.current.enemy.color);
                     }
                     uData.lastAttackTime = simNow;
@@ -968,7 +1000,11 @@ export const useBattleSystem = () => {
             }
         }
 
-        // ---- PASS 3: State Sync (Throttled) ----
+        // ---- PASS 3: Flush All Buffered Zustand Updates ----
+        flushBaseHpIfNeeded(now);
+        flushKillEvents(now);
+
+        // Stats sync (500ms throttle — already optimal)
         if (now - lastStateUpdate.current > 500) {
             lastStateUpdate.current = now;
             

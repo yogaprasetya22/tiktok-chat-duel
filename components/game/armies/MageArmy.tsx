@@ -19,11 +19,12 @@ interface MageArmyProps {
   simTimeRef: React.RefObject<number>;
   vehicles: React.RefObject<Map<string, any>>;
   unitIndex: React.RefObject<Map<string, any>>;
+  renderedIdsRef: React.RefObject<Set<string>>;
 }
 
 const POOL_SIZE = 30;
 
-export function MageArmy({ unitsMap, towerConfig, settingsRef, spellsRef, simTimeRef, vehicles, unitIndex }: MageArmyProps) {
+export function MageArmy({ unitsMap, towerConfig, settingsRef, spellsRef, simTimeRef, vehicles, unitIndex, renderedIdsRef }: MageArmyProps) {
   const poolMapRef = useRef<Map<string, number>>(new Map());
   const availableIndicesRef = useRef<number[]>([]);
   const activeSetRef = useRef<Set<string>>(new Set());
@@ -223,6 +224,7 @@ export function MageArmy({ unitsMap, towerConfig, settingsRef, spellsRef, simTim
       const uData = rawMap.get(id);
       if (!uData) return;
       _activeSet.add(id);
+      renderedIdsRef.current.add(id);
 
       if (!poolMapRef.current.has(id)) {
         if (availableIndicesRef.current.length > 0) {

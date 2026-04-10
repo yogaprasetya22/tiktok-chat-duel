@@ -27,7 +27,7 @@ export default function RootLayout({
       lang="en"
       className={`${inter.variable} ${outfit.variable} h-full antialiased`}
     >
-      <body className="font-sans min-h-full flex flex-col transition-colors duration-500">
+      <body className=" font-sans min-h-full flex flex-col transition-colors duration-500">
         {children}
       </body>
     </html>

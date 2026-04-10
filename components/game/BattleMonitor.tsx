@@ -1,19 +1,19 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { 
-  Activity, 
-  Zap, 
+import {
+  Activity,
+  Zap,
   X,
   FileJson
 } from 'lucide-react';
-import { 
-  LineChart, 
-  Line, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
   ResponsiveContainer,
   AreaChart,
   Area
@@ -109,66 +109,66 @@ export const BattleMonitor = ({ rawData: liveStats = [], mode: initialMode, onCl
   };
 
   return (
-    <div className="fixed inset-4 md:inset-8 bg-zinc-950/98 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] shadow-[0_0_100px_rgba(0,0,0,0.8)] p-8 md:p-12 text-white z-[3000] animate-in zoom-in-95 fade-in duration-500 overflow-hidden flex flex-col border-l-rose-600 border-l-8">
-      <div className="flex items-center justify-between mb-10">
-        <div className="flex items-center gap-5">
-          <div className="bg-gradient-to-br from-rose-500 to-rose-800 p-4 rounded-3xl shadow-rose-600/40 text-white shadow-2xl">
+    <div className=" fixed inset-4 md:inset-8 bg-zinc-950/98 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] shadow-[0_0_100px_rgba(0,0,0,0.8)] p-8 md:p-12 text-white z-[3000] animate-in zoom-in-95 fade-in duration-500 overflow-hidden flex flex-col border-l-rose-600 border-l-8">
+      <div className=" flex items-center justify-between mb-10">
+        <div className=" flex items-center gap-5">
+          <div className=" bg-gradient-to-br from-rose-500 to-rose-800 p-4 rounded-3xl shadow-rose-600/40 text-white shadow-2xl">
             <Activity size={32} strokeWidth={3} />
           </div>
           <div>
-            <h1 className="font-black tracking-tighter text-4xl uppercase italic leading-none mb-2 bg-gradient-to-r from-white to-white/40 bg-clip-text text-transparent">
+            <h1 className=" font-black tracking-tighter text-4xl uppercase italic leading-none mb-2 bg-gradient-to-r from-white to-white/40 bg-clip-text text-transparent">
               War Room Monitor
             </h1>
-            <div className="flex items-center gap-3">
-               <div className={`w-2.5 h-2.5 rounded-full ${mode === 'live' ? 'bg-green-500 animate-pulse' : 'bg-blue-500'}`} />
-               <span className="text-xs text-white/50 uppercase font-black tracking-widest">{mode === 'live' ? 'Live Strategic Intelligence' : 'Post-Battle Analysis'}</span>
+            <div className=" flex items-center gap-3">
+              <div className={`w-2.5 h-2.5 rounded-full ${mode === 'live' ? 'bg-green-500 animate-pulse' : 'bg-blue-500'}`} />
+              <span className=" text-xs text-white/50 uppercase font-black tracking-widest">{mode === 'live' ? 'Live Strategic Intelligence' : 'Post-Battle Analysis'}</span>
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-4">
+        <div className=" flex items-center gap-4">
           {statsSummary.guardActive && (
-             <div className="bg-rose-500/10 border border-rose-500/30 px-4 py-2 rounded-2xl text-xs font-black text-rose-500 animate-pulse">
-                PERFORMANCE GUARD ACTIVE
-             </div>
+            <div className=" bg-rose-500/10 border border-rose-500/30 px-4 py-2 rounded-2xl text-xs font-black text-rose-500 animate-pulse">
+              PERFORMANCE GUARD ACTIVE
+            </div>
           )}
-          <button onClick={onClose} className="p-3 bg-white/5 hover:bg-rose-500 hover:text-white rounded-2xl transition-all border border-white/10"><X size={24} /></button>
+          <button onClick={onClose} className=" p-3 bg-white/5 hover:bg-rose-500 hover:text-white rounded-2xl transition-all border border-white/10"><X size={24} /></button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 mb-8 items-start">
-        <div className="xl:col-span-3 flex flex-col gap-3">
-           <span className="text-[10px] font-black tracking-widest text-white/30 uppercase ml-1">Analytical Mode</span>
-           <div className="flex p-1.5 bg-white/5 rounded-[1.5rem] border border-white/10">
+      <div className=" grid grid-cols-1 xl:grid-cols-12 gap-8 mb-8 items-start">
+        <div className=" xl:col-span-3 flex flex-col gap-3">
+          <span className=" text-[10px] font-black tracking-widest text-white/30 uppercase ml-1">Analytical Mode</span>
+          <div className=" flex p-1.5 bg-white/5 rounded-[1.5rem] border border-white/10">
             <button onClick={() => setMode('live')} className={`flex-1 py-4 rounded-[1.2rem] text-xs font-black tracking-widest transition-all ${mode === 'live' ? 'bg-rose-600' : 'text-white/30'}`}>LIVE</button>
             <button onClick={() => setMode('analysis')} className={`flex-1 py-4 rounded-[1.2rem] text-xs font-black tracking-widest transition-all ${mode === 'analysis' ? 'bg-blue-600' : 'text-white/30'}`}>UPLOAD</button>
           </div>
         </div>
 
-        <div className="xl:col-span-9">
+        <div className=" xl:col-span-9">
           {(mode === 'live' || analysisData) ? (
-            <div className="flex flex-col gap-4">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="bg-white/5 p-6 rounded-[1.5rem] border border-white/5">
-                  <div className="text-[10px] text-white/30 mb-2 uppercase tracking-widest font-black">Stability (FPS)</div>
-                  <div className="text-5xl font-black text-green-500">{processedData[processedData.length-1]?.fps || 0}</div>
+            <div className=" flex flex-col gap-4">
+              <div className=" grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className=" bg-white/5 p-6 rounded-[1.5rem] border border-white/5">
+                  <div className=" text-[10px] text-white/30 mb-2 uppercase tracking-widest font-black">Stability (FPS)</div>
+                  <div className=" text-5xl font-black text-green-500">{processedData[processedData.length - 1]?.fps || 0}</div>
                 </div>
-                <div className="bg-white/5 p-6 rounded-[1.5rem] border border-white/5">
-                  <div className="text-[10px] text-white/30 mb-2 uppercase tracking-widest font-black">Simulation (AI)</div>
-                  <div className="text-5xl font-black text-rose-500">{statsSummary.drift.toFixed(1)}<span className="text-lg ml-1 text-white/20">ms</span></div>
+                <div className=" bg-white/5 p-6 rounded-[1.5rem] border border-white/5">
+                  <div className=" text-[10px] text-white/30 mb-2 uppercase tracking-widest font-black">Simulation (AI)</div>
+                  <div className=" text-5xl font-black text-rose-500">{statsSummary.drift.toFixed(1)}<span className=" text-lg ml-1 text-white/20">ms</span></div>
                 </div>
-                <div className="bg-white/5 p-6 rounded-[1.5rem] border border-white/5">
-                  <div className="text-[10px] text-white/30 mb-2 uppercase tracking-widest font-black">Draw (Mesh)</div>
-                  <div className="text-5xl font-black text-blue-400">{statsSummary.drawCalls}</div>
+                <div className=" bg-white/5 p-6 rounded-[1.5rem] border border-white/5">
+                  <div className=" text-[10px] text-white/30 mb-2 uppercase tracking-widest font-black">Draw (Mesh)</div>
+                  <div className=" text-5xl font-black text-blue-400">{statsSummary.drawCalls}</div>
                 </div>
-                <div className="bg-white/5 p-6 rounded-[1.5rem] border border-white/5">
-                  <div className="text-[10px] text-white/30 mb-2 uppercase tracking-widest font-black">Triangles</div>
-                  <div className="text-5xl font-black text-yellow-400">{statsSummary.tri}k</div>
+                <div className=" bg-white/5 p-6 rounded-[1.5rem] border border-white/5">
+                  <div className=" text-[10px] text-white/30 mb-2 uppercase tracking-widest font-black">Triangles</div>
+                  <div className=" text-5xl font-black text-yellow-400">{statsSummary.tri}k</div>
                 </div>
               </div>
             </div>
           ) : (
-            <div className="h-[140px] bg-white/5 rounded-[1.5rem] border border-dashed border-white/10 flex items-center justify-center text-white/20 italic">
-               Waiting for data... <input type="file" accept=".json" onChange={handleFileUpload} className="ml-4 text-xs" />
+            <div className=" h-[140px] bg-white/5 rounded-[1.5rem] border border-dashed border-white/10 flex items-center justify-center text-white/20 italic">
+              Waiting for data... <input type="file" accept=".json" onChange={handleFileUpload} className=" ml-4 text-xs" />
             </div>
           )}
         </div>
@@ -176,16 +176,16 @@ export const BattleMonitor = ({ rawData: liveStats = [], mode: initialMode, onCl
 
       {(mode === 'live' || analysisData) && (
         <>
-          <div className="flex gap-6 border-b border-white/5 mb-5 px-1 font-black">
+          <div className=" flex gap-6 border-b border-white/5 mb-5 px-1 font-black">
             <button onClick={() => setActiveTab('performance')} className={`pb-3 text-[10px] uppercase tracking-widest relative ${activeTab === 'performance' ? 'text-white' : 'text-white/20'}`}>
-              Performance {activeTab === 'performance' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-rose-500" />}
+              Performance {activeTab === 'performance' && <div className=" absolute bottom-0 left-0 w-full h-0.5 bg-rose-500" />}
             </button>
             <button onClick={() => setActiveTab('population')} className={`pb-3 text-[10px] uppercase tracking-widest relative ${activeTab === 'population' ? 'text-white' : 'text-white/20'}`}>
-              Populations {activeTab === 'population' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-rose-500" />}
+              Populations {activeTab === 'population' && <div className=" absolute bottom-0 left-0 w-full h-0.5 bg-rose-500" />}
             </button>
           </div>
 
-          <div className="flex-1 min-h-[300px] w-full bg-black/40 rounded-[2.5rem] p-8 border border-white/5 shadow-inner">
+          <div className=" flex-1 min-h-[300px] w-full bg-black/40 rounded-[2.5rem] p-8 border border-white/5 shadow-inner">
             <ResponsiveContainer width="100%" height="100%">
               {activeTab === 'performance' ? (
                 <LineChart data={processedData}>

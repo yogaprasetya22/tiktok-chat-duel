@@ -17,11 +17,12 @@ interface MarksmanArmyProps {
   simTimeRef: React.RefObject<number>;
   vehicles: React.RefObject<Map<string, any>>;
   unitIndex: React.RefObject<Map<string, any>>;
+  renderedIdsRef: React.RefObject<Set<string>>;
 }
 
 const POOL_SIZE = 30;
 
-export function MarksmanArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, vehicles, unitIndex }: MarksmanArmyProps) {
+export function MarksmanArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, vehicles, unitIndex, renderedIdsRef }: MarksmanArmyProps) {
   const poolMapRef = useRef<Map<string, number>>(new Map());
   const availableIndicesRef = useRef<number[]>([]);
   const activeSetRef = useRef<Set<string>>(new Set());
@@ -192,6 +193,7 @@ export function MarksmanArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, v
       const uData = rawMap.get(id);
       if (!uData) return;
       _activeSet.add(id);
+      renderedIdsRef.current.add(id);
 
       if (!poolMapRef.current.has(id)) {
         if (availableIndicesRef.current.length > 0) {

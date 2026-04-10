@@ -17,11 +17,12 @@ interface AssassinArmyProps {
   simTimeRef: React.RefObject<number>;
   vehicles: React.RefObject<Map<string, any>>;
   unitIndex: React.RefObject<Map<string, any>>;
+  renderedIdsRef: React.RefObject<Set<string>>;
 }
 
 const POOL_SIZE = 30;
 
-export function AssassinArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, vehicles, unitIndex }: AssassinArmyProps) {
+export function AssassinArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, vehicles, unitIndex, renderedIdsRef }: AssassinArmyProps) {
   const poolMapRef = useRef<Map<string, number>>(new Map());
   const availableIndicesRef = useRef<number[]>([]);
   const activeSetRef = useRef<Set<string>>(new Set());
@@ -221,6 +222,7 @@ export function AssassinArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, v
       const uData = rawMap.get(id);
       if (!uData) return;
       _activeSet.add(id);
+      renderedIdsRef.current.add(id);
 
       if (!poolMapRef.current.has(id)) {
         if (availableIndicesRef.current.length > 0) {

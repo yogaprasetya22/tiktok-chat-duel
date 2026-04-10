@@ -17,11 +17,12 @@ interface TankArmyProps {
   simTimeRef: React.RefObject<number>;
   vehicles: React.RefObject<Map<string, any>>;
   unitIndex: React.RefObject<Map<string, any>>;
+  renderedIdsRef: React.RefObject<Set<string>>;
 }
 
 const POOL_SIZE = 30;
 
-export function TankArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, vehicles, unitIndex }: TankArmyProps) {
+export function TankArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, vehicles, unitIndex, renderedIdsRef }: TankArmyProps) {
   const poolMapRef = useRef<Map<string, number>>(new Map());
   const availableIndicesRef = useRef<number[]>([]);
   const activeSetRef = useRef<Set<string>>(new Set());
@@ -202,6 +203,7 @@ export function TankArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, vehic
       const uData = rawMap.get(id);
       if (!uData) return;
       _activeSet.add(id);
+      renderedIdsRef.current.add(id);
 
       if (!poolMapRef.current.has(id)) {
         if (availableIndicesRef.current.length > 0) {

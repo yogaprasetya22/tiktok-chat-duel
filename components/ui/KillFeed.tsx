@@ -26,23 +26,23 @@ export const KillFeed = ({ events }: KillFeedProps) => {
   }, [events]);
 
   return (
-    <div className="fixed top-24 left-6 z-[60] flex flex-col gap-2 pointer-events-none">
+    <div className=" fixed top-24 left-6 z-[60] flex flex-col gap-2 pointer-events-none">
       {displayEvents.map((event) => (
-        <div 
+        <div
           key={event.id}
-          className="flex items-center gap-3 bg-black/60 backdrop-blur-md border border-white/10 px-4 py-2 rounded-xl animate-in slide-in-from-left-8 fade-in duration-300"
+          className=" flex items-center gap-3 bg-black/60 backdrop-blur-md border border-white/10 px-4 py-2 rounded-xl animate-in slide-in-from-left-8 fade-in duration-300"
         >
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-black text-indigo-400 uppercase tracking-tighter">{event.killer}</span>
+          <div className=" flex items-center gap-2">
+            <span className=" text-xs font-black text-indigo-400 uppercase tracking-tighter">{event.killer}</span>
             {event.victimType === 'base' ? (
-              <Shield className="w-3 h-3 text-white/50" />
+              <Shield className=" w-3 h-3 text-white/50" />
             ) : (
-              <Sword className="w-3 h-3 text-white/50" />
+              <Sword className=" w-3 h-3 text-white/50" />
             )}
-            <span className="text-xs font-black text-rose-400 uppercase tracking-tighter">{event.victim}</span>
+            <span className=" text-xs font-black text-rose-400 uppercase tracking-tighter">{event.victim}</span>
           </div>
-          <div className="p-1 bg-rose-500/20 rounded-md">
-            <Skull className="w-3 h-3 text-rose-500" />
+          <div className=" p-1 bg-rose-500/20 rounded-md">
+            <Skull className=" w-3 h-3 text-rose-500" />
           </div>
         </div>
       ))}

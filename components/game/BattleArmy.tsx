@@ -11,6 +11,7 @@ import { TankArmy } from './armies/TankArmy';
 import { MageArmy } from './armies/MageArmy';
 import { MarksmanArmy } from './armies/MarksmanArmy';
 import { AssassinArmy } from './armies/AssassinArmy';
+import { InstancedImpostorRenderer } from './armies/InstancedImpostorRenderer';
 import { MageSpellEffect, SpellEntry } from './MageSpellEffect';
 
 interface BattleArmyProps {
@@ -37,6 +38,20 @@ const _c3 = new THREE.Color('#ef4444');
 const _whiteColor = new THREE.Color('#ffffff');
 const _camDir = new THREE.Vector3();
 const tempObject = new THREE.Object3D();
+
+// Pre-computed hide matrix — avoids recomputing position+scale+updateMatrix per cleanup slot
+const _hideObj = new THREE.Object3D();
+_hideObj.position.set(0, -100, 0);
+_hideObj.scale.set(0, 0, 0);
+_hideObj.updateMatrix();
+const _hideMatrix = _hideObj.matrix.clone();
+
+// Cached per-frame camera state to avoid redundant property access  
+let _cachedCamQuat = new THREE.Quaternion();
+let _cachedCamRotY = 0;
+let _cachedCosRotY = 1;
+let _cachedSinRotY = 0;
+let _cachedNow = 0;
 
 const LEVEL_COLORS: Record<number, string> = {
   1: '#FFFFFF', 2: '#4CAF50', 3: '#2196F3', 4: '#9c27b0', 5: '#facc15', 
@@ -117,6 +132,10 @@ export function BattleArmy({ unitRegistry, towerConfig, updateSimulation, settin
   const { spawnVFX } = useVFX();
   const lastSpawnedRef = useRef<Map<string, number>>(new Map());
 
+  // Shared ref: each army class adds its rendered unit IDs here each frame.
+  // The InstancedImpostorRenderer reads this to skip already-rendered units.
+  const renderedIdsRef = useRef<Set<string>>(new Set());
+
   // --- VFX BRIDGE: Link the context to the ref ---
   useEffect(() => {
     if (vfxRef && !vfxRef.current) {
@@ -172,6 +191,9 @@ export function BattleArmy({ unitRegistry, towerConfig, updateSimulation, settin
   useFrame((state, delta) => {
     updateSimulation(delta);
 
+    // Clear renderedIds at start of frame — armies will repopulate during their useFrame
+    renderedIdsRef.current.clear();
+
     const rawMap = unitRegistry.current;
     if (!rawMap) return;
 
@@ -207,6 +229,15 @@ export function BattleArmy({ unitRegistry, towerConfig, updateSimulation, settin
     const HUD_DETAIL_DIST_SQ = 180 * 180; 
     const maxHpAttr = notchRef.current?.geometry.getAttribute('aMaxHp');
 
+    // PERF: Cache camera state ONCE per frame — avoids per-unit property access
+    _cachedCamQuat.copy(state.camera.quaternion);
+    _cachedCamRotY = state.camera.rotation.y;
+    _cachedCosRotY = Math.cos(_cachedCamRotY);
+    _cachedSinRotY = Math.sin(_cachedCamRotY);
+    _cachedNow = Date.now();
+    // Pre-compute camera world direction once for health bar z-offset
+    state.camera.getWorldDirection(_camDir);
+
     activeUnits.forEach((u: any) => {
       // Setup master HUD limit
       if (hudIdx >= MAX_UNITS || !u || u.hp <= 0) return;
@@ -224,43 +255,42 @@ export function BattleArmy({ unitRegistry, towerConfig, updateSimulation, settin
       const showDetail = u.isBoss || u.dSq < HUD_DETAIL_DIST_SQ;
 
       if (showDetail) {
-        // 2. Health Bar Background
+        // 2. Health Bar Background — use cached quaternion instead of per-unit copy
         const pct = Math.max(0, u.hp / (u.maxHp || 100));
         const by = u.isBoss ? 7.0 : 3.2;
         const bs = u.isBoss ? 2.5 : 1.0;
 
         tempObject.position.set(u.position[0], by, u.position[2]);
-        tempObject.quaternion.copy(state.camera.quaternion);
+        tempObject.quaternion.copy(_cachedCamQuat); // Cached once per frame
         tempObject.scale.set(bs, bs, 1);
         tempObject.updateMatrix();
         healthBgRef.current.setMatrixAt(hudIdx, tempObject.matrix);
 
-        // 3. Health Bar Fill
+        // 3. Health Bar Fill — use pre-computed cos/sin instead of per-unit Math.cos/sin
         const fx = pct * bs;
         tempObject.scale.set(fx, bs, 1);
         const ox = (bs - fx) * 0.4;
-        tempObject.position.x -= Math.cos(state.camera.rotation.y)*ox;
-        tempObject.position.z += Math.sin(state.camera.rotation.y)*ox;
+        tempObject.position.x -= _cachedCosRotY * ox; // Cached cos
+        tempObject.position.z += _cachedSinRotY * ox; // Cached sin
         tempObject.updateMatrix();
         healthFillRef.current.setMatrixAt(hudIdx, tempObject.matrix);
 
-        state.camera.getWorldDirection(_camDir);
+        // Z-offset using pre-computed cam direction
         tempObject.position.addScaledVector(_camDir, -0.02);
         tempObject.updateMatrix();
         healthFillRef.current.setMatrixAt(hudIdx, tempObject.matrix);
 
-        // 4. Hit Flashes & Team Color
+        // 4. Hit Flashes & Team Color — use cached Date.now()
         const teamC = u.type === 'player' ? towerConfig.player.color : towerConfig.enemy.color;
         _healthColor.set(teamC);
         
-        const now = Date.now();
-        const flashAge = now - (u.lastDamageTime || 0);
+        const flashAge = _cachedNow - (u.lastDamageTime || 0);
         if (flashAge < 100) {
             _healthColor.lerpColors(_healthColor, _whiteColor, 1.0 - (flashAge / 100));
             const lastSpawn = lastSpawnedRef.current.get(u.id) || 0;
-            if (now - lastSpawn > 50) {
+            if (_cachedNow - lastSpawn > 50) {
                 spawnVFX(u.position, 'blood', '#bb0000');
-                lastSpawnedRef.current.set(u.id, now);
+                lastSpawnedRef.current.set(u.id, _cachedNow);
             }
         }
         healthFillRef.current.setColorAt(hudIdx, _healthColor);
@@ -273,12 +303,10 @@ export function BattleArmy({ unitRegistry, towerConfig, updateSimulation, settin
         
         if (maxHpAttr) (maxHpAttr as THREE.InstancedBufferAttribute).setX(hudIdx, u.maxHp || 100);
       } else {
-        // Hide detailed HUD if too far
-        tempObject.position.set(0, -100, 0);
-        tempObject.updateMatrix();
-        healthBgRef.current.setMatrixAt(hudIdx, tempObject.matrix);
-        healthFillRef.current.setMatrixAt(hudIdx, tempObject.matrix);
-        notchRef.current.setMatrixAt(hudIdx, tempObject.matrix);
+        // Hide detailed HUD if too far — use pre-computed hide matrix
+        healthBgRef.current.setMatrixAt(hudIdx, _hideMatrix);
+        healthFillRef.current.setMatrixAt(hudIdx, _hideMatrix);
+        notchRef.current.setMatrixAt(hudIdx, _hideMatrix);
       }
 
       hudIdx++;
@@ -332,26 +360,24 @@ export function BattleArmy({ unitRegistry, towerConfig, updateSimulation, settin
       }
     }
 
-    // 7. Cleanup Unused HUD Slots
+    // 7. Cleanup Unused HUD Slots — use pre-computed hide matrix (no position/scale/updateMatrix per slot)
     const prevMax = lastHudIdxRef.current;
     if (settingsRef.current.potatoMode) {
-        tempObject.position.set(0, -100, 0); tempObject.scale.set(0, 0, 0); tempObject.updateMatrix();
         for (let i = 0; i < MAX_UNITS; i++) {
-            healthBgRef.current.setMatrixAt(i, tempObject.matrix);
-            healthFillRef.current.setMatrixAt(i, tempObject.matrix);
-            shadowRef.current.setMatrixAt(i, tempObject.matrix);
+            healthBgRef.current.setMatrixAt(i, _hideMatrix);
+            healthFillRef.current.setMatrixAt(i, _hideMatrix);
+            shadowRef.current.setMatrixAt(i, _hideMatrix);
         }
         lastHudIdxRef.current = 0;
     } else {
         const clearTo = Math.max(hudIdx, prevMax);
         lastHudIdxRef.current = hudIdx;
         
-        tempObject.position.set(0, -100, 0); tempObject.scale.set(0, 0, 0); tempObject.updateMatrix();
         for (let i = hudIdx; i < clearTo; i++) {
-            shadowRef.current.setMatrixAt(i, tempObject.matrix);
-            healthBgRef.current.setMatrixAt(i, tempObject.matrix);
-            healthFillRef.current.setMatrixAt(i, tempObject.matrix);
-            notchRef.current.setMatrixAt(i, tempObject.matrix);
+            shadowRef.current.setMatrixAt(i, _hideMatrix);
+            healthBgRef.current.setMatrixAt(i, _hideMatrix);
+            healthFillRef.current.setMatrixAt(i, _hideMatrix);
+            notchRef.current.setMatrixAt(i, _hideMatrix);
         }
     }
 
@@ -364,12 +390,21 @@ export function BattleArmy({ unitRegistry, towerConfig, updateSimulation, settin
 
   return (
     <group>
-      {/* Separated Unit Rendering by Class (No internal HUD logic inside them anymore!) */}
-      <FighterArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} />
-      <TankArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} />
-      <MageArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} spellsRef={spellsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} />
-      <MarksmanArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} />
-      <AssassinArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} />
+      {/* Full-3D Animated Unit Rendering by Class */}
+      <FighterArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} renderedIdsRef={renderedIdsRef} />
+      <TankArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} renderedIdsRef={renderedIdsRef} />
+      <MageArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} spellsRef={spellsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} renderedIdsRef={renderedIdsRef} />
+      <MarksmanArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} renderedIdsRef={renderedIdsRef} />
+      <AssassinArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} renderedIdsRef={renderedIdsRef} />
+
+      {/* LOD Impostor Layer: far-away units rendered as InstancedMesh billboards (2 draw calls) */}
+      <InstancedImpostorRenderer
+        unitRegistry={unitRegistry}
+        renderedIdsRef={renderedIdsRef}
+        playerColor={towerConfig.player.color}
+        enemyColor={towerConfig.enemy.color}
+        settingsRef={settingsRef}
+      />
 
       {/* Mage GLSL Spell Projectiles */}
       <MageSpellEffect spellsRef={spellsRef} unitRegistry={unitRegistry} simTimeRef={simTimeRef} />
