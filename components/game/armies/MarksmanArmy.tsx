@@ -20,7 +20,7 @@ interface MarksmanArmyProps {
   renderedIdsRef: React.RefObject<Set<string>>;
 }
 
-const POOL_SIZE = 25;
+const POOL_SIZE = 12;
 
 export function MarksmanArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, vehicles, unitIndex, renderedIdsRef }: MarksmanArmyProps) {
   const poolMapRef = useRef<Map<string, number>>(new Map());
@@ -100,6 +100,14 @@ export function MarksmanArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, v
     const storeState = useStore.getState();
     const mode = storeState.gameMode;
     const settings = settingsRef.current;
+    if (settings.potatoMode) {
+        poolMapRef.current.forEach((idx) => {
+            if (characterPool[idx]) characterPool[idx].group.visible = false;
+        });
+        poolMapRef.current.clear();
+        availableIndicesRef.current = Array.from({ length: POOL_SIZE }, (_, i) => i);
+        return;
+    }
 
     // Filter units of this class
     const myUnits: any[] = [];
@@ -115,8 +123,9 @@ export function MarksmanArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, v
         const uData = rawMap.get(id);
         if (!uData) return;
 
-        // Targeting
-        if (frameCountRef.current % 10 === 0 || !u.targetId) {
+        // Targeting (Throttled & Staggered to prevent CPU spikes)
+        const staggerOffset = id.charCodeAt(id.length - 1) % 10;
+        if ((frameCountRef.current + staggerOffset) % 10 === 0 || !u.targetId) {
             let bestDistSq = uData.perceptionRadiusSq || 6400;
             let bestTargetId = undefined;
             rawMap.forEach((potential, pid) => {

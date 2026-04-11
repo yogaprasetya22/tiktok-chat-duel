@@ -153,11 +153,11 @@ export const GameCanvas = React.memo(({
       onChange: (v) => { settingsRef.current.critChance = v; }
     },
     maxCap: {
-      value: towerConfig.maxUnits, min: 10, max: 300, step: 5, label: "Max Units",
+      value: towerConfig.maxUnits, min: 1, max: 300, step: 1, label: "Max Units",
       onChange: (v) => { if (setTowerConfig) setTowerConfig(prev => ({ ...prev, maxUnits: v })); }
     },
     baseHp: {
-      value: towerConfig.baseHp, min: 500, max: 20000, step: 100, label: "Tower HP",
+      value: towerConfig.baseHp, min: 500, max: 200000, step: 100, label: "Tower HP",
       onChange: (v) => { if (setTowerConfig) setTowerConfig(prev => ({ ...prev, baseHp: v })); }
     },
     baseDist: {
@@ -188,7 +188,7 @@ export const GameCanvas = React.memo(({
     triangles: { value: 0, label: "Estimated Triangles", editable: false },
     suspect: { value: "OPTIMAL", label: "Lag Suspect", editable: false },
     "Performance Tool": folder({
-      showPerf: { value: true, label: "Show R3F-Perf" },
+      showPerf: { value: false, label: "Show R3F-Perf Tools" },
       perfPosition: {
         value: "top-right",
         options: ["top-right", "top-left", "bottom-right", "bottom-left"],
@@ -201,10 +201,15 @@ export const GameCanvas = React.memo(({
 
   // Fix: Move useFrame inside a child component that sits inside <Canvas>
   const DiagnosticsBridge = () => {
-    useFrame(() => {
-      if (settingsRef.current.telemetry) {
-        const { engineMs, unitCount, vfxCount, bottleneck } = settingsRef.current.telemetry;
-        setDiag({ engineTime: engineMs, units: unitCount, vfx: vfxCount, suspect: bottleneck });
+    const lastUpdate = useRef(0);
+    useFrame((state) => {
+      const now = state.clock.elapsedTime * 1000;
+      if (now - lastUpdate.current > 1000) {
+        lastUpdate.current = now;
+        if (settingsRef.current.telemetry) {
+          const { engineMs, unitCount, vfxCount, bottleneck } = settingsRef.current.telemetry;
+          setDiag({ engineTime: engineMs, units: unitCount, vfx: vfxCount, suspect: bottleneck });
+        }
       }
     });
     return null;
@@ -227,15 +232,7 @@ export const GameCanvas = React.memo(({
           titleBar={{ title: "Supreme Engine Tuning", drag: false }}
         />
 
-        {/* Performance Downloader */}
-        <button
-          onClick={downloadPerfLogs}
-          title="Download Performance Analysis Report"
-          className="mt-4 w-full py-3 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 rounded-2xl flex items-center justify-center gap-3 text-indigo-400 hover:text-indigo-300 transition-all group"
-        >
-          <Activity className="w-4 h-4 group-hover:scale-110 transition-transform" />
-          <span className="text-[10px] font-black uppercase tracking-widest">Download Performance Report</span>
-        </button>
+
 
         <button
           onClick={clearVFXCache}
@@ -250,7 +247,7 @@ export const GameCanvas = React.memo(({
         DPR: {dpr.toFixed(2)}
       </div>
       <Canvas
-        dpr={dpr}
+        dpr={[0.8, 1.0]}
         shadows={false}
         camera={{ position: [0, 45, 60], fov: 35, far: 800 }}
         gl={{
@@ -262,8 +259,8 @@ export const GameCanvas = React.memo(({
         }}
         className="select-none touch-none "
       >
-        <StatsGl className="!absolute !top-24 !left-2 !right-auto !bottom-auto !z-[2000]" />
-        <PerformanceMonitor onIncline={() => setDpr(Math.min(dpr + 0.1, 1.0))} onDecline={() => setDpr(Math.max(dpr - 0.1, 0.7))} />
+        {showPerf && <StatsGl className="!absolute !top-24 !left-2 !right-auto !bottom-auto !z-[2000]" />}
+
         <AdaptiveEvents />
         <AdaptiveDpr pixelated={true} />
 

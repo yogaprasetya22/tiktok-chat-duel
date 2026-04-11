@@ -20,7 +20,7 @@ interface AssassinArmyProps {
   renderedIdsRef: React.RefObject<Set<string>>;
 }
 
-const POOL_SIZE = 15;
+const POOL_SIZE = 8;
 
 export function AssassinArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, vehicles, unitIndex, renderedIdsRef }: AssassinArmyProps) {
   const poolMapRef = useRef<Map<string, number>>(new Map());
@@ -103,6 +103,14 @@ export function AssassinArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, v
     const storeState = useStore.getState();
     const mode = storeState.gameMode;
     const settings = settingsRef.current;
+    if (settings.potatoMode) {
+        poolMapRef.current.forEach((idx) => {
+            if (characterPool[idx]) characterPool[idx].group.visible = false;
+        });
+        poolMapRef.current.clear();
+        availableIndicesRef.current = Array.from({ length: POOL_SIZE }, (_, i) => i);
+        return;
+    }
 
     // Filter units of this class
     const myUnits: any[] = [];
@@ -118,8 +126,9 @@ export function AssassinArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, v
         const uData = rawMap.get(id);
         if (!uData) return;
 
-        // Targeting (Priority: Mage/Marksman > Fighter > Tank)
-        if (frameCountRef.current % 10 === 0 || !u.targetId) {
+        // Targeting (Throttled & Staggered to prevent CPU spikes)
+        const staggerOffset = id.charCodeAt(id.length - 1) % 10;
+        if ((frameCountRef.current + staggerOffset) % 10 === 0 || !u.targetId) {
             let bestScore = -Infinity;
             let bestTargetId = undefined;
             rawMap.forEach((potential, pid) => {

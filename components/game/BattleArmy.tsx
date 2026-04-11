@@ -195,12 +195,20 @@ export function BattleArmy({ unitRegistry, towerConfig, updateSimulation, settin
   const cachedActiveUnits = useRef<any[]>([]);
   const frameCountRef = useRef(0);
 
+  const simAccumulator = useRef(0);
+  const SIM_STEP = 1/30; // 30Hz physics is stable and saves 50% CPU over 60Hz
+
   // The master ECS physics and HUD logic tick.
   useFrame((state, delta) => {
-    updateSimulation(delta);
+    // 1. FIXED STEP SIMULATION (SAVES CPU/HEAT)
+    simAccumulator.current += Math.min(0.1, delta); // Cap delta to prevent "jumps" after alt-tab
+    while (simAccumulator.current >= SIM_STEP) {
+        updateSimulation(SIM_STEP); // Run simulation at fixed 30fps
+        simAccumulator.current -= SIM_STEP;
+    }
 
-    // Clear renderedIds at start of frame — armies will repopulate during their useFrame
-    renderedIdsRef.current.clear();
+    // Armies will populate this in their useFrame, then ImpostorRenderer consumes and clears it
+    
 
     const rawMap = unitRegistry.current;
     if (!rawMap) return;

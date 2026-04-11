@@ -20,7 +20,7 @@ interface FighterArmyProps {
   renderedIdsRef: React.RefObject<Set<string>>;
 }
 
-const POOL_SIZE = 45;
+const POOL_SIZE = 25;
 
 export function FighterArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, vehicles, unitIndex, renderedIdsRef }: FighterArmyProps) {
   const poolMapRef = useRef<Map<string, number>>(new Map());
@@ -106,6 +106,14 @@ export function FighterArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, ve
     const storeState = useStore.getState();
     const mode = storeState.gameMode;
     const settings = settingsRef.current;
+    if (settings.potatoMode) {
+        poolMapRef.current.forEach((idx) => {
+            if (characterPool[idx]) characterPool[idx].group.visible = false;
+        });
+        poolMapRef.current.clear();
+        availableIndicesRef.current = Array.from({ length: POOL_SIZE }, (_, i) => i);
+        return;
+    }
 
     // PERF: Cache weather speed multiplier ONCE per frame, not per-unit
     const weather = storeState.weather;
@@ -128,8 +136,9 @@ export function FighterArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, ve
         const uData = rawMap.get(id);
         if (!uData) return;
 
-        // Targeting (Throttled)
-        if (frameCountRef.current % 10 === 0 || !u.targetId) {
+        // Targeting (Throttled & Staggered to prevent CPU spikes)
+        const staggerOffset = id.charCodeAt(id.length - 1) % 10;
+        if ((frameCountRef.current + staggerOffset) % 10 === 0 || !u.targetId) {
             let bestDistSq = uData.perceptionRadiusSq || 3600; 
             let bestTargetId = undefined;
             rawMap.forEach((potential, pid) => {

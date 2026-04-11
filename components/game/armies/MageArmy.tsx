@@ -12,6 +12,7 @@ import { SpellEntry, SpellsRegistryRef } from '../MageSpellEffect';
 import { ENEMY_BASE_Z, PLAYER_BASE_Z, WEATHER_CONFIG } from "../../../hooks/battle/constants";
 
 interface MageArmyProps {
+
   unitsMap: React.RefObject<Map<string, any>>;
   towerConfig: TowerConfig;
   settingsRef: React.RefObject<SimulationSettings>;
@@ -22,7 +23,7 @@ interface MageArmyProps {
   renderedIdsRef: React.RefObject<Set<string>>;
 }
 
-const POOL_SIZE = 20;
+const POOL_SIZE = 12;
 
 export function MageArmy({ unitsMap, towerConfig, settingsRef, spellsRef, simTimeRef, vehicles, unitIndex, renderedIdsRef }: MageArmyProps) {
   const poolMapRef = useRef<Map<string, number>>(new Map());
@@ -105,6 +106,14 @@ export function MageArmy({ unitsMap, towerConfig, settingsRef, spellsRef, simTim
     const storeState = useStore.getState();
     const mode = storeState.gameMode;
     const settings = settingsRef.current;
+    if (settings.potatoMode) {
+        poolMapRef.current.forEach((idx) => {
+            if (characterPool[idx]) characterPool[idx].group.visible = false;
+        });
+        poolMapRef.current.clear();
+        availableIndicesRef.current = Array.from({ length: POOL_SIZE }, (_, i) => i);
+        return;
+    }
 
     // PERF: Cache weather speed multiplier ONCE per frame
     const weather = storeState.weather;
@@ -127,8 +136,9 @@ export function MageArmy({ unitsMap, towerConfig, settingsRef, spellsRef, simTim
         const uData = rawMap.get(id);
         if (!uData) return;
 
-        // Targeting (Throttled)
-        if (frameCountRef.current % 10 === 0 || !u.targetId) {
+        // Targeting (Throttled & Staggered to prevent CPU spikes)
+        const staggerOffset = id.charCodeAt(id.length - 1) % 10;
+        if ((frameCountRef.current + staggerOffset) % 10 === 0 || !u.targetId) {
             let bestDistSq = uData.perceptionRadiusSq || 3600; 
             let bestTargetId = undefined;
             rawMap.forEach((potential, pid) => {
@@ -218,7 +228,11 @@ export function MageArmy({ unitsMap, towerConfig, settingsRef, spellsRef, simTim
             }
 
             if (!isChasing) {
-                const seekB = vehicle.steering.behaviors.find((b: any) => b.target !== undefined);
+                let seekB = vehicle._seekB;
+                if (!seekB) {
+                    seekB = vehicle.steering.behaviors.find((b: any) => b.target !== undefined);
+                    vehicle._seekB = seekB;
+                }
                 if (seekB) {
                     const baseZ = u.type === 'player' ? ENEMY_BASE_Z : PLAYER_BASE_Z;
                     const amp = uData.laneSwaggerAmp || 0.5;
@@ -245,10 +259,6 @@ export function MageArmy({ unitsMap, towerConfig, settingsRef, spellsRef, simTim
     });
 
     // --- 2. ACTOR LOOP: Process POOL_SIZE units for rendering ---
-    myUnits.sort((a, b) => {
-        if (a.isBoss !== b.isBoss) return -1;
-        return a.dSq - b.dSq;
-    });
     const visibleUnits = myUnits.slice(0, POOL_SIZE);
 
     visibleUnits.forEach((u: any) => {

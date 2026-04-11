@@ -561,8 +561,19 @@ export const useBattleSystem = () => {
 
             const unitId = `${type}-${Math.random().toString(36).substring(2, 9)}`;
             const distance = towerConfigRef.current.baseDistance || 24;
-            const jitterX = (Math.random() - 0.5) * 8.0;
-            const jitterZ = (Math.random() - 0.5) * 8.0;
+            
+            // MECANISME SPAWN SEJAJARAN
+            // Use total unit count to stagger X position (forming a line)
+            // Spread between -8 and 8 on X axis
+            const currentTeamSize = teamUnits.length;
+            const spreadWidth = 14.0;
+            const spawnIndex = currentTeamSize % 10; // Wrap every 10 units
+            const spreadStep = spreadWidth / 9;
+            const jitterX = - (spreadWidth/2) + (spawnIndex * spreadStep);
+            
+            // Small Z jitter to avoid perfect overlap depth-wise
+            const jitterZ = (Math.random() - 0.5) * 3.0; 
+            
             const spawnZ = type === "player" ? distance - 2 : -distance + 2;
             const spawnPos = [laneOffset + jitterX, -0.4, spawnZ + jitterZ] as [
                 number,
@@ -721,24 +732,25 @@ export const useBattleSystem = () => {
 
                         if (isBase) {
                             const damage = h.damage;
+                            let isDead = false;
+                            
                             if (h.targetId === "enemy-base") {
-                                enemyBaseHpRef.current = Math.max(
-                                    0,
-                                    enemyBaseHpRef.current - damage,
-                                );
+                                enemyBaseHpRef.current = Math.max(0, enemyBaseHpRef.current - damage);
+                                if (enemyBaseHpRef.current === 0 && gameStateRef.current === "PLAYING") isDead = true;
                             } else {
-                                playerBaseHpRef.current = Math.max(
-                                    0,
-                                    playerBaseHpRef.current - damage,
+                                playerBaseHpRef.current = Math.max(0, playerBaseHpRef.current - damage);
+                                if (playerBaseHpRef.current === 0 && gameStateRef.current === "PLAYING") isDead = true;
+                            }
+                            markBaseHpDirty();
+                            accumulateDamage(h.targetId, damage, [h.posX, h.posY, h.posZ], h.color);
+                            
+                            if (isDead) {
+                                addKillEvent(
+                                    h.attackerName || "Attacker",
+                                    h.targetId === "enemy-base" ? towerConfigRef.current.enemy.name : towerConfigRef.current.player.name,
+                                    "base"
                                 );
                             }
-                            markBaseHpDirty(); // Buffered — syncs every 100ms
-                            accumulateDamage(
-                                h.targetId,
-                                damage,
-                                [h.posX, h.posY, h.posZ],
-                                h.color,
-                            );
                         } else {
                             const target = unitIndexRef.current.get(h.targetId);
                             if (target && target.hp > 0 && !target.isDying) {
@@ -927,8 +939,8 @@ export const useBattleSystem = () => {
                         (u.type === "player" ? ENEMY_BASE_Z : PLAYER_BASE_Z),
                     2,
                 );
-                const attackRangeSq = u.range * u.range;
-                const canReachBase = distToBaseSq < attackRangeSq;
+                const TOWER_HITBOX_RADIUS = 2.5;
+                const canReachBase = distToBaseSq < Math.pow(u.range + TOWER_HITBOX_RADIUS, 2);
                 uData.isAttackingBase = false;
 
                 // Commit Combat State
@@ -963,49 +975,54 @@ export const useBattleSystem = () => {
                             u.unitClass === "mage",
                         );
                         const damage = rawDamage * weatherDmgMult;
-                        if (u.type === "player") {
-                            enemyBaseHpRef.current = Math.max(
-                                0,
-                                enemyBaseHpRef.current - damage,
-                            );
-                            if (
-                                enemyBaseHpRef.current === 0 &&
-                                gameStateRef.current === "PLAYING"
-                            )
-                                addKillEvent(
-                                    u.userName,
-                                    towerConfigRef.current.enemy.name,
-                                    "base",
-                                );
-                            markBaseHpDirty(); // Buffered — syncs every 100ms
-                            accumulateDamage(
-                                "enemy-base",
-                                damage,
-                                [0, 5, ENEMY_BASE_Z],
-                                towerConfigRef.current.player.color,
-                            );
+                        const targetId = u.type === "player" ? "enemy-base" : "player-base";
+                        const targetZ = u.type === "player" ? ENEMY_BASE_Z : PLAYER_BASE_Z;
+                        const teamColor = u.type === "player" ? towerConfigRef.current.player.color : towerConfigRef.current.enemy.color;
+                        
+                        if (u.unitClass === "mage" || u.unitClass === "marksman") {
+                            const travelTime = u.unitClass === "mage" ? MAGE_PROJECTILE_TIME_MS : 200;
+                            const dmgSlot = pendingDamagePool.current.find(s => !s.active);
+                            if (dmgSlot) {
+                                dmgSlot.active = true;
+                                dmgSlot.targetId = targetId;
+                                dmgSlot.damage = damage;
+                                dmgSlot.hitTime = simNow + travelTime;
+                                dmgSlot.posX = uData.position[0] * 0.1; 
+                                dmgSlot.posY = 5.0;
+                                dmgSlot.posZ = targetZ;
+                                dmgSlot.color = teamColor;
+                                dmgSlot.attackerName = u.userName;
+                                dmgSlot.attackerClass = u.unitClass;
+                                dmgSlot.attackerId = u.id;
+                            }
+                            
+                            const availableSlot = spellsRef.current.find((s) => !s.active);
+                            if (availableSlot) {
+                                availableSlot.active = true;
+                                availableSlot.progress = 0;
+                                availableSlot.fromX = uData.position[0];
+                                availableSlot.fromY = 1.6;
+                                availableSlot.fromZ = uData.position[2];
+                                availableSlot.toX = uData.position[0] * 0.1;
+                                availableSlot.toY = 4.0;
+                                availableSlot.toZ = targetZ;
+                                availableSlot.startTime = simNow;
+                                availableSlot.color = u.unitClass === "marksman" ? "#ffcc00" : teamColor;
+                                availableSlot.targetId = targetId;
+                                (availableSlot as any).isBullet = u.unitClass === "marksman";
+                            }
                         } else {
-                            playerBaseHpRef.current = Math.max(
-                                0,
-                                playerBaseHpRef.current - damage,
-                            );
-                            if (
-                                playerBaseHpRef.current === 0 &&
-                                gameStateRef.current === "PLAYING"
-                            )
-                                addKillEvent(
-                                    u.userName,
-                                    towerConfigRef.current.player.name,
-                                    "base",
-                                );
-                            markBaseHpDirty(); // Buffered — syncs every 100ms
-                            accumulateDamage(
-                                "player-base",
-                                damage,
-                                [0, 5, PLAYER_BASE_Z],
-                                towerConfigRef.current.enemy.color,
-                            );
+                            if (u.type === "player") {
+                                enemyBaseHpRef.current = Math.max(0, enemyBaseHpRef.current - damage);
+                                if (enemyBaseHpRef.current === 0 && gameStateRef.current === "PLAYING") addKillEvent(u.userName, towerConfigRef.current.enemy.name, "base");
+                            } else {
+                                playerBaseHpRef.current = Math.max(0, playerBaseHpRef.current - damage);
+                                if (playerBaseHpRef.current === 0 && gameStateRef.current === "PLAYING") addKillEvent(u.userName, towerConfigRef.current.player.name, "base");
+                            }
+                            markBaseHpDirty();
+                            accumulateDamage(targetId, damage, [uData.position[0] * 0.1, 5, targetZ], teamColor);
                         }
+                        
                         uData.lastAttackTime = simNow;
                         statsRef.current.damageDealt[u.userName] =
                             (statsRef.current.damageDealt[u.userName] || 0) +
@@ -1244,7 +1261,7 @@ export const useBattleSystem = () => {
                 const vehicle = vehicles.current.get(u.id);
                 if (vehicle) {
                     const limitEdgeZ =
-                        (towerConfigRef.current.baseDistance || 24) - 2;
+                        (towerConfigRef.current.baseDistance || 24) - 0.5;
                     if (vehicle.position.z < -limitEdgeZ)
                         vehicle.position.z = -limitEdgeZ;
                     if (vehicle.position.z > limitEdgeZ)

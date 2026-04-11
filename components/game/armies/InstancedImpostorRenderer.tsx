@@ -39,6 +39,7 @@ interface InstancedImpostorRendererProps {
 // Reusable dummy Object3D for matrix composition — zero-alloc pattern
 const _dummy = new THREE.Object3D();
 const _color = new THREE.Color();
+const _whiteColor = new THREE.Color('#ffffff');
 const _hidePos = new THREE.Matrix4().compose(
   new THREE.Vector3(0, -1000, 0),
   new THREE.Quaternion(),
@@ -212,7 +213,7 @@ export function InstancedImpostorRenderer({
       const flashAge = now - (u.lastDamageTime || 0);
       if (flashAge < 120) {
         const t = 1.0 - flashAge / 120;
-        _color.lerp(new THREE.Color('#ffffff'), t * 0.6);
+        _color.lerp(_whiteColor, t * 0.6);
       }
 
       mesh.setColorAt(idx, _color);
@@ -232,7 +233,10 @@ export function InstancedImpostorRenderer({
 
     // Update instance count for frustum culling optimization
     mesh.count = idx;
-  }, -1);
+    
+    // Clear for next frame so armies can repopulate
+    renderedIdsRef.current.clear();
+  });
 
   return (
     <instancedMesh
