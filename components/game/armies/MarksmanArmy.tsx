@@ -20,7 +20,7 @@ interface MarksmanArmyProps {
   renderedIdsRef: React.RefObject<Set<string>>;
 }
 
-const POOL_SIZE = 35;
+const POOL_SIZE = 25;
 
 export function MarksmanArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, vehicles, unitIndex, renderedIdsRef }: MarksmanArmyProps) {
   const poolMapRef = useRef<Map<string, number>>(new Map());
@@ -54,10 +54,10 @@ export function MarksmanArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, v
             child.receiveShadow = false;
             child.frustumCulled = true;
             const name = child.name.toLowerCase();
-            if (name.includes('cloth') || name.includes('hat') || name.includes('cap') || name.includes('trim')) {
-              // PERF: Only clone material for colorable meshes — shared materials for everything else
-              if (child.material) child.material = child.material.clone();
-              colorable.push(child);
+            const isColorable = name.includes('cloth') || name.includes('pattern') || name.includes('trim') || name.includes('ribbon') || name.includes('quiver');
+            if (isColorable) {
+                if (child.material) child.material = child.material.clone();
+                colorable.push(child);
             }
           }
         });
@@ -65,6 +65,27 @@ export function MarksmanArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, v
     }
     return items;
   }, [m1]);
+
+  useEffect(() => {
+    return () => {
+        characterPool.forEach(item => {
+            if (item.group) {
+                item.group.traverse((child: any) => {
+                    if (child.isMesh) {
+                        child.geometry.dispose();
+                        if (child.material) {
+                            if (Array.isArray(child.material)) {
+                                child.material.forEach((m: any) => m.dispose());
+                            } else {
+                                child.material.dispose();
+                            }
+                        }
+                    }
+                });
+            }
+        });
+    };
+  }, [characterPool]);
 
   useFrame((state, delta) => {
     frameCountRef.current++;
@@ -217,6 +238,10 @@ export function MarksmanArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, v
       const poolIdx = poolMapRef.current.get(id);
       if (poolIdx === undefined) return;
       const pItem = characterPool[poolIdx];
+      if (!pItem) {
+          poolMapRef.current.delete(id);
+          return;
+      }
       pItem.group.visible = true;
 
       const baseScale = u.isBoss ? 4.2 : (1.3 + (u.level || 1) * 0.1);

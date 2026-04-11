@@ -22,7 +22,7 @@ interface MageArmyProps {
   renderedIdsRef: React.RefObject<Set<string>>;
 }
 
-const POOL_SIZE = 25;
+const POOL_SIZE = 20;
 
 export function MageArmy({ unitsMap, towerConfig, settingsRef, spellsRef, simTimeRef, vehicles, unitIndex, renderedIdsRef }: MageArmyProps) {
   const poolMapRef = useRef<Map<string, number>>(new Map());
@@ -59,10 +59,10 @@ export function MageArmy({ unitsMap, towerConfig, settingsRef, spellsRef, simTim
             child.receiveShadow = false;
             child.frustumCulled = true;
             const name = child.name.toLowerCase();
-            if (name.includes('cloth') || name.includes('robe') || name.includes('hat') || name.includes('cape') || name.includes('trim')) {
-               // PERF: Only clone material for colorable meshes — shared materials for everything else
-               if (child.material) child.material = child.material.clone();
-               colorable.push(child);
+            const isColorable = name.includes('cloth') || name.includes('trim') || name.includes('jewel') || name.includes('robe') || name.includes('scarf');
+            if (isColorable) {
+                if (child.material) child.material = child.material.clone();
+                colorable.push(child);
             }
           }
         });
@@ -70,6 +70,27 @@ export function MageArmy({ unitsMap, towerConfig, settingsRef, spellsRef, simTim
     }
     return items;
   }, [mage1, mage2]);
+
+  useEffect(() => {
+    return () => {
+        characterPool.forEach(item => {
+            if (item.group) {
+                item.group.traverse((child: any) => {
+                    if (child.isMesh) {
+                        child.geometry.dispose();
+                        if (child.material) {
+                            if (Array.isArray(child.material)) {
+                                child.material.forEach((m: any) => m.dispose());
+                            } else {
+                                child.material.dispose();
+                            }
+                        }
+                    }
+                });
+            }
+        });
+    };
+  }, [characterPool]);
 
   useFrame((state, delta) => {
     frameCountRef.current++;
@@ -252,6 +273,10 @@ export function MageArmy({ unitsMap, towerConfig, settingsRef, spellsRef, simTim
       const poolIdx = poolMapRef.current.get(id);
       if (poolIdx === undefined) return;
       const pItem = characterPool[poolIdx];
+      if (!pItem) {
+          poolMapRef.current.delete(id);
+          return;
+      }
       pItem.group.visible = true;
 
       const baseScale = u.isBoss ? 4.0 : (1.3 + (u.level || 1) * 0.1);

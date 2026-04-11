@@ -57,8 +57,8 @@ export function AssassinArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, v
             child.receiveShadow = false;
             child.frustumCulled = true;
             const name = child.name.toLowerCase();
-            if (name.includes('cloth') || name.includes('mask') || name.includes('hood') || name.includes('wrap')) {
-                // PERF: Only clone material for colorable meshes — shared materials for everything else
+            const isColorable = name.includes('cloth') || name.includes('mask') || name.includes('hood') || name.includes('wrap') || name.includes('ribbon');
+            if (isColorable) {
                 if (child.material) child.material = child.material.clone();
                 colorable.push(child);
             }
@@ -68,6 +68,27 @@ export function AssassinArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, v
     }
     return items;
   }, [n1, n2]);
+
+  useEffect(() => {
+    return () => {
+        characterPool.forEach(item => {
+            if (item.group) {
+                item.group.traverse((child: any) => {
+                    if (child.isMesh) {
+                        child.geometry.dispose();
+                        if (child.material) {
+                            if (Array.isArray(child.material)) {
+                                child.material.forEach((m: any) => m.dispose());
+                            } else {
+                                child.material.dispose();
+                            }
+                        }
+                    }
+                });
+            }
+        });
+    };
+  }, [characterPool]);
 
   useFrame((state, delta) => {
     frameCountRef.current++;
@@ -246,7 +267,11 @@ export function AssassinArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, v
       const poolIdx = poolMapRef.current.get(id);
       if (poolIdx === undefined) return;
       const pItem = characterPool[poolIdx];
-      
+      if (!pItem) {
+          poolMapRef.current.delete(id);
+          return;
+      }
+      pItem.group.visible = true;
       const isUntargetable = u.untargetableUntil > (simTimeRef.current * 1000);
       pItem.group.visible = !isUntargetable;
 

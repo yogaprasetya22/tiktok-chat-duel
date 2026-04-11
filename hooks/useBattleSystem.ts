@@ -1255,10 +1255,10 @@ export const useBattleSystem = () => {
                 }
             }
 
-            // ---- PASS 2: Social Dynamics / Spatial Partitioning (Optimized) ----
-            const GRID_SIZE = 4;
+            // ---- PASS 2: Social Dynamics / 2D Spatial Partitioning (Optimized) ----
+            const GRID_SIZE = 5;
             const buckets = bucketsMapRef.current;
-            // Zero-alloc: reset existing bucket arrays instead of clearing map and creating new arrays
+            // Zero-alloc: reset existing bucket arrays instead of clearing map
             buckets.forEach((arr) => { arr.length = 0; });
 
             for (let i = 0; i < unitsRef.current.length; i++) {
@@ -1267,38 +1267,50 @@ export const useBattleSystem = () => {
                 const uData = unitDataRef.current.get(u.id);
                 if (!uData) continue;
 
-                const bIdx = Math.floor(uData.position[2] / GRID_SIZE);
-                let bucket = buckets.get(bIdx);
+                // 2D Spatial Hash Key
+                const gx = Math.floor(uData.position[0] / GRID_SIZE);
+                const gz = Math.floor(uData.position[2] / GRID_SIZE);
+                const hash = (gx << 16) | (gz & 0xFFFF);
+                
+                let bucket = buckets.get(hash);
                 if (!bucket) {
-                    bucket = [];
-                    buckets.set(bIdx, bucket);
+                    bucket = []; // PERF: Could use a pre-allocated pool of arrays
+                    buckets.set(hash, bucket);
                 }
                 bucket.push(i);
             }
 
-            buckets.forEach((indices, bIdx) => {
-                const neighborIndicesNext = buckets.get(bIdx + 1);
+            buckets.forEach((indices, hash) => {
+                const gx = hash >> 16;
+                const gz = (hash << 16) >> 16; // Extract sign-extended 16-bit
+
+                // Check self and neighbors (Only positive offsets for unique pairs)
+                // We check: (0,0), (1,0), (1,1), (0,1), (-1,1)
+                const neighborKeys = [
+                    hash,
+                    ((gx + 1) << 16) | (gz & 0xFFFF),
+                    ((gx + 1) << 16) | ((gz + 1) & 0xFFFF),
+                    (gx << 16) | ((gz + 1) & 0xFFFF),
+                    ((gx - 1) << 16) | ((gz + 1) & 0xFFFF)
+                ];
 
                 for (let i = 0; i < indices.length; i++) {
                     const idxA = indices[i];
                     const uA = unitsRef.current[idxA];
                     const uDataA = unitDataRef.current.get(uA.id)!;
 
+                    // Intra-bucket pairs
                     for (let j = i + 1; j < indices.length; j++) {
-                        solveSocialDynamics(
-                            uA,
-                            uDataA,
-                            unitsRef.current[indices[j]],
-                        );
+                        solveSocialDynamics(uA, uDataA, unitsRef.current[indices[j]]);
                     }
 
-                    if (neighborIndicesNext) {
-                        for (let j = 0; j < neighborIndicesNext.length; j++) {
-                            solveSocialDynamics(
-                                uA,
-                                uDataA,
-                                unitsRef.current[neighborIndicesNext[j]],
-                            );
+                    // Inter-bucket neighbors
+                    for (let k = 1; k < neighborKeys.length; k++) {
+                        const neighborIndices = buckets.get(neighborKeys[k]);
+                        if (neighborIndices) {
+                            for (let j = 0; j < neighborIndices.length; j++) {
+                                solveSocialDynamics(uA, uDataA, unitsRef.current[neighborIndices[j]]);
+                            }
                         }
                     }
                 }

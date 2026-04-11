@@ -197,11 +197,12 @@ export const CORPSE_DESPAWN_MS = 5000; // Time in ms before a corpse is removed 
 export const ASSASSIN_BLINK_DISTANCE = 18.0; // Increased range for "far" feel
 export const ASSASSIN_BLINK_COOLDOWN = 6000;
 export const ASSASSIN_INVUL_MS = 800;
+export const NAME_POOL_SIZE = 90;
 
 // --- LOD IMPOSTOR SYSTEM ---
 // Units beyond this distance² from camera are rendered as flat billboard impostors
 // instead of full 3D animated models (1-2 draw calls vs hundreds)
-export const LOD_IMPOSTOR_DIST_SQ = 62 * 62;   // 3844 — switch to billboard later (better for 45deg camera)
+export const LOD_IMPOSTOR_DIST_SQ = 48 * 48;
 export const LOD_IMPOSTOR_MAX = 1000;           // Max billboard instances (player+enemy combined)
 export const LOD_IMPOSTOR_SCALE = 1.8;          // Visual scale of impostor billboards
 export const LOD_IMPOSTOR_BOSS_SCALE = 5.0;     // Boss impostor scale

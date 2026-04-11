@@ -1,7 +1,7 @@
 'use client';
 
 import * as THREE from 'three';
-import React, { createContext, useContext, useRef, useMemo, useCallback } from 'react';
+import React, { createContext, useContext, useRef, useMemo, useCallback, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 
 export type VFXType = 'hit' | 'death' | 'blood' | 'boss-spawn' | 'mega_explosion' | 'spark' | 'shockwave' | 'fireball_hit' | 'slash' | 'muzzle';
@@ -29,39 +29,55 @@ export const useVFX = () => {
   return context;
 };
 
-const MAX_PARTICLES = 2000;
+const MAX_PARTICLES = 2500;
 
 export const VFXProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const particles = useMemo(() => {
-    const p: Particle[] = [];
-    for (let i = 0; i < MAX_PARTICLES; i++) {
-      p.push({
-        position: new THREE.Vector3(0, -100, 0),
-        velocity: new THREE.Vector3(),
-        color: new THREE.Color(),
-        size: 0,
-        life: 0,
-        maxLife: 0,
-        type: 'hit'
-      });
+  // PERFORMANCE: Use TypedArrays instead of thousands of small objects to eliminate GC pressure
+  const data = useMemo(() => ({
+    positions: new Float32Array(MAX_PARTICLES * 3),
+    velocities: new Float32Array(MAX_PARTICLES * 3),
+    colors: new Float32Array(MAX_PARTICLES * 3),
+    lifetimes: new Float32Array(MAX_PARTICLES),    // life
+    maxLifetimes: new Float32Array(MAX_PARTICLES), // maxLife
+    sizes: new Float32Array(MAX_PARTICLES),
+    types: new Int8Array(MAX_PARTICLES), // 0: hit, 1: death, 2: blood, 3: boss, 4: explosion, 5: spark, 6: shockwave, 7: fire, 8: slash, 9: muzzle
+  }), []);
+
+  const typeToId = (type: VFXType): number => {
+    switch(type) {
+      case 'hit': return 0; case 'death': return 1; case 'blood': return 2;
+      case 'boss-spawn': return 3; case 'mega_explosion': return 4;
+      case 'spark': return 5; case 'shockwave': return 6;
+      case 'fireball_hit': return 7; case 'slash': return 8; case 'muzzle': return 9;
+      default: return 0;
     }
-    return p;
-  }, []);
+  };
 
   const meshRef = useRef<THREE.InstancedMesh>(null!);
   const poolIndex = useRef(0);
   const activeIndices = useRef<Set<number>>(new Set());
   const lastSpawnAt = useRef<{ [key: string]: number }>({});
 
-  const spawnVFX = useCallback((position: [number, number, number], type: VFXType, color: string = '#ffffff') => {
-    // PERFORMANCE: Spatial & Temporal Culling
-    // If the same effect is requested at the same spot within 50ms, skip it.
+  useEffect(() => {
+    return () => {
+      if (meshRef.current) {
+        meshRef.current.geometry.dispose();
+        if (Array.isArray(meshRef.current.material)) {
+           meshRef.current.material.forEach(m => m.dispose());
+        } else {
+           meshRef.current.material.dispose();
+        }
+      }
+    };
+  }, []);
+
+  const spawnVFX = useCallback((position: [number, number, number], type: VFXType, colorStr: string = '#ffffff') => {
     const key = `${type}-${Math.round(position[0])}-${Math.round(position[2])}`;
     const now = performance.now();
     if (lastSpawnAt.current[key] && now - lastSpawnAt.current[key] < 20) return;
     lastSpawnAt.current[key] = now;
 
-      const count = type === 'mega_explosion' ? 60 :
+    const count = type === 'mega_explosion' ? 60 :
       type === 'fireball_hit' ? 50 : 
       type === 'blood' ? 12 : 
       type === 'boss-spawn' ? 40 :
@@ -69,7 +85,6 @@ export const VFXProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         type === 'slash' ? 12 :
           type === 'muzzle' ? 6 :
             type === 'shockwave' ? 1 : 8;
-
 
     const speed = type === 'mega_explosion' ? 10 :
       type === 'fireball_hit' ? 7 : 
@@ -79,7 +94,6 @@ export const VFXProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         type === 'muzzle' ? 20 :
           type === 'death' ? 4 : 3;
 
-
     const baseSize = type === 'shockwave' ? 3.5 :
       type === 'fireball_hit' ? 1.5 : 
       type === 'blood' ? 0.35 : 
@@ -87,7 +101,6 @@ export const VFXProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         type === 'spark' ? 0.12 : 
         type === 'muzzle' ? 0.6 :
           type === 'slash' ? 0.8 : 0.25;
-
 
     const baseLife = type === 'shockwave' ? 0.3 :
       type === 'fireball_hit' ? 2.0 : 
@@ -97,66 +110,63 @@ export const VFXProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         type === 'muzzle' ? 0.15 :
           type === 'slash' ? 0.25 : 0.6;
 
+    const typeId = typeToId(type);
+    _tempColor.set(colorStr).convertLinearToSRGB();
 
     for (let i = 0; i < count; i++) {
       const idx = poolIndex.current;
       poolIndex.current = (poolIndex.current + 1) % MAX_PARTICLES;
-      
-      const p = particles[idx];
       activeIndices.current.add(idx);
 
-      p.type = type;
-      p.position.set(...position);
+      data.types[idx] = typeId;
+      data.positions[idx * 3] = position[0];
+      data.positions[idx * 3 + 1] = position[1];
+      data.positions[idx * 3 + 2] = position[2];
 
       if (type === 'shockwave') {
-        p.velocity.set(0, 0, 0);
+        data.velocities[idx * 3] = 0;
+        data.velocities[idx * 3 + 1] = 0;
+        data.velocities[idx * 3 + 2] = 0;
       } else if (type === 'slash') {
-        // Flat, wide spread for slash
         const angle = Math.random() * Math.PI * 2;
-        p.velocity.set(
-          Math.cos(angle) * speed,
-          (Math.random() - 0.5) * 2,
-          Math.sin(angle) * speed
-        );
+        data.velocities[idx * 3] = Math.cos(angle) * speed;
+        data.velocities[idx * 3 + 1] = (Math.random() - 0.5) * 2;
+        data.velocities[idx * 3 + 2] = Math.sin(angle) * speed;
       } else {
-
         const spread = type === 'fireball_hit' ? 1.2 : 1.0;
-        p.velocity.set(
-          (Math.random() - 0.5) * speed * spread,
-          (type === 'mega_explosion' || type === 'spark' || type === 'fireball_hit' ? Math.random() * speed + 2 : Math.random() * speed),
-          (Math.random() - 0.5) * speed * spread
-        );
+        data.velocities[idx * 3] = (Math.random() - 0.5) * speed * spread;
+        data.velocities[idx * 3 + 1] = (type === 'mega_explosion' || type === 'spark' || type === 'fireball_hit' ? Math.random() * speed + 2 : Math.random() * speed);
+        data.velocities[idx * 3 + 2] = (Math.random() - 0.5) * speed * spread;
       }
 
-      p.life = baseLife * (0.8 + Math.random() * 0.4);
-      p.maxLife = p.life;
+      const life = baseLife * (0.8 + Math.random() * 0.4);
+      data.lifetimes[idx] = life;
+      data.maxLifetimes[idx] = life;
       
-      // Fireball hit: 70% smoke, 30% fire
-      if (type === 'fireball_hit') {
-        if (Math.random() > 0.3) {
-            p.color.set('#333333').convertLinearToSRGB(); // Darker smoke
-        } else {
-            p.color.set(color).convertLinearToSRGB(); // Fire color
-        }
+      if (type === 'fireball_hit' && Math.random() > 0.3) {
+        data.colors[idx * 3] = 0.1; // Dark smoke
+        data.colors[idx * 3 + 1] = 0.1;
+        data.colors[idx * 3 + 2] = 0.1;
       } else {
-        p.color.set(color).convertLinearToSRGB();
+        data.colors[idx * 3] = _tempColor.r;
+        data.colors[idx * 3 + 1] = _tempColor.g;
+        data.colors[idx * 3 + 2] = _tempColor.b;
       }
       
-      p.size = baseSize * (0.8 + Math.random() * 0.4);
+      data.sizes[idx] = baseSize * (0.8 + Math.random() * 0.4);
     }
-  }, [particles]);
+  }, [data]);
 
   const dummy = useMemo(() => new THREE.Object3D(), []);
 
   useFrame((_, delta) => {
     if (!meshRef.current) return;
 
-    // PERFORMANCE: Only update ACTIVE indices
     activeIndices.current.forEach((idx) => {
-      const p = particles[idx];
-      p.life -= delta;
+      let life = data.lifetimes[idx] - delta;
+      data.lifetimes[idx] = life;
 
-      if (p.life <= 0) {
+      if (life <= 0) {
         dummy.position.set(0, -100, 0);
         dummy.updateMatrix();
         meshRef.current.setMatrixAt(idx, dummy.matrix);
@@ -164,32 +174,44 @@ export const VFXProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return;
       }
 
-      if (p.type !== 'shockwave') {
-        if (p.type === 'fireball_hit') {
-           p.velocity.y += delta * 3.5; // Smoke rises faster
-           p.position.addScaledVector(p.velocity, delta * 0.7); // Better air resistance feel
-           p.velocity.multiplyScalar(0.97); // Drag
-        } else if (p.type === 'blood') {
-           p.velocity.y -= delta * 15; // Heavier gravity for blood
-           p.position.addScaledVector(p.velocity, delta);
-           p.velocity.multiplyScalar(0.96); // Air resistance
+      const typeId = data.types[idx];
+      // 6: shockwave
+      if (typeId !== 6) {
+        if (typeId === 7) { // fireball_hit
+           data.velocities[idx * 3 + 1] += delta * 3.5;
+           data.positions[idx * 3] += data.velocities[idx * 3] * delta * 0.7;
+           data.positions[idx * 3 + 1] += data.velocities[idx * 3 + 1] * delta * 0.7;
+           data.positions[idx * 3 + 2] += data.velocities[idx * 3 + 2] * delta * 0.7;
+           data.velocities[idx * 3] *= 0.97;
+           data.velocities[idx * 3 + 1] *= 0.97;
+           data.velocities[idx * 3 + 2] *= 0.97;
+        } else if (typeId === 2) { // blood
+           data.velocities[idx * 3 + 1] -= delta * 15;
+           data.positions[idx * 3] += data.velocities[idx * 3] * delta;
+           data.positions[idx * 3 + 1] += data.velocities[idx * 3 + 1] * delta;
+           data.positions[idx * 3 + 2] += data.velocities[idx * 3 + 2] * delta;
+           data.velocities[idx * 3] *= 0.96;
+           data.velocities[idx * 3 + 1] *= 0.96;
+           data.velocities[idx * 3 + 2] *= 0.96;
         } else {
-           p.velocity.y -= delta * 10; // Standard gravity
-           p.position.addScaledVector(p.velocity, delta);
+           data.velocities[idx * 3 + 1] -= delta * 10;
+           data.positions[idx * 3] += data.velocities[idx * 3] * delta;
+           data.positions[idx * 3 + 1] += data.velocities[idx * 3 + 1] * delta;
+           data.positions[idx * 3 + 2] += data.velocities[idx * 3 + 2] * delta;
         }
       }
 
-      const progress = p.life / p.maxLife;
-      let scale = p.type === 'shockwave' ? p.size * (1 - progress) : progress * p.size;
+      const progress = life / data.maxLifetimes[idx];
+      const pSize = data.sizes[idx];
+      let scale = typeId === 6 ? pSize * (1 - progress) : progress * pSize;
 
-      // Special smoke scaling: expands as it ages then fades
-      if (p.type === 'fireball_hit') {
-          const expansion = 1.0 + (1.0 - progress) * 2.0; // Grows 3x
-          scale = p.size * Math.sin(progress * Math.PI) * expansion;
+      if (typeId === 7) { // smoke expansion
+          const expansion = 1.0 + (1.0 - progress) * 2.0;
+          scale = pSize * Math.sin(progress * Math.PI) * expansion;
       }
 
-      dummy.position.copy(p.position);
-      if (p.type === 'shockwave') {
+      dummy.position.set(data.positions[idx * 3], data.positions[idx * 3 + 1], data.positions[idx * 3 + 2]);
+      if (typeId === 6) {
         dummy.scale.set(scale, 0.05, scale);
       } else {
         dummy.scale.set(scale, scale, scale);
@@ -198,12 +220,14 @@ export const VFXProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       meshRef.current.setMatrixAt(idx, dummy.matrix);
       
-      // Flicker fire particles
-      if (p.type === 'fireball_hit' && p.color.r > 0.4) {
-          const flicker = 0.8 + Math.sin(p.life * 20) * 0.2;
-          meshRef.current.setColorAt(idx, _tempColor.copy(p.color).multiplyScalar(flicker));
+      // Flicker logic
+      if (typeId === 7 && data.colors[idx * 3] > 0.4) {
+          const flicker = 0.8 + Math.sin(life * 20) * 0.2;
+          _tempColor.setRGB(data.colors[idx * 3] * flicker, data.colors[idx * 3 + 1] * flicker, data.colors[idx * 3 + 2] * flicker);
+          meshRef.current.setColorAt(idx, _tempColor);
       } else {
-          meshRef.current.setColorAt(idx, p.color);
+          _tempColor.setRGB(data.colors[idx * 3], data.colors[idx * 3 + 1], data.colors[idx * 3 + 2]);
+          meshRef.current.setColorAt(idx, _tempColor);
       }
     });
 

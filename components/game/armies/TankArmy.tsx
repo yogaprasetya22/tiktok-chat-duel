@@ -20,7 +20,7 @@ interface TankArmyProps {
   renderedIdsRef: React.RefObject<Set<string>>;
 }
 
-const POOL_SIZE = 60;
+const POOL_SIZE = 45;
 
 export function TankArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, vehicles, unitIndex, renderedIdsRef }: TankArmyProps) {
   const poolMapRef = useRef<Map<string, number>>(new Map());
@@ -84,8 +84,10 @@ export function TankArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, vehic
           child.frustumCulled = true;
           child._assetIdx = assetIdx;
           const name = child.name.toLowerCase();
-          if (name.includes('helmet') || name.includes('shield') || name.includes('cloth') || name.includes('armour') || name.includes('trim')) {
-            colorable.push(child);
+          const isColorable = name.includes('cloth') || name.includes('plume') || name.includes('trim') || name.includes('shield_pattern') || name.includes('helmet');
+          if (isColorable) {
+              if (child.material) child.material = child.material.clone();
+              colorable.push(child);
           }
         }
       });
@@ -93,6 +95,27 @@ export function TankArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, vehic
     }
     return items;
   }, [t1, t2]);
+  
+  useEffect(() => {
+    return () => {
+        characterPool.forEach(item => {
+            if (item.group) {
+                item.group.traverse((child: any) => {
+                    if (child.isMesh) {
+                        child.geometry.dispose();
+                        if (child.material) {
+                            if (Array.isArray(child.material)) {
+                                child.material.forEach((m: any) => m.dispose());
+                            } else {
+                                child.material.dispose();
+                            }
+                        }
+                    }
+                });
+            }
+        });
+    };
+  }, [characterPool]);
 
   useFrame((state, delta) => {
     frameCountRef.current++;
@@ -254,6 +277,10 @@ export function TankArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, vehic
       const poolIdx = poolMapRef.current.get(id);
       if (poolIdx === undefined) return;
       const pItem = characterPool[poolIdx];
+      if (!pItem) {
+          poolMapRef.current.delete(id);
+          return;
+      }
       pItem.group.visible = true;
 
       const baseScale = u.isBoss ? 6.5 : (2.5 + (u.level || 1) * 0.15);

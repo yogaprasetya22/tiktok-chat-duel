@@ -20,7 +20,7 @@ interface FighterArmyProps {
   renderedIdsRef: React.RefObject<Set<string>>;
 }
 
-const POOL_SIZE = 60;
+const POOL_SIZE = 45;
 
 export function FighterArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, vehicles, unitIndex, renderedIdsRef }: FighterArmyProps) {
   const poolMapRef = useRef<Map<string, number>>(new Map());
@@ -60,8 +60,8 @@ export function FighterArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, ve
             child.receiveShadow = false;
             child.frustumCulled = true;
             const name = child.name.toLowerCase();
-            if (name.includes('cape') || name.includes('cloth') || name.includes('trim') || name.includes('helmet') || name.includes('shoulder')) {
-                // PERF: Only clone material for colorable meshes — shared materials for everything else
+            const isColorable = name.includes('cape') || name.includes('cloth') || name.includes('trim') || name.includes('helmet') || name.includes('shoulder');
+            if (isColorable) {
                 if (child.material) child.material = child.material.clone();
                 colorable.push(child);
             }
@@ -71,6 +71,27 @@ export function FighterArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, ve
     }
     return items;
   }, [f1, f2, f3]);
+
+  useEffect(() => {
+    return () => {
+        characterPool.forEach(item => {
+            if (item.group) {
+                item.group.traverse((child: any) => {
+                    if (child.isMesh) {
+                        child.geometry.dispose();
+                        if (child.material) {
+                            if (Array.isArray(child.material)) {
+                                child.material.forEach((m: any) => m.dispose());
+                            } else {
+                                child.material.dispose();
+                            }
+                        }
+                    }
+                });
+            }
+        });
+    };
+  }, [characterPool]);
 
   useFrame((state, delta) => {
     frameCountRef.current++;
@@ -241,6 +262,10 @@ export function FighterArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, ve
       const poolIdx = poolMapRef.current.get(id);
       if (poolIdx === undefined) return;
       const pItem = characterPool[poolIdx];
+      if (!pItem) {
+          poolMapRef.current.delete(id);
+          return;
+      }
       pItem.group.visible = true;
 
       const baseScale = u.isBoss ? 4.5 : (1.4 + (u.level || 1) * 0.1);

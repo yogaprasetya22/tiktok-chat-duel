@@ -129,6 +129,19 @@ export function InstancedImpostorRenderer({
     });
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (meshRef.current) {
+        meshRef.current.geometry.dispose();
+        if (Array.isArray(meshRef.current.material)) {
+           meshRef.current.material.forEach(m => m.dispose());
+        } else {
+           meshRef.current.material.dispose();
+        }
+      }
+    };
+  }, []);
+
   // Initialize all instances to hidden
   useEffect(() => {
     if (!meshRef.current) return;
@@ -219,7 +232,7 @@ export function InstancedImpostorRenderer({
 
     // Update instance count for frustum culling optimization
     mesh.count = idx;
-  });
+  }, -1);
 
   return (
     <instancedMesh

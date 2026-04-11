@@ -29,7 +29,7 @@ interface BattleArmyProps {
 
 
 const MAX_UNITS = 350;
-const NAME_POOL_SIZE = 60;
+const NAME_POOL_SIZE = 120; // Increased for more visible players
 
 const _healthColor = new THREE.Color();
 const _c1 = new THREE.Color('#22c55e');
@@ -58,19 +58,26 @@ const LEVEL_COLORS: Record<number, string> = {
 };
 const getLevelColor = (level: number): string => LEVEL_COLORS[Math.min(level, 5)] ?? '#FFFFFF';
 const getLevelBadge = (level: number): string => {
-  if (level >= 5) return '★★★ ';
-  if (level >= 4) return '★★  ';
-  if (level >= 3) return '★    ';
+  if (level >= 5) return '[GODLY] ';
+  if (level >= 4) return '[ELITE] ';
+  if (level >= 3) return '[PRO] ';
   return '';
 };
 
 // Optimization: Sub-component for individual name labels to avoid full list updates
 const UnitNameLabel = React.memo(({ unit, isVisible, camera }: { unit: any, isVisible: boolean, camera: any }) => {
     const textRef = useRef<any>(null);
-    useFrame(() => {
+    useFrame(({ clock }) => {
         if (!textRef.current || !isVisible) return;
-        textRef.current.position.set(unit.position[0], (unit.isBoss ? 7.0 : 3.2) + (unit.isBoss ? 1.6 : 0.65), unit.position[2]);
+        const time = clock.elapsedTime;
+        const hover = Math.sin(time * 3 + unit.id.length) * 0.1;
+        textRef.current.position.set(unit.position[0], (unit.isBoss ? 7.2 : 3.4) + (unit.isBoss ? 1.8 : 0.7) + hover, unit.position[2]);
         textRef.current.quaternion.copy(camera.quaternion);
+        
+        if (unit.isBoss) {
+            const pulse = 1.0 + Math.sin(time * 5) * 0.1;
+            textRef.current.scale.set(pulse, pulse, 1);
+        }
     });
     const col = useMemo(() => getLevelColor(unit.level || 1), [unit.level]);
     const label = useMemo(() => getLevelBadge(unit.level || 1) + (unit.userName || 'Pasukan'), [unit.level, unit.userName]);
@@ -80,8 +87,9 @@ const UnitNameLabel = React.memo(({ unit, isVisible, camera }: { unit: any, isVi
             ref={textRef}
             visible={isVisible}
             color={col}
-            fontSize={unit.isBoss ? 0.85 : 0.38}
-            outlineWidth={0.05}
+            fontSize={unit.isBoss ? 0.95 : 0.45}
+            font="/fonts/Inter-Bold.ttf"
+            outlineWidth={0.07}
             outlineColor="#000000"
             anchorX="center"
             anchorY="middle"
@@ -322,8 +330,16 @@ export function BattleArmy({ unitRegistry, towerConfig, updateSimulation, settin
       if (!mesh) return;
       const unit = rawMap.get(unitId);
       if (unit && unit.hp > 0 && unit.dSq < HUD_DETAIL_DIST_SQ && !isPotato) {
-        mesh.position.set(unit.position![0], (unit.isBoss ? 7.0 : 3.2) + (unit.isBoss ? 1.6 : 0.65), unit.position![2]);
-        mesh.quaternion.copy(state.camera.quaternion);
+        const hover = Math.sin(time * 3 + unitId.length) * 0.1;
+        mesh.position.set(unit.position![0], (unit.isBoss ? 7.2 : 3.4) + (unit.isBoss ? 1.8 : 0.7) + hover, unit.position![2]);
+        mesh.quaternion.copy(_cachedCamQuat);
+        
+        if (unit.isBoss) {
+            const pulse = 1.1 + Math.sin(time * 6) * 0.1;
+            mesh.scale.set(pulse, pulse, 1);
+        } else {
+            mesh.scale.set(1, 1, 1);
+        }
         mesh.visible = true;
       } else { mesh.visible = false; }
     });
@@ -353,7 +369,8 @@ export function BattleArmy({ unitRegistry, towerConfig, updateSimulation, settin
             if (nameSlotContent.current[slot] !== label) { mesh.text = label; nameSlotContent.current[slot] = label; }
             const col = getLevelColor(u.level || 1);
             if (nameSlotColor.current[slot] !== col) { mesh.color = col; nameSlotColor.current[slot] = col; }
-            mesh.fontSize = u.isBoss ? 0.85 : 0.38;
+            mesh.fontSize = u.isBoss ? 0.95 : 0.45;
+            mesh.outlineWidth = 0.08;
             mesh.visible = true;
           }
         });
@@ -417,7 +434,21 @@ export function BattleArmy({ unitRegistry, towerConfig, updateSimulation, settin
       
       <group ref={nameGroupRef}>
         {Array.from({ length: NAME_POOL_SIZE }, (_, i) => (
-          <Text key={"name-" + i} ref={(el) => { nameTextRefs.current[i] = el; }} visible={false} fontSize={0.38} color="#ffffff" outlineWidth={0.05} outlineColor="#000000" anchorX="center" anchorY="middle" renderOrder={10} depthOffset={-2}>{''}</Text>
+          <Text 
+            key={"name-" + i} 
+            ref={(el) => { nameTextRefs.current[i] = el; }} 
+            visible={false} 
+            fontSize={0.45} 
+            color="#ffffff" 
+            outlineWidth={0.08} 
+            outlineColor="#000000" 
+            anchorX="center" 
+            anchorY="middle" 
+            renderOrder={10} 
+            depthOffset={-2}
+          >
+            {''}
+          </Text>
         ))}
       </group>
     </group>
