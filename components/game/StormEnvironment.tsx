@@ -180,7 +180,7 @@ const Forest = ({ potatoMode }: { potatoMode?: boolean }) => {
 
 
 // --- 2. GPU Accelerated Rain ---
-const RAIN_COUNT = 1500;
+const RAIN_COUNT = 500;
 const RainMaterial = new THREE.ShaderMaterial({
   uniforms: {
     time: { value: 0 },
@@ -266,8 +266,7 @@ const Lightning = () => {
   return <pointLight ref={lightRef} position={[0, 40, -10]} distance={200} decay={1.5} color="#cce6ff" intensity={0} castShadow={false} />;
 };
 
-// --- 4. Procedural Wind Swaying Grass ---
-const GRASS_COUNT = 5000;
+const GRASS_COUNT = 800;
 const GrassMaterial = new THREE.ShaderMaterial({
   uniforms: {
     time: { value: 0 },

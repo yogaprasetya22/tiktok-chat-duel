@@ -236,6 +236,7 @@ export interface SimulationSettings {
         unitCount: number;
         vfxCount: number;
         bucketCount: number;
+        bottleneck: string;
     };
 }
 

@@ -186,7 +186,8 @@ export let INITIAL_SETTINGS: SimulationSettings = {
         engineMs: 0,
         unitCount: 0,
         vfxCount: 0,
-        bucketCount: 0
+        bucketCount: 0,
+        bottleneck: "OPTIMAL"
     }
 };
 
@@ -200,7 +201,7 @@ export const ASSASSIN_INVUL_MS = 800;
 // --- LOD IMPOSTOR SYSTEM ---
 // Units beyond this distance² from camera are rendered as flat billboard impostors
 // instead of full 3D animated models (1-2 draw calls vs hundreds)
-export const LOD_IMPOSTOR_DIST_SQ = 50 * 50;   // 2500 — switch to billboard at 50 units distance
+export const LOD_IMPOSTOR_DIST_SQ = 35 * 35;   // 1225 — switch to billboard earlier for performance
 export const LOD_IMPOSTOR_MAX = 600;            // Max billboard instances (player+enemy combined)
 export const LOD_IMPOSTOR_SCALE = 1.8;          // Visual scale of impostor billboards
 export const LOD_IMPOSTOR_BOSS_SCALE = 5.0;     // Boss impostor scale

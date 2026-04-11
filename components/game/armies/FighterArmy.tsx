@@ -20,7 +20,7 @@ interface FighterArmyProps {
   renderedIdsRef: React.RefObject<Set<string>>;
 }
 
-const POOL_SIZE = 40;
+const POOL_SIZE = 14;
 
 export function FighterArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, vehicles, unitIndex, renderedIdsRef }: FighterArmyProps) {
   const poolMapRef = useRef<Map<string, number>>(new Map());
@@ -53,14 +53,21 @@ export function FighterArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, ve
           selectedAsset.animations.forEach((clip: THREE.AnimationClip) => { actions[clip.name] = mixer.clipAction(clip); });
         }
 
+        const colorable: THREE.Mesh[] = [];
         clone.traverse((child: any) => {
           if (child.isMesh) {
             child.castShadow = false;
             child.receiveShadow = false;
             child.frustumCulled = true;
+            const name = child.name.toLowerCase();
+            if (name.includes('cape') || name.includes('cloth') || name.includes('trim') || name.includes('helmet') || name.includes('shoulder')) {
+                // PERF: Only clone material for colorable meshes — shared materials for everything else
+                if (child.material) child.material = child.material.clone();
+                colorable.push(child);
+            }
           }
         });
-        items.push({ group: clone, mixer, actions, currentAnim: '', lastUpdate: 0, rotation: 0, initialized: false });
+        items.push({ group: clone, colorable, mixer, actions, currentAnim: '', lastUpdate: 0, rotation: 0, initialized: false });
     }
     return items;
   }, [f1, f2, f3]);
@@ -68,15 +75,23 @@ export function FighterArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, ve
   useFrame((state, delta) => {
     frameCountRef.current++;
     const rawMap = unitsMap.current;
-    if (!rawMap) return;
+    if (!rawMap || characterPool.length === 0) return;
 
     const time = state.clock.elapsedTime;
     const camPos = state.camera.position;
     const _activeSet = activeSetRef.current;
     _activeSet.clear();
 
-    const mode = useStore.getState().gameMode;
+    const storeState = useStore.getState();
+    const mode = storeState.gameMode;
     const settings = settingsRef.current;
+
+    // PERF: Cache weather speed multiplier ONCE per frame, not per-unit
+    const weather = storeState.weather;
+    const wConfig = WEATHER_CONFIG[weather];
+    const wMults = (wConfig as any).multipliers || {};
+    const fighterMults = wMults['fighter'] || {};
+    const cachedWeatherSpeedMult = (fighterMults.move_speed_mult || 1.0) * (wMults.globalSpeedMultiplier || 1.0);
 
     // Filter units of this class
     const myUnits: any[] = [];
@@ -148,41 +163,36 @@ export function FighterArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, ve
         if (vehicle) {
             let isChasing = false;
 
-            // Weather Speed Multiplier
-            const weather = useStore.getState().weather;
-            const wConfig = WEATHER_CONFIG[weather];
-            const wMults = (wConfig as any).multipliers || {};
-            const classMults = wMults[u.unitClass] || {};
-            const weatherSpeedMult = (classMults.move_speed_mult || 1.0) * (wMults.globalSpeedMultiplier || 1.0);
+            // PERF: Use frame-cached weather multiplier
+            const weatherSpeedMult = cachedWeatherSpeedMult;
 
             // Chase Target with Encirclement Offset
             if (u.targetId) {
                 const target = rawMap.get(u.targetId);
                 if (target) {
-                    vehicle.steering.behaviors.forEach((b: any) => {
-                        if (b.constructor.name === 'SeekBehavior') {
-                            // ENCIRCLEMENT: Add offset based on unit ID to prevent merging into a single point
-                            const totalVal = id.split('-').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0);
-                            const angle = (totalVal % 360) * (Math.PI / 180);
-                            const orbitRadius = uData.encirclementRadius || 1.25;
-                            const offsetX = Math.cos(angle) * orbitRadius;
-                            const offsetZ = Math.sin(angle) * orbitRadius;
-                            b.target.set(target.position[0] + offsetX, 0, target.position[2] + offsetZ);
-                            isChasing = true;
-                        }
-                    });
+                    // PERF: Find SeekBehavior directly instead of forEach
+                    const seekB = vehicle.steering.behaviors.find((b: any) => b.target !== undefined);
+                    if (seekB) {
+                        const totalVal = id.split('-').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0);
+                        const angle = (totalVal % 360) * (Math.PI / 180);
+                        const orbitRadius = uData.encirclementRadius || 1.25;
+                        const offsetX = Math.cos(angle) * orbitRadius;
+                        const offsetZ = Math.sin(angle) * orbitRadius;
+                        seekB.target.set(target.position[0] + offsetX, 0, target.position[2] + offsetZ);
+                        isChasing = true;
+                    }
                 }
             }
 
             if (!isChasing) {
-                vehicle.steering.behaviors.forEach((b: any) => {
-                    if (b.constructor.name === 'SeekBehavior') {
-                        const baseZ = u.type === 'player' ? ENEMY_BASE_Z : PLAYER_BASE_Z;
-                        const amp = uData.laneSwaggerAmp || 0.5;
-                        const swagger = Math.sin((id.length * 8) + (uData.jitterOffset || 0)) * amp;
-                        b.target.set((uData.laneOffset || 0) + swagger, 0, baseZ);
-                    }
-                });
+                // PERF: Find SeekBehavior directly
+                const seekB = vehicle.steering.behaviors.find((b: any) => b.target !== undefined);
+                if (seekB) {
+                    const baseZ = u.type === 'player' ? ENEMY_BASE_Z : PLAYER_BASE_Z;
+                    const amp = uData.laneSwaggerAmp || 0.5;
+                    const swagger = Math.sin((id.length * 8) + (uData.jitterOffset || 0)) * amp;
+                    seekB.target.set((uData.laneOffset || 0) + swagger, 0, baseZ);
+                }
             }
             const baseSpeed = (u.speed || 3) * (settings.globalSpeedMultiplier || 1);
             vehicle.maxSpeed = (uData.status === 'attacking' || u.isDying) ? 0 : baseSpeed * weatherSpeedMult;
@@ -222,15 +232,8 @@ export function FighterArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, ve
           poolMapRef.current.set(id, pIdx);
           const pItem = characterPool[pIdx];
           const teamColor = u.type === 'player' ? towerConfig.player.color : towerConfig.enemy.color;
-          pItem.group.traverse((child: any) => {
-            if (child.isMesh) {
-              const name = child.name.toLowerCase();
-              if (name.includes('cape') || name.includes('cloth') || name.includes('trim') || name.includes('helmet') || name.includes('shoulder')) {
-                if (!child._originalMaterial) child._originalMaterial = child.material;
-                child.material = child.material.clone();
-                child.material.color.set(teamColor);
-              }
-            }
+          pItem.colorable.forEach((mesh: THREE.Mesh) => {
+              (mesh.material as THREE.MeshStandardMaterial).color.set(teamColor);
           });
         } else return;
       }

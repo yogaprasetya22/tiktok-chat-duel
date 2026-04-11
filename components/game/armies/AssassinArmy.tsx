@@ -20,7 +20,7 @@ interface AssassinArmyProps {
   renderedIdsRef: React.RefObject<Set<string>>;
 }
 
-const POOL_SIZE = 30;
+const POOL_SIZE = 8;
 
 export function AssassinArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, vehicles, unitIndex, renderedIdsRef }: AssassinArmyProps) {
   const poolMapRef = useRef<Map<string, number>>(new Map());
@@ -50,14 +50,22 @@ export function AssassinArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, v
         if (selected.animations) {
           selected.animations.forEach((clip: THREE.AnimationClip) => { actions[clip.name] = mixer.clipAction(clip); });
         }
+        const colorable: THREE.Mesh[] = [];
         clone.traverse((child: any) => {
           if (child.isMesh) {
             child.castShadow = false;
             child.receiveShadow = false;
             child.frustumCulled = true;
+            if (child.material) {
+                child.material = child.material.clone();
+            }
+            const name = child.name.toLowerCase();
+            if (name.includes('cloth') || name.includes('mask') || name.includes('hood') || name.includes('wrap')) {
+                colorable.push(child);
+            }
           }
         });
-        items.push({ group: clone, mixer, actions, currentAnim: '', lastUpdate: 0, rotation: 0, initialized: false });
+        items.push({ group: clone, colorable, mixer, actions, currentAnim: '', lastUpdate: 0, rotation: 0, initialized: false });
     }
     return items;
   }, [n1, n2]);
@@ -65,14 +73,15 @@ export function AssassinArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, v
   useFrame((state, delta) => {
     frameCountRef.current++;
     const rawMap = unitsMap.current;
-    if (!rawMap) return;
+    if (!rawMap || characterPool.length === 0) return;
 
     const time = state.clock.elapsedTime;
     const camPos = state.camera.position;
     const _activeSet = activeSetRef.current;
     _activeSet.clear();
 
-    const mode = useStore.getState().gameMode;
+    const storeState = useStore.getState();
+    const mode = storeState.gameMode;
     const settings = settingsRef.current;
 
     // Filter units of this class
@@ -170,28 +179,27 @@ export function AssassinArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, v
             if (u.targetId) {
                 const target = rawMap.get(u.targetId);
                 if (target) {
-                    vehicle.steering.behaviors.forEach((b: any) => {
-                        if (b.constructor.name === 'SeekBehavior') {
-                            const totalVal = id.split('-').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0);
-                            const angle = (totalVal % 360) * (Math.PI / 180);
-                            const orbitRadius = uData.encirclementRadius || 3.0;
-                            const offsetX = Math.cos(angle) * orbitRadius;
-                            const offsetZ = Math.sin(angle) * orbitRadius;
-                            b.target.set(target.position[0] + offsetX, 0, target.position[2] + offsetZ);
-                            isChasing = true;
-                        }
-                    });
+                    // PERF: Find SeekBehavior directly
+                    const seekB = vehicle.steering.behaviors.find((b: any) => b.target !== undefined);
+                    if (seekB) {
+                        const totalVal = id.split('-').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0);
+                        const angle = (totalVal % 360) * (Math.PI / 180);
+                        const orbitRadius = uData.encirclementRadius || 3.0;
+                        const offsetX = Math.cos(angle) * orbitRadius;
+                        const offsetZ = Math.sin(angle) * orbitRadius;
+                        seekB.target.set(target.position[0] + offsetX, 0, target.position[2] + offsetZ);
+                        isChasing = true;
+                    }
                 }
             }
             if (!isChasing) {
-                vehicle.steering.behaviors.forEach((b: any) => {
-                    if (b.constructor.name === 'SeekBehavior') {
-                        const baseZ = u.type === 'player' ? ENEMY_BASE_Z : PLAYER_BASE_Z;
-                        const amp = uData.laneSwaggerAmp || 0.8;
-                        const swagger = Math.sin((id.length * 10) + (uData.jitterOffset || 0)) * amp;
-                        b.target.set((uData.laneOffset || 0) + swagger, 0, baseZ);
-                    }
-                });
+                const seekB = vehicle.steering.behaviors.find((b: any) => b.target !== undefined);
+                if (seekB) {
+                    const baseZ = u.type === 'player' ? ENEMY_BASE_Z : PLAYER_BASE_Z;
+                    const amp = uData.laneSwaggerAmp || 0.8;
+                    const swagger = Math.sin((id.length * 10) + (uData.jitterOffset || 0)) * amp;
+                    seekB.target.set((uData.laneOffset || 0) + swagger, 0, baseZ);
+                }
             }
             vehicle.maxSpeed = (uData.status === 'attacking' || u.isDying) ? 0 : (u.speed || 4) * (settings.globalSpeedMultiplier || 1);
             
@@ -230,15 +238,8 @@ export function AssassinArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, v
           poolMapRef.current.set(id, pIdx);
           const pItem = characterPool[pIdx];
           const teamColor = u.type === 'player' ? towerConfig.player.color : towerConfig.enemy.color;
-          pItem.group.traverse((child: any) => {
-            if (child.isMesh) {
-              const name = child.name.toLowerCase();
-              if (name.includes('cloth') || name.includes('mask') || name.includes('hood') || name.includes('wrap')) {
-                if (!child._originalMaterial) child._originalMaterial = child.material;
-                child.material = child.material.clone();
-                child.material.color.set(teamColor);
-              }
-            }
+          pItem.colorable.forEach((mesh: THREE.Mesh) => {
+              (mesh.material as THREE.MeshStandardMaterial).color.set(teamColor);
           });
         } else return;
       }

@@ -41,7 +41,7 @@ const MemoizedKillFeed = React.memo(({ killEvents, towerConfig }: { killEvents: 
   return (
     <div className="absolute top-28 left-6 w-72 flex flex-col gap-1.5 items-start pointer-events-none z-[1100]">
       {killEvents.slice(-3).map((event, i) => event && event.id && (
-        <div key={event.id} className="animate-in slide-in-from-left-4 fade-in duration-500 bg-zinc-950/80 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/10 flex items-center gap-3 shadow-xl">
+        <div key={event.id} className="animate-in slide-in-from-left-4 fade-in duration-500 bg-zinc-950/95 px-3 py-1.5 rounded-xl border border-white/10 flex items-center gap-3 shadow-xl">
           <span className="text-white font-black italic text-[10px] tracking-tighter" style={{ color: towerConfig.player.color }}>{event.killer}</span>
           <Sword className="w-3 h-3 text-rose-500" />
           <span className="text-white/60 font-bold text-[9px] tracking-tight">{event.victim}</span>
@@ -58,7 +58,7 @@ const MemoizedLeaderboard = React.memo(({ stats, team, color, name }: { stats: a
   
   return (
     <div className={`absolute top-32 ${isPlayer ? 'left-8' : 'right-8'} w-64 pointer-events-auto z-[1100]`}>
-      <div className={`bg-zinc-950/40 backdrop-blur-3xl rounded-[32px] border border-white/10 p-6 shadow-2xl space-y-6 animate-in ${isPlayer ? 'slide-in-from-left-12' : 'slide-in-from-right-12'} duration-1000`}>
+      <div className={`bg-black/90 rounded-[32px] border border-white/10 p-6 shadow-2xl space-y-6 animate-in ${isPlayer ? 'slide-in-from-left-12' : 'slide-in-from-right-12'} duration-1000`}>
         <div className="flex items-center justify-between border-b border-white/5 pb-4">
           {isPlayer ? (
             <>
@@ -142,6 +142,85 @@ const MemoizedLeaderboard = React.memo(({ stats, team, color, name }: { stats: a
   );
 });
 
+const TowerHPBars = React.memo(({ towerConfig }: { towerConfig: TowerConfig }) => {
+  const playerBaseHp = useStore(s => s.playerBaseHp);
+  const enemyBaseHp = useStore(s => s.enemyBaseHp);
+  const armyCounts = useStore(s => s.armyCounts);
+
+  const pWidth = (playerBaseHp / (towerConfig?.baseHp || 1000)) * 100;
+  const eWidth = (enemyBaseHp / (towerConfig?.baseHp || 1000)) * 100;
+
+  return (
+    <div className="grid grid-cols-2 gap-8 px-4 w-full">
+      {/* Team A HP */}
+      <div className="relative group">
+        <div className="flex justify-between items-end mb-2">
+          <div className="flex flex-col">
+            <div className="flex items-center gap-2 mb-0.5">
+               <Shield className="w-3 h-3 text-indigo-400" />
+               <span className="text-[9px] uppercase tracking-[0.2em] text-white/50 font-black">{towerConfig?.player.name} BASE</span>
+            </div>
+            <span className="text-3xl font-black italic text-white tracking-tighter tabular-nums drop-shadow-2xl">
+              {playerBaseHp.toLocaleString()} <span className="text-[10px] text-indigo-400 not-italic uppercase tracking-tighter opacity-80">HP</span>
+            </span>
+          </div>
+          <div className="flex flex-col items-end">
+            <div className="flex items-center gap-1.5 px-2 py-0.5 bg-indigo-500/10 rounded-md border border-indigo-500/20 mb-1">
+               <Users className="w-2.5 h-2.5 text-indigo-400" />
+               <span className="text-[9px] font-black text-indigo-300">{armyCounts.player} UNITS</span>
+            </div>
+          </div>
+        </div>
+        <div className="h-4 bg-zinc-950/90 rounded-full border border-white/5 p-1 overflow-hidden relative shadow-inner">
+          <div 
+            className="h-full rounded-full transition-all duration-700 ease-out relative"
+            style={{ 
+              width: `${pWidth}%`, 
+              backgroundColor: towerConfig?.player.color,
+              boxShadow: `0 0 20px ${towerConfig?.player.color}44`
+            }}
+          >
+            <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent opacity-50" />
+          </div>
+        </div>
+      </div>
+
+      {/* Team B HP */}
+      <div className="relative group">
+        <div className="flex justify-between items-end mb-2">
+           <div className="flex flex-col items-start px-2 py-0.5 bg-rose-500/10 rounded-md border border-rose-500/20 mb-1">
+              <div className="flex items-center gap-1.5">
+                 <Users className="w-2.5 h-2.5 text-rose-400" />
+                 <span className="text-[9px] font-black text-rose-300">{armyCounts.enemy} UNITS</span>
+              </div>
+           </div>
+          <div className="flex flex-col items-end">
+            <div className="flex items-center gap-2 mb-0.5">
+               <span className="text-[9px] uppercase tracking-[0.2em] text-white/50 font-black">{towerConfig?.enemy.name} BASE</span>
+               <Shield className="w-3 h-3 text-rose-400" />
+            </div>
+            <span className="text-3xl font-black italic text-white tracking-tighter tabular-nums drop-shadow-2xl">
+               <span className="text-[10px] text-rose-400 not-italic uppercase tracking-tighter opacity-80">HP</span> {enemyBaseHp.toLocaleString()}
+            </span>
+          </div>
+        </div>
+        <div className="h-4 bg-zinc-950/90 rounded-full border border-white/5 p-1 overflow-hidden relative shadow-inner">
+          <div 
+            className="h-full rounded-full transition-all duration-700 ease-out relative ml-auto"
+            style={{ 
+              width: `${eWidth}%`, 
+              backgroundColor: towerConfig?.enemy.color,
+              boxShadow: `0 0 20px ${towerConfig?.enemy.color}44`
+            }}
+          >
+             <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent opacity-50" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+});
+
 export const UIOverlay = ({
   towerConfig,
   setTowerConfig,
@@ -165,10 +244,7 @@ export const UIOverlay = ({
   updateSettingsRef,
   standalone,
 }: UIOverlayProps) => {
-  const playerBaseHp = useStore(s => s.playerBaseHp);
-  const enemyBaseHp = useStore(s => s.enemyBaseHp);
   const gameState = useStore(s => s.gameState);
-  const armyCounts = useStore(s => s.armyCounts);
   const killEvents = useStore(s => s.killEvents);
   const liveStats = useStore(s => s.liveStats);
   const isSettingsOpen = useStore(s => s.isSettingsOpen);
@@ -214,42 +290,42 @@ export const UIOverlay = ({
         <div className="absolute top-6 right-6 flex gap-2 pointer-events-auto z-[1000]">
           <button 
             onClick={onToggleTesting}
-            className={`p-3 backdrop-blur-md rounded-xl border border-white/10 transition-all ${testingMode ? 'bg-amber-500 text-white shadow-[0_0_15px_rgba(245,158,11,0.5)]' : 'bg-zinc-900/80 text-white/50 hover:text-white'}`}
+            className={`p-3 rounded-xl border border-white/10 transition-all ${testingMode ? 'bg-amber-500 text-white shadow-[0_0_15px_rgba(245,158,11,0.5)]' : 'bg-zinc-900/80 text-white/50 hover:text-white'}`}
             title="Testing Mode (Auto-Spawn)"
           >
             <Zap className={`w-5 h-5 ${testingMode ? 'animate-pulse' : ''}`} />
           </button>
           <button 
             onClick={onToggleChat}
-            className={`p-3 backdrop-blur-md rounded-xl border border-white/10 transition-all ${showChat ? 'bg-pink-500 text-white shadow-[0_0_15px_rgba(236,72,153,0.5)]' : 'bg-zinc-900/80 text-white/50 hover:text-white'}`}
+            className={`p-3 rounded-xl border border-white/10 transition-all ${showChat ? 'bg-pink-500 text-white shadow-[0_0_15px_rgba(236,72,153,0.5)]' : 'bg-zinc-900/80 text-white/50 hover:text-white'}`}
             title={showChat ? "Hide Comments" : "Show Comments"}
           >
             <MessageSquare className="w-5 h-5" />
           </button>
           <button 
             onClick={onToggleCinematic}
-            className={`p-3 backdrop-blur-md rounded-xl border border-white/10 transition-all ${isCinematic ? 'bg-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.5)]' : 'bg-zinc-900/80 text-white/50 hover:text-white'}`}
+            className={`p-3 rounded-xl border border-white/10 transition-all ${isCinematic ? 'bg-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.5)]' : 'bg-zinc-900/80 text-white/50 hover:text-white'}`}
             title="Film Mode"
           >
             <Camera className="w-5 h-5" />
           </button>
           <button 
             onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-            className={`p-3 backdrop-blur-md rounded-xl border border-white/10 transition-all shadow-xl ${isSettingsOpen ? 'bg-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.5)]' : 'bg-zinc-900/80 text-white/50 hover:text-white'}`}
+            className={`p-3 rounded-xl border border-white/10 transition-all shadow-xl ${isSettingsOpen ? 'bg-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.5)]' : 'bg-zinc-900/80 text-white/50 hover:text-white'}`}
             title="Update Configuration"
           >
             <Settings2 className="w-5 h-5" />
           </button>
           <Link
             href="/training"
-            className="p-3 bg-rose-500/10 hover:bg-rose-500/20 backdrop-blur-md rounded-xl border border-rose-500/20 text-rose-500 transition-all shadow-xl group"
+            className="p-3 bg-rose-500/10 hover:bg-rose-500/20 rounded-xl border border-rose-500/20 text-rose-500 transition-all shadow-xl group"
             title="Dedicated Training Arena"
           >
             <Target className="w-5 h-5 group-hover:scale-110 transition-transform" />
           </Link>
           <button 
             onClick={toggleFullscreen}
-            className={`p-3 backdrop-blur-md rounded-xl border border-white/10 transition-all ${isFullscreen ? 'bg-zinc-100 text-zinc-950' : 'bg-zinc-950/80 text-white/50 hover:text-white'}`}
+            className={`p-3 rounded-xl border border-white/10 transition-all ${isFullscreen ? 'bg-zinc-100 text-zinc-950' : 'bg-zinc-950/80 text-white/50 hover:text-white'}`}
             title="Fullscreen Canvas"
           >
             {isFullscreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
@@ -260,7 +336,7 @@ export const UIOverlay = ({
 
       {/* Setup Modal Wizard - SUPREME Z-INDEX */}
       {gameState === "SETUP" && (
-        <div className={`${standalone ? 'relative w-full p-0 flex flex-col items-center justify-center' : 'fixed inset-0 z-[2000] flex items-center justify-center p-4 md:p-12 bg-zinc-950/90 backdrop-blur-xl animate-in fade-in duration-500'} pointer-events-auto`}>
+        <div className={`${standalone ? 'relative w-full p-0 flex flex-col items-center justify-center' : 'fixed inset-0 z-[2000] flex items-center justify-center p-4 md:p-12 bg-zinc-950/98 animate-in fade-in duration-500'} pointer-events-auto`}>
           <div className={`w-full max-w-2xl bg-zinc-900 border border-white/10 rounded-[40px] p-10 md:p-16 shadow-[0_0_100px_-20px_rgba(79,70,229,0.3)] space-y-10 relative overflow-hidden ${standalone ? 'm-0' : ''}`}>
             {/* Background Glow */}
             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-96 h-96 bg-indigo-600/10 blur-[120px] rounded-full -z-10" />
@@ -571,112 +647,17 @@ export const UIOverlay = ({
         <div className="mt-auto pointer-events-auto">
           <div className="flex-1 flex flex-col gap-4">
             {/* Modern Tower HP Bars */}
-            <div className="grid grid-cols-2 gap-8 px-4">
-              {/* Team A HP */}
-              <div className="relative group">
-                <div className="flex justify-between items-end mb-2">
-                  <div className="flex flex-col">
-                    <div className="flex items-center gap-2 mb-0.5">
-                       <Shield className="w-3 h-3 text-indigo-400" />
-                       <span className="text-[9px] uppercase tracking-[0.2em] text-white/50 font-black">{towerConfig.player.name} BASE</span>
-                    </div>
-                    <span className="text-3xl font-black italic text-white tracking-tighter tabular-nums drop-shadow-2xl">
-                      {playerBaseHp.toLocaleString()} <span className="text-[10px] text-indigo-400 not-italic uppercase tracking-tighter opacity-80">HP</span>
-                    </span>
-                  </div>
-                  <div className="flex flex-col items-end">
-                    <div className="flex items-center gap-1.5 px-2 py-0.5 bg-indigo-500/10 rounded-md border border-indigo-500/20 mb-1">
-                       <Users className="w-2.5 h-2.5 text-indigo-400" />
-                       <span className="text-[9px] font-black text-indigo-300">{armyCounts.player} UNITS</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="h-4 bg-zinc-950/60 backdrop-blur-md rounded-full border border-white/5 p-1 overflow-hidden relative shadow-inner">
-                  <div 
-                    className="h-full rounded-full transition-all duration-700 ease-out relative"
-                    style={{ 
-                      width: `${(playerBaseHp / towerConfig.baseHp) * 100}%`, 
-                      backgroundColor: towerConfig.player.color,
-                      boxShadow: `0 0 20px ${towerConfig.player.color}44`
-                    }}
-                  >
-                    {/* Glossy Overlay */}
-                    <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent opacity-50" />
-                  </div>
-                </div>
-              </div>
-
-              {/* Team B HP */}
-              <div className="relative group">
-                <div className="flex justify-between items-end mb-2">
-                   <div className="flex flex-col items-start px-2 py-0.5 bg-rose-500/10 rounded-md border border-rose-500/20 mb-1">
-                      <div className="flex items-center gap-1.5">
-                         <Users className="w-2.5 h-2.5 text-rose-400" />
-                         <span className="text-[9px] font-black text-rose-300">{armyCounts.enemy} UNITS</span>
-                      </div>
-                   </div>
-                  <div className="flex flex-col items-end">
-                    <div className="flex items-center gap-2 mb-0.5">
-                       <span className="text-[9px] uppercase tracking-[0.2em] text-white/50 font-black">{towerConfig.enemy.name} BASE</span>
-                       <Shield className="w-3 h-3 text-rose-400" />
-                    </div>
-                    <span className="text-3xl font-black italic text-white tracking-tighter tabular-nums drop-shadow-2xl">
-                       <span className="text-[10px] text-rose-400 not-italic uppercase tracking-tighter opacity-80">HP</span> {enemyBaseHp.toLocaleString()}
-                    </span>
-                  </div>
-                </div>
-                <div className="h-4 bg-zinc-950/60 backdrop-blur-md rounded-full border border-white/5 p-1 overflow-hidden relative shadow-inner">
-                  <div 
-                    className="h-full rounded-full transition-all duration-700 ease-out relative ml-auto"
-                    style={{ 
-                      width: `${(enemyBaseHp / towerConfig.baseHp) * 100}%`, 
-                      backgroundColor: towerConfig.enemy.color,
-                      boxShadow: `0 0 20px ${towerConfig.enemy.color}44`
-                    }}
-                  >
-                     <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent opacity-50" />
-                  </div>
-                </div>
-              </div>
-            </div>
+            <TowerHPBars towerConfig={towerConfig} />
 
             {/* --- TOP-LEVEL HUD (Outside Canvas Layer) --- */}
             {gameState === 'PLAYING' && (
               <div className="absolute inset-x-0 top-0 h-full pointer-events-none p-8 flex flex-col items-center">
                 
-                {/* 1. TOP CENTER: Global Stats Hub */}
+                {/* 1. TOP CENTER: Centered HUD Region */}
                 <div className="absolute top-6 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 pointer-events-auto z-[1200]">
-                  <div className="bg-zinc-950/60 backdrop-blur-3xl px-10 py-4 rounded-[32px] border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.5)] flex items-center divide-x divide-white/10 gap-10">
-                    <div className="flex flex-col items-center group">
-                        <span className="text-[10px] font-black uppercase tracking-[0.25em] mb-1.5 opacity-80 group-hover:opacity-100 transition-opacity" style={{ color: towerConfig.player.color }}>
-                           {towerConfig.player.name} KILLS
-                        </span>
-                        <span className="text-4xl font-black italic text-white tracking-tighter leading-none drop-shadow-[0_0_8px_rgba(255,255,255,0.3)]">
-                          {Object.values(liveStats.playerKills || {}).reduce((a:any, b:any) => a + b, 0).toLocaleString()}
-                        </span>
-                     </div>
-                    <div className="px-10 flex flex-col items-center">
-                       <div className="relative">
-                          <div className="absolute inset-0 blur-xl opacity-20 animate-pulse" style={{ backgroundColor: towerConfig.enemy.color }} />
-                          <div className="p-3 rounded-2xl relative border" style={{ backgroundColor: `${towerConfig.enemy.color}22`, borderColor: `${towerConfig.enemy.color}44` }}>
-                             <Sword className="w-5 h-5" style={{ color: towerConfig.enemy.color }} />
-                          </div>
-                       </div>
-                       <span className="text-[9px] font-black text-white/40 uppercase tracking-[0.4em] mt-3">VS</span>
-                    </div>
-                     <div className="flex flex-col items-center group">
-                        <span className="text-[10px] font-black uppercase tracking-[0.25em] mb-1.5 opacity-80 group-hover:opacity-100 transition-opacity" style={{ color: towerConfig.enemy.color }}>
-                           {towerConfig.enemy.name} KILLS
-                        </span>
-                        <span className="text-4xl font-black italic text-white tracking-tighter leading-none drop-shadow-[0_0_8px_rgba(255,255,255,0.3)]">
-                          {Object.values(liveStats.enemyKills || {}).reduce((a:any, b:any) => a + b, 0).toLocaleString()}
-                        </span>
-                     </div>
-                  </div>
-
-                  {/* Weather Indicator (Below Kills Hub) */}
+                  {/* Weather Indicator (Kill Counter hidden for now) */}
                   <div className="mt-3 flex flex-col items-center animate-in slide-in-from-top-4 duration-1000">
-                    <div className="bg-zinc-950/40 backdrop-blur-xl px-4 py-1.5 rounded-2xl border border-white/5 flex items-center gap-3">
+                    <div className="bg-zinc-950/90 px-4 py-1.5 rounded-2xl border border-white/5 flex items-center gap-3">
                        {weather === 'CLEAR' && <Sun className="w-4 h-4 text-yellow-400" />}
                        {weather === 'RAIN' && <CloudRain className="w-4 h-4 text-blue-400" />}
                        {weather === 'STORM' && <Wind className="w-4 h-4 text-slate-400" />}

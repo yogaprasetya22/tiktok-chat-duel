@@ -2,12 +2,12 @@
 
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import {
-  OrbitControls,
+  MapControls,
   Sky,
   Environment as DreiEnvironment,
   ContactShadows,
   Html,
-  Stats,
+  StatsGl,
   PerformanceMonitor,
   AdaptiveEvents,
   AdaptiveDpr,
@@ -16,7 +16,10 @@ import {
   Billboard,
   Text,
 } from "@react-three/drei";
-import { useControls, Leva } from "leva";
+import { useControls, Leva, folder } from "leva";
+import dynamic from 'next/dynamic';
+
+const Perf = dynamic(() => import("r3f-perf").then((mod) => mod.Perf), { ssr: false });
 
 import { Base } from "./Base";
 import { Chessboard } from "./Chessboard";
@@ -24,7 +27,7 @@ import { VFXProvider, useVFX } from "./VFXManager";
 import { BattleArmy } from "./BattleArmy";
 import { StormEnvironment } from "./StormEnvironment";
 import { DamageHUDBatcher } from "./DamageHUDBatcher";
-import { ActiveUnit, TowerConfig, DamageText, MapObstacle } from "../../hooks/useBattleSystem";
+import { ActiveUnit, TowerConfig, MapObstacle } from "../../hooks/useBattleSystem";
 import { useStore } from "../../hooks/useStore";
 import React, { useState, useEffect, useRef } from "react";
 import { Sword, Trophy, Zap, Skull, Maximize2, Activity, RefreshCw } from "lucide-react";
@@ -129,81 +132,92 @@ export const GameCanvas = React.memo(({
 
   // --- High-Performance Simulation Controls (Leva) ---
   useControls("Military Tuning", {
-    hpMult: { 
+    hpMult: {
       value: settingsRef.current.globalHpMultiplier, min: 0.1, max: 5, step: 0.1, label: "HP Multiplier",
       onChange: (v) => { settingsRef.current.globalHpMultiplier = v; }
     },
-    dmgMult: { 
+    dmgMult: {
       value: settingsRef.current.globalDamageMultiplier, min: 0.1, max: 5, step: 0.1, label: "DMG Multiplier",
       onChange: (v) => { settingsRef.current.globalDamageMultiplier = v; }
     },
-    speedMult: { 
+    speedMult: {
       value: settingsRef.current.globalSpeedMultiplier, min: 0.1, max: 3, step: 0.1, label: "Speed Multiplier",
       onChange: (v) => { settingsRef.current.globalSpeedMultiplier = v; }
     },
-    cooldown: { 
+    cooldown: {
       value: settingsRef.current.globalAttackCooldown, min: 100, max: 2000, step: 50, label: "Atk Cooldown (ms)",
       onChange: (v) => { settingsRef.current.globalAttackCooldown = v; }
     },
-    crit: { 
+    crit: {
       value: settingsRef.current.critChance, min: 0, max: 1, step: 0.05, label: "Crit Chance",
       onChange: (v) => { settingsRef.current.critChance = v; }
     },
     maxCap: {
       value: towerConfig.maxUnits, min: 10, max: 300, step: 5, label: "Max Units",
-      onChange: (v) => { if (setTowerConfig) setTowerConfig(prev => ({...prev, maxUnits: v})); }
+      onChange: (v) => { if (setTowerConfig) setTowerConfig(prev => ({ ...prev, maxUnits: v })); }
     },
     baseHp: {
       value: towerConfig.baseHp, min: 500, max: 20000, step: 100, label: "Tower HP",
-      onChange: (v) => { if (setTowerConfig) setTowerConfig(prev => ({...prev, baseHp: v})); }
+      onChange: (v) => { if (setTowerConfig) setTowerConfig(prev => ({ ...prev, baseHp: v })); }
     },
     baseDist: {
       value: towerConfig.baseDistance || 24, min: 10, max: 80, step: 2, label: "Jarak Base",
-      onChange: (v) => { if (setTowerConfig) setTowerConfig(prev => ({...prev, baseDistance: v})); }
+      onChange: (v) => { if (setTowerConfig) setTowerConfig(prev => ({ ...prev, baseDistance: v })); }
     }
   }, { collapsed: false });
 
   useControls("World Tuning", {
-    timeScale: { 
+    timeScale: {
       value: settingsRef.current.timeScale, min: 0.1, max: 3.0, step: 0.1, label: "Time Scale",
       onChange: (v) => { settingsRef.current.timeScale = v; }
     },
-    unitScale: { 
+    unitScale: {
       value: settingsRef.current.unitScale, min: 0.2, max: 2.0, step: 0.1, label: "Unit Visual Scale",
       onChange: (v) => { settingsRef.current.unitScale = v; }
     },
     potato: {
-        value: !!settingsRef.current.potatoMode, label: "Potato Mode (Extreme FPS)",
-        onChange: (v) => { settingsRef.current.potatoMode = v; }
+      value: !!settingsRef.current.potatoMode, label: "Potato Mode (Extreme FPS)",
+      onChange: (v) => { settingsRef.current.potatoMode = v; }
     }
   }, { collapsed: true });
 
-  const [, setDiag] = useControls("Diagnostics", () => ({
+  const [{ perfPosition, minimal, deepAnalyze, showPerf }, setDiag] = useControls("Diagnostics", () => ({
     engineTime: { value: 0, label: "Engine Tick (ms)", editable: false },
     units: { value: 0, label: "Active Units", editable: false },
     vfx: { value: 0, label: "Active Particles", editable: false },
+    triangles: { value: 0, label: "Estimated Triangles", editable: false },
+    suspect: { value: "OPTIMAL", label: "Lag Suspect", editable: false },
+    "Performance Tool": folder({
+      showPerf: { value: true, label: "Show R3F-Perf" },
+      perfPosition: {
+        value: "top-right",
+        options: ["top-right", "top-left", "bottom-right", "bottom-left"],
+        label: "Monitor Position"
+      },
+      minimal: { value: false, label: "Minimal Stats" },
+      deepAnalyze: { value: false, label: "Deep Memory Profile" }
+    })
   }), { collapsed: true });
 
   // Fix: Move useFrame inside a child component that sits inside <Canvas>
   const DiagnosticsBridge = () => {
     useFrame(() => {
-        if (settingsRef.current.telemetry) {
-            const { engineMs, unitCount, vfxCount } = settingsRef.current.telemetry;
-            setDiag({ engineTime: engineMs, units: unitCount, vfx: vfxCount });
-        }
+      if (settingsRef.current.telemetry) {
+        const { engineMs, unitCount, vfxCount, bottleneck } = settingsRef.current.telemetry;
+        setDiag({ engineTime: engineMs, units: unitCount, vfx: vfxCount, suspect: bottleneck });
+      }
     });
     return null;
   };
 
   return (
     <div className={`w-full h-full overflow-hidden relative bg-black select-none touch-none ${isFullscreen ? '' : 'rounded-2xl border border-white/10 shadow-2xl'}`}>
-      
+
       {/* Engine Bridge: Leva Console (Bottom Left) */}
-      <div className={`absolute bottom-6 left-6 z-[1200] w-80 transition-all duration-300 shadow-2xl ${
-        !isSettingsOpen ? 'opacity-0 pointer-events-none translate-y-4' : 'opacity-100 pointer-events-auto translate-y-0'
-      }`}>
-        <Leva 
-          hidden={!isSettingsOpen} 
+      <div className={`absolute bottom-6 left-6 z-[1200] w-80 transition-all duration-300 shadow-2xl ${!isSettingsOpen ? 'opacity-0 pointer-events-none translate-y-4' : 'opacity-100 pointer-events-auto translate-y-0'
+        }`}>
+        <Leva
+          hidden={!isSettingsOpen}
           theme={{
             colors: { accent1: '#6366f1', accent2: '#4f46e5', accent3: '#4338ca', elevation1: '#09090bee', elevation2: '#18181bee', elevation3: '#27272aee' },
             radii: { xs: '8px', sm: '12px', lg: '20px' }
@@ -212,33 +226,33 @@ export const GameCanvas = React.memo(({
           flat
           titleBar={{ title: "Supreme Engine Tuning", drag: false }}
         />
-        
+
         {/* Performance Downloader */}
-        <button 
-           onClick={downloadPerfLogs}
-           title="Download Performance Analysis Report"
-           className="mt-4 w-full py-3 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 rounded-2xl flex items-center justify-center gap-3 text-indigo-400 hover:text-indigo-300 transition-all group"
+        <button
+          onClick={downloadPerfLogs}
+          title="Download Performance Analysis Report"
+          className="mt-4 w-full py-3 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 rounded-2xl flex items-center justify-center gap-3 text-indigo-400 hover:text-indigo-300 transition-all group"
         >
-           <Activity className="w-4 h-4 group-hover:scale-110 transition-transform" />
-           <span className="text-[10px] font-black uppercase tracking-widest">Download Performance Report</span>
+          <Activity className="w-4 h-4 group-hover:scale-110 transition-transform" />
+          <span className="text-[10px] font-black uppercase tracking-widest">Download Performance Report</span>
         </button>
 
-        <button 
-           onClick={clearVFXCache}
-           className="mt-2 w-full py-3 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 rounded-2xl flex items-center justify-center gap-3 text-rose-400 hover:text-rose-300 transition-all group"
+        <button
+          onClick={clearVFXCache}
+          className="mt-2 w-full py-3 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 rounded-2xl flex items-center justify-center gap-3 text-rose-400 hover:text-rose-300 transition-all group"
         >
-           <RefreshCw className="w-4 h-4 group-hover:rotate-180 transition-transform duration-500" />
-           <span className="text-[10px] font-black uppercase tracking-widest">Clear VFX Cache</span>
+          <RefreshCw className="w-4 h-4 group-hover:rotate-180 transition-transform duration-500" />
+          <span className="text-[10px] font-black uppercase tracking-widest">Clear VFX Cache</span>
         </button>
       </div>
 
       <div className="absolute top-4 left-4 z-10 bg-black/50 p-2 rounded text-[10px] text-white backdrop-blur-md border border-white/10 pointer-events-none">
         DPR: {dpr.toFixed(2)}
       </div>
-      <Stats className="!absolute !bottom-4 !right-4 !left-auto !top-auto opacity-50 grayscale" />
       <Canvas
         dpr={dpr}
-        camera={{ position: [0, 20, 60], fov: 40, far: 500 }}
+        shadows={false}
+        camera={{ position: [0, 45, 60], fov: 35, far: 800 }}
         gl={{
           antialias: false,
           powerPreference: "high-performance",
@@ -248,24 +262,37 @@ export const GameCanvas = React.memo(({
         }}
         className="select-none touch-none "
       >
+        <StatsGl className="!absolute !bottom-4 !right-4 !left-auto !top-auto !z-[2000]" />
         <PerformanceMonitor onIncline={() => setDpr(Math.min(dpr + 0.1, 1.0))} onDecline={() => setDpr(Math.max(dpr - 0.1, 0.7))} />
         <AdaptiveEvents />
         <AdaptiveDpr pixelated={true} />
 
-        <OrbitControls
-          makeDefault
-          enablePan={!isCinematic && gameState === 'PLAYING'}
-          maxPolarAngle={Math.PI / 2.1}
-          minPolarAngle={Math.PI / 12}
-          maxDistance={220}
+        {showPerf && (
+          <Perf
+            position={perfPosition}
+            minimal={minimal}
+            showGraph={!minimal}
+            deepAnalyze={deepAnalyze}
+            className="z-[2000]"
+          />
+        )}
+
+        <MapControls
+          enableDamping={true}
+          dampingFactor={0.05}
+          screenSpacePanning={false}
           minDistance={10}
+          maxDistance={350}
+          maxPolarAngle={Math.PI / 2.5}
+          minPolarAngle={0}
+          makeDefault
         />
 
 
 
-        <StormEnvironment 
-            baseDistance={towerConfig.baseDistance || 24} 
-            potatoMode={settingsRef.current.potatoMode}
+        <StormEnvironment
+          baseDistance={towerConfig.baseDistance || 24}
+          potatoMode={settingsRef.current.potatoMode}
         />
 
         <DiagnosticsBridge />

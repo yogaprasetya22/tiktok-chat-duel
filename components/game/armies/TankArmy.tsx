@@ -20,7 +20,7 @@ interface TankArmyProps {
   renderedIdsRef: React.RefObject<Set<string>>;
 }
 
-const POOL_SIZE = 30;
+const POOL_SIZE = 8;
 
 export function TankArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, vehicles, unitIndex, renderedIdsRef }: TankArmyProps) {
   const poolMapRef = useRef<Map<string, number>>(new Map());
@@ -37,27 +37,59 @@ export function TankArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, vehic
   const t1 = useGLTF('/assets-model/Viking_Male.glb') as any;
   const t2 = useGLTF('/assets-model/Viking_Female.glb') as any;
 
+  // Shared Materials for Teams (One clone per team per model part)
+  const teamMats = useMemo(() => {
+    const mats: Record<string, THREE.Material[]> = { player: [], enemy: [] };
+    const assets = [t1, t2];
+    
+    // For each unique asset, pre-clone materials for both teams
+    assets.forEach((asset, assetIdx) => {
+        if (!asset.scene) return;
+        asset.scene.traverse((child: any) => {
+            if (child.isMesh && child.material) {
+                const mP = child.material.clone();
+                const mE = child.material.clone();
+                mP.color.set(towerConfig.player.color);
+                mE.color.set(towerConfig.enemy.color);
+                child[`_matIdx_${assetIdx}`] = mats.player.length; // store index
+                mats.player.push(mP);
+                mats.enemy.push(mE);
+            }
+        });
+    });
+    return mats;
+  }, [t1, t2, towerConfig.player.color, towerConfig.enemy.color]);
+
   const characterPool = useMemo(() => {
     const items: any[] = [];
     if (!t1.scene || !t2.scene) return [];
     const assets = [t1, t2];
 
     for (let i = 0; i < POOL_SIZE; i++) {
-      const selected = assets[Math.floor(Math.random() * assets.length)];
+      const assetIdx = Math.floor(Math.random() * assets.length);
+      const selected = assets[assetIdx];
       const clone = SkeletonUtils.clone(selected.scene);
       const mixer = new THREE.AnimationMixer(clone);
       const actions: Record<string, THREE.AnimationAction> = {};
       if (selected.animations) {
         selected.animations.forEach((clip: THREE.AnimationClip) => { actions[clip.name] = mixer.clipAction(clip); });
       }
+      
+      // We don't clone materials here anymore, we'll assign shared ones in the loop based on team
+      const colorable: THREE.Mesh[] = [];
       clone.traverse((child: any) => {
         if (child.isMesh) {
           child.castShadow = false;
           child.receiveShadow = false;
           child.frustumCulled = true;
+          child._assetIdx = assetIdx;
+          const name = child.name.toLowerCase();
+          if (name.includes('helmet') || name.includes('shield') || name.includes('cloth') || name.includes('armour') || name.includes('trim')) {
+             colorable.push(child);
+          }
         }
       });
-      items.push({ group: clone, mixer, actions, currentAnim: '', lastUpdate: 0, rotation: 0, initialized: false });
+      items.push({ group: clone, colorable, mixer, actions, currentAnim: '', lastUpdate: 0, rotation: 0, initialized: false });
     }
     return items;
   }, [t1, t2]);
@@ -65,14 +97,15 @@ export function TankArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, vehic
   useFrame((state, delta) => {
     frameCountRef.current++;
     const rawMap = unitsMap.current;
-    if (!rawMap) return;
+    if (!rawMap || characterPool.length === 0) return;
 
     const time = state.clock.elapsedTime;
     const camPos = state.camera.position;
     const _activeSet = activeSetRef.current;
     _activeSet.clear();
 
-    const mode = useStore.getState().gameMode;
+    const storeState = useStore.getState();
+    const mode = storeState.gameMode;
     const settings = settingsRef.current;
 
     // Filter units of this class
@@ -149,30 +182,29 @@ export function TankArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, vehic
         if (u.targetId) {
             const target = rawMap.get(u.targetId);
             if (target) {
-              vehicle.steering.behaviors.forEach((b: any) => {
-                if (b.constructor.name === 'SeekBehavior') {
+              // PERF: Find SeekBehavior directly instead of forEach
+              const seekB = vehicle.steering.behaviors.find((b: any) => b.target !== undefined);
+              if (seekB) {
                    const totalVal = id.split('-').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0);
                    const angle = (totalVal % 360) * (Math.PI / 180);
                    const orbitRadius = uData.encirclementRadius || 1.25;
                    const encRadius = orbitRadius * 1.5; // Tanks spread out more
                    const offsetX = Math.cos(angle) * encRadius;
                    const offsetZ = Math.sin(angle) * encRadius;
-                   b.target.set(target.position[0] + offsetX, 0, target.position[2] + offsetZ);
+                   seekB.target.set(target.position[0] + offsetX, 0, target.position[2] + offsetZ);
                    isChasing = true;
-                }
-              });
+              }
             }
         }
 
         if (!isChasing) {
-           vehicle.steering.behaviors.forEach((b: any) => {
-              if (b.constructor.name === 'SeekBehavior') {
+            const seekB = vehicle.steering.behaviors.find((b: any) => b.target !== undefined);
+            if (seekB) {
                  const baseZ = u.type === 'player' ? ENEMY_BASE_Z : PLAYER_BASE_Z; 
                  const amp = uData.laneSwaggerAmp || 0.5;
                  const swagger = Math.sin((id.length * 5) + (uData.jitterOffset || 0)) * amp;
-                 b.target.set((uData.laneOffset || 0) + swagger, 0, baseZ);
-              }
-           });
+                 seekB.target.set((uData.laneOffset || 0) + swagger, 0, baseZ);
+            }
         }
         vehicle.maxSpeed = (uData.status === 'attacking' || u.isDying) ? 0 : (u.speed || 2) * (settings.globalSpeedMultiplier || 1);
         
@@ -210,16 +242,11 @@ export function TankArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, vehic
           const pIdx = availableIndicesRef.current.shift()!;
           poolMapRef.current.set(id, pIdx);
           const pItem = characterPool[pIdx];
-          const teamColor = u.type === 'player' ? towerConfig.player.color : towerConfig.enemy.color;
-          pItem.group.traverse((child: any) => {
-            if (child.isMesh) {
-              const name = child.name.toLowerCase();
-              if (name.includes('helmet') || name.includes('shield') || name.includes('cloth') || name.includes('armour') || name.includes('trim')) {
-                 if (!child._originalMaterial) child._originalMaterial = child.material;
-                 child.material = child.material.clone();
-                 child.material.color.set(teamColor);
-              }
-            }
+          const isPlayer = u.type === 'player';
+          const teamMaterials = u.type === 'player' ? teamMats.player : teamMats.enemy;
+          pItem.colorable.forEach((mesh: any) => {
+              const matIdx = mesh[`_matIdx_${mesh._assetIdx}`];
+              if (matIdx !== undefined) mesh.material = teamMaterials[matIdx];
           });
         } else return;
       }

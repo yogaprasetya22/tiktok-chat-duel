@@ -10,7 +10,7 @@ const nextConfig: NextConfig = {
         root: path.resolve("."),
     },
     // Ensure that heavy three.js imports are optimized
-    transpilePackages: ["three", "@react-three/fiber", "@react-three/drei"],
+    transpilePackages: ["three", "@react-three/fiber", "@react-three/drei", "r3f-perf"],
     experimental: {
         optimizePackageImports: ["three", "lucide-react"],
     },

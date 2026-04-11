@@ -29,7 +29,7 @@ interface BattleArmyProps {
 
 
 const MAX_UNITS = 350;
-const NAME_POOL_SIZE = 150;
+const NAME_POOL_SIZE = 60;
 
 const _healthColor = new THREE.Color();
 const _c1 = new THREE.Color('#22c55e');

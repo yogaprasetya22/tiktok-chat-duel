@@ -22,7 +22,7 @@ interface MageArmyProps {
   renderedIdsRef: React.RefObject<Set<string>>;
 }
 
-const POOL_SIZE = 30;
+const POOL_SIZE = 8;
 
 export function MageArmy({ unitsMap, towerConfig, settingsRef, spellsRef, simTimeRef, vehicles, unitIndex, renderedIdsRef }: MageArmyProps) {
   const poolMapRef = useRef<Map<string, number>>(new Map());
@@ -52,14 +52,22 @@ export function MageArmy({ unitsMap, towerConfig, settingsRef, spellsRef, simTim
         if (selectedAsset.animations) {
           selectedAsset.animations.forEach((clip: THREE.AnimationClip) => { actions[clip.name] = mixer.clipAction(clip); });
         }
+        const colorable: THREE.Mesh[] = [];
         clone.traverse((child: any) => {
           if (child.isMesh) {
             child.castShadow = false;
             child.receiveShadow = false;
             child.frustumCulled = true;
+            if (child.material) {
+                child.material = child.material.clone();
+            }
+            const name = child.name.toLowerCase();
+            if (name.includes('cloth') || name.includes('robe') || name.includes('hat') || name.includes('cape') || name.includes('trim')) {
+               colorable.push(child);
+            }
           }
         });
-        items.push({ group: clone, mixer, actions, currentAnim: '', lastUpdate: 0, rotation: 0, initialized: false });
+        items.push({ group: clone, colorable, mixer, actions, currentAnim: '', lastUpdate: 0, rotation: 0, initialized: false });
     }
     return items;
   }, [mage1, mage2]);
@@ -67,15 +75,23 @@ export function MageArmy({ unitsMap, towerConfig, settingsRef, spellsRef, simTim
   useFrame((state, delta) => {
     frameCountRef.current++;
     const rawMap = unitsMap.current;
-    if (!rawMap) return;
+    if (!rawMap || characterPool.length === 0) return;
 
     const time = state.clock.elapsedTime;
     const camPos = state.camera.position;
     const _activeSet = activeSetRef.current;
     _activeSet.clear();
 
-    const mode = useStore.getState().gameMode;
+    const storeState = useStore.getState();
+    const mode = storeState.gameMode;
     const settings = settingsRef.current;
+
+    // PERF: Cache weather speed multiplier ONCE per frame
+    const weather = storeState.weather;
+    const wConfig = WEATHER_CONFIG[weather];
+    const wMults = (wConfig as any).multipliers || {};
+    const mageMults = wMults['mage'] || {};
+    const cachedWeatherSpeedMult = (mageMults.move_speed_mult || 1.0) * (wMults.globalSpeedMultiplier || 1.0);
 
     // Filter units of this class
     const myUnits: any[] = [];
@@ -145,11 +161,8 @@ export function MageArmy({ unitsMap, towerConfig, settingsRef, spellsRef, simTim
         // Steering & Rotation
         const vehicle = vehicles?.current?.get(id);
         if (vehicle) {
-            const weather = useStore.getState().weather;
-            const wConfig = WEATHER_CONFIG[weather];
-            const wMults = (wConfig as any).multipliers || {};
-            const classMults = wMults[u.unitClass] || {};
-            const weatherSpeedMult = (classMults.move_speed_mult || 1.0) * (wMults.globalSpeedMultiplier || 1.0);
+            // PERF: Use frame-cached weather multiplier
+            const weatherSpeedMult = cachedWeatherSpeedMult;
 
             let isChasing = false;
             let isKiting = false;
@@ -162,37 +175,36 @@ export function MageArmy({ unitsMap, towerConfig, settingsRef, spellsRef, simTim
                     const dz = uData.position[2] - target.position[2];
                     const distSq = dx * dx + dz * dz;
                     const kitingThresholdSq = 49; 
-                    vehicle.steering.behaviors.forEach((b: any) => {
-                        if (b.constructor.name === 'SeekBehavior') {
-                            if (distSq < kitingThresholdSq) {
-                                const safeDirZ = u.type === 'player' ? 1 : -1;
-                                const retreatX = uData.position[0] + (uData.position[0] - target.position[0]) * 2;
-                                const retreatZ = uData.position[2] + (uData.position[2] - target.position[2]) * 2 + (safeDirZ * 5);
-                                b.target.set(retreatX, 0, retreatZ);
-                                isKiting = true;
-                            } else {
-                                const totalVal = id.split('-').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0);
-                                const angle = (totalVal % 360) * (Math.PI / 180);
-                                const encRadius = 1.5; 
-                                const offsetX = Math.cos(angle) * encRadius;
-                                const offsetZ = Math.sin(angle) * encRadius;
-                                b.target.set(target.position[0] + offsetX, 0, target.position[2] + offsetZ);
-                            }
-                            isChasing = true;
+                    // PERF: Find SeekBehavior directly
+                    const seekB = vehicle.steering.behaviors.find((b: any) => b.target !== undefined);
+                    if (seekB) {
+                        if (distSq < kitingThresholdSq) {
+                            const safeDirZ = u.type === 'player' ? 1 : -1;
+                            const retreatX = uData.position[0] + (uData.position[0] - target.position[0]) * 2;
+                            const retreatZ = uData.position[2] + (uData.position[2] - target.position[2]) * 2 + (safeDirZ * 5);
+                            seekB.target.set(retreatX, 0, retreatZ);
+                            isKiting = true;
+                        } else {
+                            const totalVal = id.split('-').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0);
+                            const angle = (totalVal % 360) * (Math.PI / 180);
+                            const encRadius = 1.5; 
+                            const offsetX = Math.cos(angle) * encRadius;
+                            const offsetZ = Math.sin(angle) * encRadius;
+                            seekB.target.set(target.position[0] + offsetX, 0, target.position[2] + offsetZ);
                         }
-                    });
+                        isChasing = true;
+                    }
                 }
             }
 
             if (!isChasing) {
-                vehicle.steering.behaviors.forEach((b: any) => {
-                    if (b.constructor.name === 'SeekBehavior') {
-                        const baseZ = u.type === 'player' ? ENEMY_BASE_Z : PLAYER_BASE_Z;
-                        const amp = uData.laneSwaggerAmp || 0.5;
-                        const swagger = Math.sin((id.length * 8) + (uData.jitterOffset || 0)) * amp;
-                        b.target.set((uData.laneOffset || 0) + swagger, 0, baseZ);
-                    }
-                });
+                const seekB = vehicle.steering.behaviors.find((b: any) => b.target !== undefined);
+                if (seekB) {
+                    const baseZ = u.type === 'player' ? ENEMY_BASE_Z : PLAYER_BASE_Z;
+                    const amp = uData.laneSwaggerAmp || 0.5;
+                    const swagger = Math.sin((id.length * 8) + (uData.jitterOffset || 0)) * amp;
+                    seekB.target.set((uData.laneOffset || 0) + swagger, 0, baseZ);
+                }
             }
             const baseSpeed = (u.speed || 3) * (settings.globalSpeedMultiplier || 1);
             vehicle.maxSpeed = (uData.status === 'attacking' || u.isDying) ? 0 : baseSpeed * weatherSpeedMult;
@@ -232,15 +244,8 @@ export function MageArmy({ unitsMap, towerConfig, settingsRef, spellsRef, simTim
           poolMapRef.current.set(id, pIdx);
           const pItem = characterPool[pIdx];
           const teamColor = u.type === 'player' ? towerConfig.player.color : towerConfig.enemy.color;
-          pItem.group.traverse((child: any) => {
-            if (child.isMesh) {
-              const name = child.name.toLowerCase();
-              if (name.includes('cloth') || name.includes('robe') || name.includes('hat') || name.includes('cape') || name.includes('trim')) {
-                 if (!child._originalMaterial) child._originalMaterial = child.material;
-                 child.material = child.material.clone();
-                 child.material.color.set(teamColor);
-              }
-            }
+          pItem.colorable.forEach((mesh: THREE.Mesh) => {
+              (mesh.material as THREE.MeshStandardMaterial).color.set(teamColor);
           });
         } else return;
       }
