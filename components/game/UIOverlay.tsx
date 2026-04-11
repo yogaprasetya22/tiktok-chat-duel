@@ -39,7 +39,7 @@ interface UIOverlayProps {
 // Optimization: Memoize KillFeed to prevent full UI re-renders
 const MemoizedKillFeed = React.memo(({ killEvents, towerConfig }: { killEvents: any[], towerConfig: any }) => {
   return (
-    <div className="absolute top-28 left-6 w-72 flex flex-col gap-1.5 items-start pointer-events-none z-[1100]">
+    <div className="absolute top-20 md:top-28 left-4 md:left-6 w-56 md:w-72 flex flex-col gap-1 md:gap-1.5 items-start pointer-events-none z-[1100] select-none touch-none">
       {killEvents.slice(-3).map((event, i) => event && event.id && (
         <div key={event.id} className="animate-in slide-in-from-left-4 fade-in duration-500 bg-zinc-950/95 px-3 py-1.5 rounded-xl border border-white/10 flex items-center gap-3 shadow-xl">
           <span className="text-white font-black italic text-[10px] tracking-tighter" style={{ color: towerConfig.player.color }}>{event.killer}</span>
@@ -57,27 +57,21 @@ const MemoizedLeaderboard = React.memo(({ stats, team, color, name }: { stats: a
   const kills = isPlayer ? stats.playerKills : stats.enemyKills;
   
   return (
-    <div className={`absolute top-32 ${isPlayer ? 'left-8' : 'right-8'} w-64 pointer-events-auto z-[1100]`}>
-      <div className={`bg-black/90 rounded-[32px] border border-white/10 p-6 shadow-2xl space-y-6 animate-in ${isPlayer ? 'slide-in-from-left-12' : 'slide-in-from-right-12'} duration-1000`}>
-        <div className="flex items-center justify-between border-b border-white/5 pb-4">
+    <div className={`absolute top-24 md:top-28 ${isPlayer ? 'left-2 md:left-6' : 'right-2 md:right-6'} w-36 md:w-56 pointer-events-auto z-[1100] select-none touch-none`}>
+      <div className={`bg-black/60 backdrop-blur-md rounded-xl md:rounded-3xl border border-white/5 p-2 md:p-4 shadow-xl space-y-2 md:space-y-4 animate-in ${isPlayer ? 'slide-in-from-left-8' : 'slide-in-from-right-8'} duration-1000 group/board hover:bg-black/80 transition-colors`}>
+        <div className="flex items-center justify-between border-b border-white/5 pb-2">
           {isPlayer ? (
             <>
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-indigo-500/20 rounded-xl">
-                    <Trophy className="w-4 h-4 text-indigo-400" />
-                </div>
-                <span className="text-xs font-black text-white uppercase tracking-widest italic">{name} RANK</span>
+              <div className="flex items-center gap-1.5 md:gap-2">
+                <Trophy className="w-3 md:w-4 h-3 md:h-4 text-indigo-400" />
+                <span className="text-[9px] md:text-[11px] font-black text-white/80 uppercase tracking-widest">{name}</span>
               </div>
-              <div className="px-2 py-0.5 bg-indigo-500/10 rounded text-[8px] font-black text-indigo-400 tracking-tighter">ELITE HUD</div>
             </>
           ) : (
             <>
-              <div className="px-2 py-0.5 rounded text-[8px] font-black tracking-tighter" style={{ backgroundColor: `${color}22`, color: color }}>ENEMY HUD</div>
-              <div className="flex items-center gap-3">
-                <span className="text-xs font-black text-white uppercase tracking-widest italic">{name} RANK</span>
-                <div className="p-2 rounded-xl" style={{ backgroundColor: `${color}22` }}>
-                    <Trophy className="w-4 h-4" style={{ color: color }} />
-                </div>
+              <div className="flex items-center gap-1.5 md:gap-2">
+                <span className="text-[9px] md:text-[11px] font-black text-white/80 uppercase tracking-widest">{name}</span>
+                <Trophy className="w-3 md:w-4 h-3 md:h-4" style={{ color: color }} />
               </div>
             </>
           )}
@@ -91,38 +85,34 @@ const MemoizedLeaderboard = React.memo(({ stats, team, color, name }: { stats: a
             <div key={username} className={`flex items-center justify-between group animate-in ${isPlayer ? 'slide-in-from-left-4' : 'slide-in-from-right-4'} fade-in`} style={{ animationDelay: `${i * 100}ms` }}>
               {isPlayer ? (
                 <>
-                  <div className="flex items-center gap-4">
-                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-black italic text-xs transition-transform group-hover:scale-110 ${
-                      i === 0 ? 'text-white shadow-[0_0_20px_rgba(0,0,0,0.5)] animate-bounce' : 'bg-white/5 text-white/40 border border-white/5'
+                  <div className="flex items-center gap-1.5 md:gap-3">
+                    <div className={`w-5 h-5 md:w-7 md:h-7 rounded-md md:rounded-lg flex items-center justify-center font-black italic text-[9px] md:text-xs text-white/40 border border-white/5 ${
+                      i === 0 ? 'animate-pulse shadow-lg' : 'bg-white/5'
                     }`}
-                    style={{ backgroundColor: i === 0 ? color : undefined }}>
+                    style={{ backgroundColor: i === 0 ? `${color}44` : undefined, borderColor: i === 0 ? color : undefined, color: i === 0 ? '#fff' : undefined }}>
                       {i + 1}
                     </div>
-                    <div className="flex flex-col">
-                        <span className="text-sm font-black text-white/90 group-hover:text-white truncate max-w-[110px] tracking-tight transition-colors">{username}</span>
-                        <span className="text-[8px] font-bold text-white/30 uppercase tracking-[0.1em]">Verified Player</span>
+                    <div className="flex flex-col min-w-0">
+                        <span className="text-[10px] md:text-xs font-black text-white/70 group-hover:text-white truncate max-w-[60px] md:max-w-[100px] tracking-tight transition-colors">{username}</span>
                     </div>
                   </div>
-                  <div className="flex flex-col items-end">
-                      <span className="text-sm font-black italic tracking-tighter" style={{ color: i === 0 ? color : '#ffffff' }}>{(value as number)}</span>
-                      <span className="text-[7px] font-black text-white/20 uppercase">KILLS</span>
+                  <div className="flex items-baseline gap-0.5">
+                      <span className="text-[10px] md:text-xs font-black italic tracking-tighter" style={{ color: i === 0 ? color : '#ffffffaa' }}>{(value as number)}</span>
                   </div>
                 </>
               ) : (
                 <>
-                  <div className="flex flex-col items-start min-w-[40px]">
-                      <span className="text-sm font-black italic tracking-tighter" style={{ color: i === 0 ? color : '#ffffff' }}>{(value as number)}</span>
-                      <span className="text-[7px] font-black text-white/20 uppercase">KILLS</span>
+                  <div className="flex items-baseline gap-0.5">
+                      <span className="text-[10px] md:text-xs font-black italic tracking-tighter" style={{ color: i === 0 ? color : '#ffffffaa' }}>{(value as number)}</span>
                   </div>
-                  <div className="flex items-center gap-4 flex-1 justify-end overflow-hidden">
+                  <div className="flex items-center gap-1.5 md:gap-3 flex-1 justify-end min-w-0">
                       <div className="flex flex-col items-end min-w-0">
-                        <span className="text-sm font-black text-white/90 group-hover:text-white truncate w-full text-right tracking-tight transition-colors">{username}</span>
-                        <span className="text-[8px] font-bold text-white/30 uppercase tracking-[0.1em]">Rival Player</span>
+                        <span className="text-[10px] md:text-xs font-black text-white/70 group-hover:text-white truncate max-w-[60px] md:max-w-[100px] text-right tracking-tight transition-colors">{username}</span>
                       </div>
-                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-black italic text-xs transition-transform group-hover:scale-110 flex-shrink-0 ${
-                      i === 0 ? 'text-white shadow-[0_0_20px_rgba(0,0,0,0.5)] animate-bounce' : 'bg-white/5 text-white/40 border border-white/5'
+                    <div className={`w-5 h-5 md:w-7 md:h-7 rounded-md md:rounded-lg flex items-center justify-center font-black italic text-[9px] md:text-xs text-white/40 border border-white/5 flex-shrink-0 ${
+                      i === 0 ? 'animate-pulse shadow-lg' : 'bg-white/5'
                     }`}
-                    style={{ backgroundColor: i === 0 ? color : undefined }}>
+                    style={{ backgroundColor: i === 0 ? `${color}44` : undefined, borderColor: i === 0 ? color : undefined, color: i === 0 ? '#fff' : undefined }}>
                       {i + 1}
                     </div>
                   </div>
@@ -131,9 +121,8 @@ const MemoizedLeaderboard = React.memo(({ stats, team, color, name }: { stats: a
             </div>
           ))}
           {Object.keys(kills || {}).length === 0 && (
-            <div className="py-12 text-center space-y-3 opacity-20">
-              <Skull className="w-10 h-10 mx-auto" />
-              <p className="text-[10px] uppercase tracking-[0.3em] text-white font-black">Scanning Arena...</p>
+            <div className="py-2 text-center opacity-10">
+              <p className="text-[8px] uppercase tracking-[0.2em] text-white font-black">Empty...</p>
             </div>
           )}
         </div>
@@ -151,17 +140,17 @@ const TowerHPBars = React.memo(({ towerConfig }: { towerConfig: TowerConfig }) =
   const eWidth = (enemyBaseHp / (towerConfig?.baseHp || 1000)) * 100;
 
   return (
-    <div className="grid grid-cols-2 gap-8 px-4 w-full">
+    <div className="grid grid-cols-2 gap-4 md:gap-8 px-3 md:px-4 w-full select-none touch-none">
       {/* Team A HP */}
       <div className="relative group">
         <div className="flex justify-between items-end mb-2">
           <div className="flex flex-col">
-            <div className="flex items-center gap-2 mb-0.5">
-               <Shield className="w-3 h-3 text-indigo-400" />
-               <span className="text-[9px] uppercase tracking-[0.2em] text-white/50 font-black">{towerConfig?.player.name} BASE</span>
+            <div className="flex items-center gap-1 md:gap-2 mb-0.5">
+               <Shield className="w-2.5 md:w-3 h-2.5 md:h-3 text-indigo-400" />
+               <span className="text-[7px] md:text-[9px] uppercase tracking-[0.2em] text-white/50 font-black truncate max-w-[80px] md:max-w-none">{towerConfig?.player.name} BASE</span>
             </div>
-            <span className="text-3xl font-black italic text-white tracking-tighter tabular-nums drop-shadow-2xl">
-              {playerBaseHp.toLocaleString()} <span className="text-[10px] text-indigo-400 not-italic uppercase tracking-tighter opacity-80">HP</span>
+            <span className="text-xl md:text-3xl font-black italic text-white tracking-tighter tabular-nums drop-shadow-2xl">
+              {playerBaseHp.toLocaleString()} <span className="text-[8px] md:text-[10px] text-indigo-400 not-italic uppercase tracking-tighter opacity-80">HP</span>
             </span>
           </div>
           <div className="flex flex-col items-end">
@@ -195,12 +184,12 @@ const TowerHPBars = React.memo(({ towerConfig }: { towerConfig: TowerConfig }) =
               </div>
            </div>
           <div className="flex flex-col items-end">
-            <div className="flex items-center gap-2 mb-0.5">
-               <span className="text-[9px] uppercase tracking-[0.2em] text-white/50 font-black">{towerConfig?.enemy.name} BASE</span>
-               <Shield className="w-3 h-3 text-rose-400" />
+            <div className="flex items-center gap-1 md:gap-2 mb-0.5">
+               <span className="text-[7px] md:text-[9px] uppercase tracking-[0.2em] text-white/50 font-black truncate max-w-[80px] md:max-w-none">{towerConfig?.enemy.name} BASE</span>
+               <Shield className="w-2.5 md:w-3 h-2.5 md:h-3 text-rose-400" />
             </div>
-            <span className="text-3xl font-black italic text-white tracking-tighter tabular-nums drop-shadow-2xl">
-               <span className="text-[10px] text-rose-400 not-italic uppercase tracking-tighter opacity-80">HP</span> {enemyBaseHp.toLocaleString()}
+            <span className="text-xl md:text-3xl font-black italic text-white tracking-tighter tabular-nums drop-shadow-2xl">
+               <span className="text-[8px] md:text-[10px] text-rose-400 not-italic uppercase tracking-tighter opacity-80">HP</span> {enemyBaseHp.toLocaleString()}
             </span>
           </div>
         </div>
@@ -283,52 +272,52 @@ export const UIOverlay = ({
   };
 
   return (
-    <div className={`${standalone ? 'relative w-full' : 'absolute inset-0 pointer-events-none'} flex flex-col justify-between z-[1000] ${isFullscreen ? 'p-0' : 'p-6'}`}>
+    <div className={`${standalone ? 'relative w-full' : 'absolute inset-0 pointer-events-none'} flex flex-col justify-between z-[1000] select-none touch-none ${isFullscreen ? 'p-0' : 'p-3 md:p-6'}`}>
 
       {/* Fullscreen & Camera Controls - Top Right - HIDDEN DURING SETUP */}
       {gameState !== 'SETUP' && (
-        <div className="absolute top-6 right-6 flex gap-2 pointer-events-auto z-[1000]">
+        <div className="absolute top-3 md:top-6 right-3 md:right-6 flex flex-wrap justify-end gap-1.5 md:gap-2 pointer-events-auto z-[1000]">
           <button 
             onClick={onToggleTesting}
-            className={`p-3 rounded-xl border border-white/10 transition-all ${testingMode ? 'bg-amber-500 text-white shadow-[0_0_15px_rgba(245,158,11,0.5)]' : 'bg-zinc-900/80 text-white/50 hover:text-white'}`}
+            className={`p-2 md:p-3 rounded-lg md:rounded-xl border border-white/10 transition-all ${testingMode ? 'bg-amber-500 text-white shadow-[0_0_15px_rgba(245,158,11,0.5)]' : 'bg-zinc-900/80 text-white/50 hover:text-white'}`}
             title="Testing Mode (Auto-Spawn)"
           >
-            <Zap className={`w-5 h-5 ${testingMode ? 'animate-pulse' : ''}`} />
+            <Zap className={`w-4 md:w-5 h-4 md:h-5 ${testingMode ? 'animate-pulse' : ''}`} />
           </button>
           <button 
             onClick={onToggleChat}
-            className={`p-3 rounded-xl border border-white/10 transition-all ${showChat ? 'bg-pink-500 text-white shadow-[0_0_15px_rgba(236,72,153,0.5)]' : 'bg-zinc-900/80 text-white/50 hover:text-white'}`}
+            className={`p-2 md:p-3 rounded-lg md:rounded-xl border border-white/10 transition-all ${showChat ? 'bg-pink-500 text-white shadow-[0_0_15px_rgba(236,72,153,0.5)]' : 'bg-zinc-900/80 text-white/50 hover:text-white'}`}
             title={showChat ? "Hide Comments" : "Show Comments"}
           >
-            <MessageSquare className="w-5 h-5" />
+            <MessageSquare className="w-4 md:w-5 h-4 md:h-5" />
           </button>
           <button 
             onClick={onToggleCinematic}
-            className={`p-3 rounded-xl border border-white/10 transition-all ${isCinematic ? 'bg-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.5)]' : 'bg-zinc-900/80 text-white/50 hover:text-white'}`}
+            className={`p-2 md:p-3 rounded-lg md:rounded-xl border border-white/10 transition-all ${isCinematic ? 'bg-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.5)]' : 'bg-zinc-900/80 text-white/50 hover:text-white'}`}
             title="Film Mode"
           >
-            <Camera className="w-5 h-5" />
+            <Camera className="w-4 md:w-5 h-4 md:h-5" />
           </button>
           <button 
             onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-            className={`p-3 rounded-xl border border-white/10 transition-all shadow-xl ${isSettingsOpen ? 'bg-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.5)]' : 'bg-zinc-900/80 text-white/50 hover:text-white'}`}
+            className={`p-2 md:p-3 rounded-lg md:rounded-xl border border-white/10 transition-all shadow-xl ${isSettingsOpen ? 'bg-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.5)]' : 'bg-zinc-900/80 text-white/50 hover:text-white'}`}
             title="Update Configuration"
           >
-            <Settings2 className="w-5 h-5" />
+            <Settings2 className="w-4 md:w-5 h-4 md:h-5" />
           </button>
           <Link
             href="/training"
-            className="p-3 bg-rose-500/10 hover:bg-rose-500/20 rounded-xl border border-rose-500/20 text-rose-500 transition-all shadow-xl group"
+            className="p-2 md:p-3 bg-rose-500/10 hover:bg-rose-500/20 rounded-lg md:rounded-xl border border-rose-500/20 text-rose-500 transition-all shadow-xl group"
             title="Dedicated Training Arena"
           >
-            <Target className="w-5 h-5 group-hover:scale-110 transition-transform" />
+            <Target className="w-4 md:w-5 h-4 md:h-5 group-hover:scale-110 transition-transform" />
           </Link>
           <button 
             onClick={toggleFullscreen}
-            className={`p-3 rounded-xl border border-white/10 transition-all ${isFullscreen ? 'bg-zinc-100 text-zinc-950' : 'bg-zinc-950/80 text-white/50 hover:text-white'}`}
+            className={`p-2 md:p-3 rounded-lg md:rounded-xl border border-white/10 transition-all ${isFullscreen ? 'bg-zinc-100 text-zinc-950' : 'bg-zinc-950/80 text-white/50 hover:text-white'}`}
             title="Fullscreen Canvas"
           >
-            {isFullscreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
+            {isFullscreen ? <Minimize2 className="w-4 md:w-5 h-4 md:h-5" /> : <Maximize2 className="w-4 md:w-5 h-4 md:h-5" />}
           </button>
         </div>
       )}
@@ -336,8 +325,8 @@ export const UIOverlay = ({
 
       {/* Setup Modal Wizard - SUPREME Z-INDEX */}
       {gameState === "SETUP" && (
-        <div className={`${standalone ? 'relative w-full p-0 flex flex-col items-center justify-center' : 'fixed inset-0 z-[2000] flex items-center justify-center p-4 md:p-12 bg-zinc-950/98 animate-in fade-in duration-500'} pointer-events-auto`}>
-          <div className={`w-full max-w-2xl bg-zinc-900 border border-white/10 rounded-[40px] p-10 md:p-16 shadow-[0_0_100px_-20px_rgba(79,70,229,0.3)] space-y-10 relative overflow-hidden ${standalone ? 'm-0' : ''}`}>
+        <div className={`${standalone ? 'relative w-full p-0 flex flex-col items-center justify-center' : 'fixed inset-0 z-[2000] flex items-center justify-center p-3 md:p-12 bg-zinc-950/98 animate-in fade-in duration-500'} pointer-events-auto select-none touch-none`}>
+          <div className={`w-full max-w-2xl bg-zinc-900 border border-white/10 rounded-3xl md:rounded-[40px] p-6 md:p-16 shadow-[0_0_100px_-20px_rgba(79,70,229,0.3)] space-y-6 md:space-y-10 relative overflow-hidden ${standalone ? 'm-0' : ''}`}>
             {/* Background Glow */}
             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-96 h-96 bg-indigo-600/10 blur-[120px] rounded-full -z-10" />
 

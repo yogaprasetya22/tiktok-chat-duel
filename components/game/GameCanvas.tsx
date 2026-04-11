@@ -262,7 +262,7 @@ export const GameCanvas = React.memo(({
         }}
         className="select-none touch-none "
       >
-        <StatsGl className="!absolute !bottom-4 !right-4 !left-auto !top-auto !z-[2000]" />
+        <StatsGl className="!absolute !top-24 !left-2 !right-auto !bottom-auto !z-[2000]" />
         <PerformanceMonitor onIncline={() => setDpr(Math.min(dpr + 0.1, 1.0))} onDecline={() => setDpr(Math.max(dpr - 0.1, 0.7))} />
         <AdaptiveEvents />
         <AdaptiveDpr pixelated={true} />

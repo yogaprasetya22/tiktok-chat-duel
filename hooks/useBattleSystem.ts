@@ -195,18 +195,23 @@ export const useBattleSystem = () => {
         }[]
     >([]);
 
-    const pendingDamageRef = useRef<
-        {
-            targetId: string;
-            damage: number;
-            hitTime: number;
-            position: [number, number, number];
-            color: string;
-            attackerName: string;
-            attackerClass: string;
-            attackerId: string;
-        }[]
-    >([]);
+    // ZERO-ALLOCATION: Pre-allocated pool for damage events
+    const PENDING_DAMAGE_POOL_SIZE = 1000;
+    const pendingDamagePool = useRef<any[]>(
+        Array.from({ length: PENDING_DAMAGE_POOL_SIZE }, () => ({
+            targetId: "",
+            damage: 0,
+            hitTime: 0,
+            posX: 0,
+            posY: 0,
+            posZ: 0,
+            color: "",
+            attackerName: "",
+            attackerClass: "",
+            attackerId: "",
+            active: false
+        }))
+    );
 
     const [towerConfig, setTowerConfig] = useState<TowerConfig>({
         player: {
@@ -706,12 +711,11 @@ export const useBattleSystem = () => {
             flushDamageBuffer(now);
 
             // --- Process Delayed Hits (Mage Projectiles) ---
-            if (pendingDamageRef.current.length > 0) {
-                const hits = pendingDamageRef.current;
-                for (let i = hits.length - 1; i >= 0; i--) {
-                    const h = hits[i];
-                    if (simNow >= h.hitTime) {
-                        const isBase =
+            const hits = pendingDamagePool.current;
+            for (let i = 0; i < hits.length; i++) {
+                const h = hits[i];
+                if (h.active && simNow >= h.hitTime) {
+                    const isBase =
                             h.targetId === "player-base" ||
                             h.targetId === "enemy-base";
 
@@ -732,7 +736,7 @@ export const useBattleSystem = () => {
                             accumulateDamage(
                                 h.targetId,
                                 damage,
-                                h.position,
+                                [h.posX, h.posY, h.posZ],
                                 h.color,
                             );
                         } else {
@@ -744,7 +748,7 @@ export const useBattleSystem = () => {
                                 if (tData) {
                                     // Check if target is untargetable (Assassin Vanish)
                                     if (tData.untargetableUntil > simNow)
-                                        return;
+                                        continue;
 
                                     target.hp -= h.damage;
                                     tData.hp = target.hp;
@@ -803,9 +807,9 @@ export const useBattleSystem = () => {
                                     }
 
                                     accumulateDamage(
-                                        target.id,
+                                        h.targetId,
                                         h.damage,
-                                        tData.position,
+                                        [h.posX, h.posY, h.posZ],
                                         h.color,
                                     );
 
@@ -819,21 +823,11 @@ export const useBattleSystem = () => {
                                         const stats = statsRef.current;
                                         if (h.attackerName) {
                                             if (h.attackerId.startsWith("p")) {
-                                                stats.playerKills[
-                                                    h.attackerName
-                                                ] =
-                                                    (stats.playerKills[
-                                                        h.attackerName
-                                                    ] || 0) + 1;
+                                                stats.playerKills[h.attackerName] = (stats.playerKills[h.attackerName] || 0) + 1;
                                                 stats.teamSummary.player.totalKills += 1;
                                                 stats.teamSummary.enemy.unitsLost += 1;
                                             } else {
-                                                stats.enemyKills[
-                                                    h.attackerName
-                                                ] =
-                                                    (stats.enemyKills[
-                                                        h.attackerName
-                                                    ] || 0) + 1;
+                                                stats.enemyKills[h.attackerName] = (stats.enemyKills[h.attackerName] || 0) + 1;
                                                 stats.teamSummary.enemy.totalKills += 1;
                                                 stats.teamSummary.player.unitsLost += 1;
                                             }
@@ -842,10 +836,9 @@ export const useBattleSystem = () => {
                                 }
                             }
                         }
-                        hits.splice(i, 1);
+                        h.active = false;
                     }
                 }
-            }
 
             // ---- PASS 0: Corpse Cleanup ----
             if (now - lastReactSyncRef.current > 1500) {
@@ -1112,20 +1105,21 @@ export const useBattleSystem = () => {
                                             ? MAGE_PROJECTILE_TIME_MS
                                             : 200;
 
-                                    pendingDamageRef.current.push({
-                                        targetId: currentTarget.id,
-                                        damage: finalDmg,
-                                        hitTime: simNow + travelTime,
-                                        position: [tData.position[0], tData.position[1], tData.position[2]] as [
-                                            number,
-                                            number,
-                                            number,
-                                        ],
-                                        color: teamColor,
-                                        attackerName: u.userName,
-                                        attackerClass: u.unitClass,
-                                        attackerId: u.id,
-                                    });
+                                    // ZERO-ALLOC: Use pre-allocated pool instead of .push({})
+                                    const dmgSlot = pendingDamagePool.current.find(s => !s.active);
+                                    if (dmgSlot) {
+                                        dmgSlot.active = true;
+                                        dmgSlot.targetId = currentTarget.id;
+                                        dmgSlot.damage = finalDmg;
+                                        dmgSlot.hitTime = simNow + travelTime;
+                                        dmgSlot.posX = tData.position[0];
+                                        dmgSlot.posY = tData.position[1];
+                                        dmgSlot.posZ = tData.position[2];
+                                        dmgSlot.color = teamColor;
+                                        dmgSlot.attackerName = u.userName;
+                                        dmgSlot.attackerClass = u.unitClass;
+                                        dmgSlot.attackerId = u.id;
+                                    }
 
                                     const availableSlot =
                                         spellsRef.current.find(
@@ -1456,7 +1450,7 @@ export const useBattleSystem = () => {
         [
             addKillEvent,
             entityManager,
-            towerConfig.unitConfig,
+            towerConfig,
             flushDamageBuffer,
         ],
     );
@@ -1472,8 +1466,8 @@ export const useBattleSystem = () => {
             )[0];
         const dDealer = sort(statsRef.current.damageDealt);
         const tSpawner = sort(statsRef.current.unitsSpawned);
-        const pTopHitter = sort(statsRef.current.playerHits);
-        const eTopHitter = sort(statsRef.current.enemyHits);
+        const pTopHitter = sort(statsRef.current.playerDamage);
+        const eTopHitter = sort(statsRef.current.enemyDamage);
         return {
             topDamage: dDealer
                 ? { username: dDealer[0], value: dDealer[1] }
@@ -1491,10 +1485,10 @@ export const useBattleSystem = () => {
     }, []);
 
     const clearVFXCache = useCallback(() => {
-        damageQueueRef.current = [];
+        pendingDamagePool.current.forEach(p => p.active = false);
+        damageQueueRef.current.length = 0;
         damageBufferRef.current.clear();
-        perfHistoryRef.current = [];
-        pendingDamageRef.current = [];
+        perfHistoryRef.current.length = 0;
     }, []);
 
     const downloadPerfLogs = useCallback(() => {
