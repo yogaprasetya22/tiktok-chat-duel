@@ -56,11 +56,10 @@ export function AssassinArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, v
             child.castShadow = false;
             child.receiveShadow = false;
             child.frustumCulled = true;
-            if (child.material) {
-                child.material = child.material.clone();
-            }
             const name = child.name.toLowerCase();
             if (name.includes('cloth') || name.includes('mask') || name.includes('hood') || name.includes('wrap')) {
+                // PERF: Only clone material for colorable meshes — shared materials for everything else
+                if (child.material) child.material = child.material.clone();
                 colorable.push(child);
             }
           }

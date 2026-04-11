@@ -20,7 +20,7 @@ interface TankArmyProps {
   renderedIdsRef: React.RefObject<Set<string>>;
 }
 
-const POOL_SIZE = 8;
+const POOL_SIZE = 40;
 
 export function TankArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, vehicles, unitIndex, renderedIdsRef }: TankArmyProps) {
   const poolMapRef = useRef<Map<string, number>>(new Map());
@@ -41,21 +41,21 @@ export function TankArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, vehic
   const teamMats = useMemo(() => {
     const mats: Record<string, THREE.Material[]> = { player: [], enemy: [] };
     const assets = [t1, t2];
-    
+
     // For each unique asset, pre-clone materials for both teams
     assets.forEach((asset, assetIdx) => {
-        if (!asset.scene) return;
-        asset.scene.traverse((child: any) => {
-            if (child.isMesh && child.material) {
-                const mP = child.material.clone();
-                const mE = child.material.clone();
-                mP.color.set(towerConfig.player.color);
-                mE.color.set(towerConfig.enemy.color);
-                child[`_matIdx_${assetIdx}`] = mats.player.length; // store index
-                mats.player.push(mP);
-                mats.enemy.push(mE);
-            }
-        });
+      if (!asset.scene) return;
+      asset.scene.traverse((child: any) => {
+        if (child.isMesh && child.material) {
+          const mP = child.material.clone();
+          const mE = child.material.clone();
+          mP.color.set(towerConfig.player.color);
+          mE.color.set(towerConfig.enemy.color);
+          child[`_matIdx_${assetIdx}`] = mats.player.length; // store index
+          mats.player.push(mP);
+          mats.enemy.push(mE);
+        }
+      });
     });
     return mats;
   }, [t1, t2, towerConfig.player.color, towerConfig.enemy.color]);
@@ -74,7 +74,7 @@ export function TankArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, vehic
       if (selected.animations) {
         selected.animations.forEach((clip: THREE.AnimationClip) => { actions[clip.name] = mixer.clipAction(clip); });
       }
-      
+
       // We don't clone materials here anymore, we'll assign shared ones in the loop based on team
       const colorable: THREE.Mesh[] = [];
       clone.traverse((child: any) => {
@@ -85,7 +85,7 @@ export function TankArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, vehic
           child._assetIdx = assetIdx;
           const name = child.name.toLowerCase();
           if (name.includes('helmet') || name.includes('shield') || name.includes('cloth') || name.includes('armour') || name.includes('trim')) {
-             colorable.push(child);
+            colorable.push(child);
           }
         }
       });
@@ -127,19 +127,19 @@ export function TankArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, vehic
         let bestDistSq = uData.perceptionRadiusSq || 3600;
         let bestTargetId = undefined;
         rawMap.forEach((potential, pid) => {
-           if (pid === id || potential.hp <= 0 || potential.isDying) return;
-           if (potential.type === u.type) return;
-           if (mode === 'TRAINING' && u.type === 'player' && potential.userName !== 'Training') return;
-            const dx = uData.position[0] - potential.position[0];
-            const dz = uData.position[2] - potential.position[2];
-            const dSq = dx * dx + dz * dz;
-            const perceptionRadiusSq = uData.perceptionRadiusSq || 900; 
-            const chaseRangeSq = (uData.chaseRange || 50) * (uData.chaseRange || 50);
-            const switchThreshold = pid === u.targetId ? 1.0 : 0.6;
-            if (dSq < perceptionRadiusSq && dSq < bestDistSq * switchThreshold && dSq < chaseRangeSq) {
-              bestDistSq = dSq;
-              bestTargetId = pid;
-           }
+          if (pid === id || potential.hp <= 0 || potential.isDying) return;
+          if (potential.type === u.type) return;
+          if (mode === 'TRAINING' && u.type === 'player' && potential.userName !== 'Training') return;
+          const dx = uData.position[0] - potential.position[0];
+          const dz = uData.position[2] - potential.position[2];
+          const dSq = dx * dx + dz * dz;
+          const perceptionRadiusSq = uData.perceptionRadiusSq || 900;
+          const chaseRangeSq = (uData.chaseRange || 50) * (uData.chaseRange || 50);
+          const switchThreshold = pid === u.targetId ? 1.0 : 0.6;
+          if (dSq < perceptionRadiusSq && dSq < bestDistSq * switchThreshold && dSq < chaseRangeSq) {
+            bestDistSq = dSq;
+            bestTargetId = pid;
+          }
         });
         u.targetId = bestTargetId;
         const coreUnit = unitIndex?.current?.get(id);
@@ -159,66 +159,66 @@ export function TankArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, vehic
           u.targetId = undefined;
         }
       } else {
-        const baseZ = u.type === 'player' ? ENEMY_BASE_Z : PLAYER_BASE_Z; 
+        const baseZ = u.type === 'player' ? ENEMY_BASE_Z : PLAYER_BASE_Z;
         const distToBaseSq = Math.pow(uData.position[2] - baseZ, 2);
         uData.status = distToBaseSq < 9 ? 'attacking' : 'marching';
       }
 
       // VFX Trigger
-        // VFX (Melee Slashes)
-        const currentAtk = u.lastAttackTime || 0;
-        const prevAtk = lastVFXRef.current.get(id) || 0;
-        if (currentAtk > prevAtk) {
-             const forwardX = Math.sin(uData.rotation[1]) * 2.0;
-             const forwardZ = Math.cos(uData.rotation[1]) * 2.0;
-             spawnVFX([uData.position[0] + forwardX, 1.5, uData.position[2] + forwardZ], 'slash', '#ffffff');
-             lastVFXRef.current.set(id, currentAtk);
-        }
+      // VFX (Melee Slashes)
+      const currentAtk = u.lastAttackTime || 0;
+      const prevAtk = lastVFXRef.current.get(id) || 0;
+      if (currentAtk > prevAtk) {
+        const forwardX = Math.sin(uData.rotation[1]) * 2.0;
+        const forwardZ = Math.cos(uData.rotation[1]) * 2.0;
+        spawnVFX([uData.position[0] + forwardX, 1.5, uData.position[2] + forwardZ], 'slash', '#ffffff');
+        lastVFXRef.current.set(id, currentAtk);
+      }
 
       // Steering & Rotation
       const vehicle = vehicles?.current?.get(id);
       if (vehicle) {
         let isChasing = false;
         if (u.targetId) {
-            const target = rawMap.get(u.targetId);
-            if (target) {
-              // PERF: Find SeekBehavior directly instead of forEach
-              const seekB = vehicle.steering.behaviors.find((b: any) => b.target !== undefined);
-              if (seekB) {
-                   const totalVal = id.split('-').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0);
-                   const angle = (totalVal % 360) * (Math.PI / 180);
-                   const orbitRadius = uData.encirclementRadius || 1.25;
-                   const encRadius = orbitRadius * 1.5; // Tanks spread out more
-                   const offsetX = Math.cos(angle) * encRadius;
-                   const offsetZ = Math.sin(angle) * encRadius;
-                   seekB.target.set(target.position[0] + offsetX, 0, target.position[2] + offsetZ);
-                   isChasing = true;
-              }
+          const target = rawMap.get(u.targetId);
+          if (target) {
+            // PERF: Find SeekBehavior directly instead of forEach
+            const seekB = vehicle.steering.behaviors.find((b: any) => b.target !== undefined);
+            if (seekB) {
+              const totalVal = id.split('-').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0);
+              const angle = (totalVal % 360) * (Math.PI / 180);
+              const orbitRadius = uData.encirclementRadius || 1.25;
+              const encRadius = orbitRadius * 1.5; // Tanks spread out more
+              const offsetX = Math.cos(angle) * encRadius;
+              const offsetZ = Math.sin(angle) * encRadius;
+              seekB.target.set(target.position[0] + offsetX, 0, target.position[2] + offsetZ);
+              isChasing = true;
             }
+          }
         }
 
         if (!isChasing) {
-            const seekB = vehicle.steering.behaviors.find((b: any) => b.target !== undefined);
-            if (seekB) {
-                 const baseZ = u.type === 'player' ? ENEMY_BASE_Z : PLAYER_BASE_Z; 
-                 const amp = uData.laneSwaggerAmp || 0.5;
-                 const swagger = Math.sin((id.length * 5) + (uData.jitterOffset || 0)) * amp;
-                 seekB.target.set((uData.laneOffset || 0) + swagger, 0, baseZ);
-            }
+          const seekB = vehicle.steering.behaviors.find((b: any) => b.target !== undefined);
+          if (seekB) {
+            const baseZ = u.type === 'player' ? ENEMY_BASE_Z : PLAYER_BASE_Z;
+            const amp = uData.laneSwaggerAmp || 0.5;
+            const swagger = Math.sin((id.length * 5) + (uData.jitterOffset || 0)) * amp;
+            seekB.target.set((uData.laneOffset || 0) + swagger, 0, baseZ);
+          }
         }
         vehicle.maxSpeed = (uData.status === 'attacking' || u.isDying) ? 0 : (u.speed || 2) * (settings.globalSpeedMultiplier || 1);
-        
+
         // Rotation
         const velSq = vehicle.velocity.x ** 2 + vehicle.velocity.z ** 2;
         if (uData.status === 'marching' && velSq > 0.01) {
-            uData.rotation[1] = Math.atan2(vehicle.velocity.x, vehicle.velocity.z);
+          uData.rotation[1] = Math.atan2(vehicle.velocity.x, vehicle.velocity.z);
         } else if (uData.status === 'attacking') {
-            const baseZ = u.type === 'player' ? ENEMY_BASE_Z : PLAYER_BASE_Z;
-            const tData = u.targetId ? rawMap.get(u.targetId) : null;
-            const tx = tData ? tData.position[0] : 0;
-            const tz = tData ? tData.position[2] : baseZ;
-            const targetRot = Math.atan2(tx - uData.position[0], tz - uData.position[2]);
-            uData.rotation[1] = THREE.MathUtils.lerp(uData.rotation[1], targetRot, settings.rotationSmoothing || 0.1);
+          const baseZ = u.type === 'player' ? ENEMY_BASE_Z : PLAYER_BASE_Z;
+          const tData = u.targetId ? rawMap.get(u.targetId) : null;
+          const tx = tData ? tData.position[0] : 0;
+          const tz = tData ? tData.position[2] : baseZ;
+          const targetRot = Math.atan2(tx - uData.position[0], tz - uData.position[2]);
+          uData.rotation[1] = THREE.MathUtils.lerp(uData.rotation[1], targetRot, settings.rotationSmoothing || 0.1);
         }
       }
     });
@@ -245,8 +245,8 @@ export function TankArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, vehic
           const isPlayer = u.type === 'player';
           const teamMaterials = u.type === 'player' ? teamMats.player : teamMats.enemy;
           pItem.colorable.forEach((mesh: any) => {
-              const matIdx = mesh[`_matIdx_${mesh._assetIdx}`];
-              if (matIdx !== undefined) mesh.material = teamMaterials[matIdx];
+            const matIdx = mesh[`_matIdx_${mesh._assetIdx}`];
+            if (matIdx !== undefined) mesh.material = teamMaterials[matIdx];
           });
         } else return;
       }
@@ -264,11 +264,11 @@ export function TankArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, vehic
       else if (uData.status === 'marching') targetAnim = 'Run';
       else if (uData.status === 'attacking') {
         const actionNames = Object.keys(pItem.actions);
-        const foundAttack = actionNames.find(n => 
-          n === 'ShieldBash' || 
-          n === 'Attack' || 
-          n.includes('Attack') || 
-          n.includes('Slash') || 
+        const foundAttack = actionNames.find(n =>
+          n === 'ShieldBash' ||
+          n === 'Attack' ||
+          n.includes('Attack') ||
+          n.includes('Slash') ||
           n.includes('Bash')
         );
         targetAnim = foundAttack || 'Idle';

@@ -58,11 +58,10 @@ export function MageArmy({ unitsMap, towerConfig, settingsRef, spellsRef, simTim
             child.castShadow = false;
             child.receiveShadow = false;
             child.frustumCulled = true;
-            if (child.material) {
-                child.material = child.material.clone();
-            }
             const name = child.name.toLowerCase();
             if (name.includes('cloth') || name.includes('robe') || name.includes('hat') || name.includes('cape') || name.includes('trim')) {
+               // PERF: Only clone material for colorable meshes — shared materials for everything else
+               if (child.material) child.material = child.material.clone();
                colorable.push(child);
             }
           }
