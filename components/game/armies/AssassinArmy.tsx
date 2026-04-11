@@ -20,7 +20,7 @@ interface AssassinArmyProps {
   renderedIdsRef: React.RefObject<Set<string>>;
 }
 
-const POOL_SIZE = 8;
+const POOL_SIZE = 15;
 
 export function AssassinArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, vehicles, unitIndex, renderedIdsRef }: AssassinArmyProps) {
   const poolMapRef = useRef<Map<string, number>>(new Map());

@@ -20,7 +20,7 @@ interface TankArmyProps {
   renderedIdsRef: React.RefObject<Set<string>>;
 }
 
-const POOL_SIZE = 40;
+const POOL_SIZE = 60;
 
 export function TankArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, vehicles, unitIndex, renderedIdsRef }: TankArmyProps) {
   const poolMapRef = useRef<Map<string, number>>(new Map());

@@ -20,7 +20,7 @@ interface FighterArmyProps {
   renderedIdsRef: React.RefObject<Set<string>>;
 }
 
-const POOL_SIZE = 14;
+const POOL_SIZE = 60;
 
 export function FighterArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, vehicles, unitIndex, renderedIdsRef }: FighterArmyProps) {
   const poolMapRef = useRef<Map<string, number>>(new Map());

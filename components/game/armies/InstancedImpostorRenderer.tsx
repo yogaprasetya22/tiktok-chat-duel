@@ -76,17 +76,29 @@ export function InstancedImpostorRenderer({
 
   // Impostor material — simple, unlit, transparent edges
   const material = useMemo(() => {
-    return new THREE.ShaderMaterial({
+    return new THREE.RawShaderMaterial({
       uniforms: {},
       vertexShader: `
+        precision highp float;
+        uniform mat4 projectionMatrix;
+        uniform mat4 modelViewMatrix;
+        attribute vec3 position;
+        attribute vec2 uv;
+        attribute mat4 instanceMatrix;
+        attribute vec3 instanceColor;
+
         varying vec2 vUv;
+        varying vec3 vColor;
         void main() {
           vUv = uv;
+          vColor = instanceColor;
           gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
         }
       `,
       fragmentShader: `
+        precision highp float;
         varying vec2 vUv;
+        varying vec3 vColor;
         void main() {
           // Soldier silhouette: rounded rectangle with head
           vec2 p = vUv * 2.0 - 1.0;
@@ -108,13 +120,12 @@ export function InstancedImpostorRenderer({
           float alpha = max(body, head);
           if (alpha < 0.1) discard;
           
-          // Use instance color
-          gl_FragColor = vec4(vec3(1.0), alpha * 0.9);
+          // Use instance color passed from CPU
+          gl_FragColor = vec4(vColor, alpha * 0.9);
         }
       `,
       transparent: true,
-      depthWrite: false,
-      side: THREE.DoubleSide,
+      depthWrite: false, // impostors are far and numerous, don't mess with depth
     });
   }, []);
 

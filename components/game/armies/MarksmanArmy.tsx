@@ -20,7 +20,7 @@ interface MarksmanArmyProps {
   renderedIdsRef: React.RefObject<Set<string>>;
 }
 
-const POOL_SIZE = 8;
+const POOL_SIZE = 35;
 
 export function MarksmanArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, vehicles, unitIndex, renderedIdsRef }: MarksmanArmyProps) {
   const poolMapRef = useRef<Map<string, number>>(new Map());

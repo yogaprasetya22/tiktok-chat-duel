@@ -22,7 +22,7 @@ interface MageArmyProps {
   renderedIdsRef: React.RefObject<Set<string>>;
 }
 
-const POOL_SIZE = 8;
+const POOL_SIZE = 25;
 
 export function MageArmy({ unitsMap, towerConfig, settingsRef, spellsRef, simTimeRef, vehicles, unitIndex, renderedIdsRef }: MageArmyProps) {
   const poolMapRef = useRef<Map<string, number>>(new Map());
