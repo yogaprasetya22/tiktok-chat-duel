@@ -13,7 +13,11 @@ import { MageArmy } from './armies/MageArmy';
 import { MarksmanArmy } from './armies/MarksmanArmy';
 import { AssassinArmy } from './armies/AssassinArmy';
 import { InstancedImpostorRenderer } from './armies/InstancedImpostorRenderer';
-import { MageSpellEffect, SpellEntry } from './MageSpellEffect';
+import { MageSpellEffect, SpellEntry } from './effects/MageSpellEffect';
+import { MMSpellEffect } from './effects/MMSpellEffect';
+import { FighterSpellEffect } from './effects/FighterSpellEffect';
+import { TankSpellEffect } from './effects/TankSpellEffect';
+import { AssassinSpellEffect } from './effects/AssassinSpellEffect';
 
 interface BattleArmyProps {
   unitRegistry: React.RefObject<UnitRuntimeData[]>;
@@ -24,6 +28,10 @@ interface BattleArmyProps {
   vehicles: React.RefObject<YUKA.Vehicle[]>;
   unitIndex: React.RefObject<Map<string, ActiveUnit>>;
   spellsRef: React.RefObject<SpellEntry[]>;
+  mmSpellsRef: React.RefObject<SpellEntry[]>;
+  fighterSpellsRef: React.RefObject<any[]>;
+  tankSpellsRef: React.RefObject<any[]>;
+  assassinSpellsRef: React.RefObject<any[]>;
   vfxRef?: React.RefObject<any>;
 }
 
@@ -131,7 +139,11 @@ const MLHealthBarShader = {
   `
 };
 
-export function BattleArmy({ unitRegistry, towerConfig, updateSimulation, settingsRef, simTimeRef, vehicles, unitIndex, spellsRef, vfxRef }: BattleArmyProps) {
+export function BattleArmy({ 
+  unitRegistry, towerConfig, updateSimulation, settingsRef, simTimeRef, 
+  vehicles, unitIndex, spellsRef, mmSpellsRef, fighterSpellsRef, 
+  tankSpellsRef, assassinSpellsRef, vfxRef 
+}: BattleArmyProps) {
 
   const shadowRef = useRef<THREE.InstancedMesh>(null!);
   const healthBgRef = useRef<THREE.InstancedMesh>(null!);
@@ -317,11 +329,11 @@ export function BattleArmy({ unitRegistry, towerConfig, updateSimulation, settin
   return (
     <group>
       {/* Full-3D Animated Unit Rendering by Class */}
-      <FighterArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} renderedIdsRef={renderedIdsRef} shadowRef={shadowRef} healthBgRef={healthBgRef} healthFillRef={healthFillRef} notchRef={notchRef} hudBaseIdx={0} namePoolMap={namePoolMap} nameTextRefs={nameTextRefs} />
-      <TankArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} renderedIdsRef={renderedIdsRef} shadowRef={shadowRef} healthBgRef={healthBgRef} healthFillRef={healthFillRef} notchRef={notchRef} hudBaseIdx={30} namePoolMap={namePoolMap} nameTextRefs={nameTextRefs} />
+      <FighterArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} renderedIdsRef={renderedIdsRef} shadowRef={shadowRef} healthBgRef={healthBgRef} healthFillRef={healthFillRef} notchRef={notchRef} hudBaseIdx={0} namePoolMap={namePoolMap} nameTextRefs={nameTextRefs} fighterSpellsRef={fighterSpellsRef} />
+      <TankArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} renderedIdsRef={renderedIdsRef} shadowRef={shadowRef} healthBgRef={healthBgRef} healthFillRef={healthFillRef} notchRef={notchRef} hudBaseIdx={30} namePoolMap={namePoolMap} nameTextRefs={nameTextRefs} tankSpellsRef={tankSpellsRef} />
       <MageArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} spellsRef={spellsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} renderedIdsRef={renderedIdsRef} shadowRef={shadowRef} healthBgRef={healthBgRef} healthFillRef={healthFillRef} notchRef={notchRef} hudBaseIdx={60} namePoolMap={namePoolMap} nameTextRefs={nameTextRefs} />
-      <MarksmanArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} spellsRef={spellsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} renderedIdsRef={renderedIdsRef} shadowRef={shadowRef} healthBgRef={healthBgRef} healthFillRef={healthFillRef} notchRef={notchRef} hudBaseIdx={80} namePoolMap={namePoolMap} nameTextRefs={nameTextRefs} />
-      <AssassinArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} renderedIdsRef={renderedIdsRef} shadowRef={shadowRef} healthBgRef={healthBgRef} healthFillRef={healthFillRef} notchRef={notchRef} hudBaseIdx={100} namePoolMap={namePoolMap} nameTextRefs={nameTextRefs} />
+      <MarksmanArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} spellsRef={spellsRef} mmSpellsRef={mmSpellsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} renderedIdsRef={renderedIdsRef} shadowRef={shadowRef} healthBgRef={healthBgRef} healthFillRef={healthFillRef} notchRef={notchRef} hudBaseIdx={80} namePoolMap={namePoolMap} nameTextRefs={nameTextRefs} />
+      <AssassinArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} renderedIdsRef={renderedIdsRef} shadowRef={shadowRef} healthBgRef={healthBgRef} healthFillRef={healthFillRef} notchRef={notchRef} hudBaseIdx={100} namePoolMap={namePoolMap} nameTextRefs={nameTextRefs} assassinSpellsRef={assassinSpellsRef} />
 
       {/* LOD Impostor Layer: far-away units rendered as InstancedMesh billboards (2 draw calls) */}
       <InstancedImpostorRenderer
@@ -334,6 +346,14 @@ export function BattleArmy({ unitRegistry, towerConfig, updateSimulation, settin
 
       {/* Mage GLSL Spell Projectiles */}
       <MageSpellEffect spellsRef={spellsRef} unitRegistry={unitRegistry} simTimeRef={simTimeRef} />
+      
+      {/* Marksman GLSL Projectiles */}
+      <MMSpellEffect spellsRef={mmSpellsRef} unitRegistry={unitRegistry} simTimeRef={simTimeRef} />
+
+      {/* Melee Combat Effects */}
+      <FighterSpellEffect fighterSpellsRef={fighterSpellsRef} simTimeRef={simTimeRef} />
+      <TankSpellEffect tankSpellsRef={tankSpellsRef} simTimeRef={simTimeRef} />
+      <AssassinSpellEffect assassinSpellsRef={assassinSpellsRef} simTimeRef={simTimeRef} />
 
       {/* Centralized HUD Layer */}
       <instancedMesh ref={shadowRef} args={[null as any, null as any, MAX_UNITS]} geometry={shadowGeo} material={shadowMat} />

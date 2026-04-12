@@ -105,20 +105,20 @@ export const VFXProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         type === 'muzzle' ? 20 :
           type === 'death' ? 4 : 3;
 
-    const baseSize = type === 'shockwave' ? 3.5 :
-      type === 'fireball_hit' ? 0.45 : 
-      type === 'blood' ? 0.35 : 
-      type === 'mega_explosion' ? 0.4 :
-        type === 'spark' ? 0.12 : 
-        type === 'muzzle' ? 0.6 :
+    const baseSize = type === 'shockwave' ? 2.5 :
+      type === 'fireball_hit' ? 0.35 : 
+      type === 'blood' ? 0.25 : 
+      type === 'mega_explosion' ? 0.15 :
+        type === 'spark' ? 0.08 : 
+        type === 'muzzle' ? 0.4 :
           type === 'slash' ? 0.8 : 0.25;
 
-    const baseLife = type === 'shockwave' ? 0.3 :
-      type === 'fireball_hit' ? 0.65 : 
-      type === 'blood' ? 0.8 : 
-      type === 'mega_explosion' ? 2.5 :
-        type === 'spark' ? 0.3 : 
-        type === 'muzzle' ? 0.15 :
+    const baseLife = type === 'shockwave' ? 0.2 :
+      type === 'fireball_hit' ? 0.4 : 
+      type === 'blood' ? 0.6 : 
+      type === 'mega_explosion' ? 0.8 :
+        type === 'spark' ? 0.2 : 
+        type === 'muzzle' ? 0.1 :
           type === 'slash' ? 0.25 : 0.6;
 
     const typeId = typeToId(type);

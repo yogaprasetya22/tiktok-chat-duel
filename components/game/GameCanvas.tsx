@@ -103,6 +103,10 @@ interface GameCanvasProps {
   vehicles: React.RefObject<YUKA.Vehicle[]>;
   unitIndex: React.RefObject<Map<string, any>>;
   spellsRef: React.RefObject<any[]>;
+  mmSpellsRef: React.RefObject<any[]>;
+  fighterSpellsRef: React.RefObject<any[]>;
+  tankSpellsRef: React.RefObject<any[]>;
+  assassinSpellsRef: React.RefObject<any[]>;
   downloadPerfLogs: () => void;
   clearVFXCache: () => void;
 }
@@ -123,6 +127,10 @@ export const GameCanvas = React.memo(({
   vehicles,
   unitIndex,
   spellsRef,
+  mmSpellsRef,
+  fighterSpellsRef,
+  tankSpellsRef,
+  assassinSpellsRef,
   downloadPerfLogs,
   clearVFXCache,
 }: GameCanvasProps) => {
@@ -316,6 +324,10 @@ export const GameCanvas = React.memo(({
             vehicles={vehicles}
             unitIndex={unitIndex}
             spellsRef={spellsRef}
+            mmSpellsRef={mmSpellsRef}
+            fighterSpellsRef={fighterSpellsRef}
+            tankSpellsRef={tankSpellsRef}
+            assassinSpellsRef={assassinSpellsRef}
           />
 
 

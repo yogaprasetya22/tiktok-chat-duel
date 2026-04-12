@@ -7,7 +7,6 @@
 
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import * as YUKA from "yuka";
-import * as THREE from "three";
 import { useStore } from "./useStore";
 
 import type {
@@ -84,6 +83,30 @@ export const useBattleSystem = () => {
         Array.from({ length: 300 }, () => ({
             fromX: 0, fromY: 1, fromZ: 0, toX: 0, toY: 1, toZ: 0,
             progress: 0, startTime: 0, active: false,
+        }))
+    );
+    const mmSpellsRef = useRef<any[]>(
+        Array.from({ length: 400 }, () => ({
+            fromX: 0, fromY: 1, fromZ: 0, toX: 0, toY: 1, toZ: 0,
+            progress: 0, startTime: 0, active: false,
+        }))
+    );
+    const fighterSpellsRef = useRef<any[]>(
+        Array.from({ length: 200 }, () => ({
+            x: 0, y: 0, z: 0, rotation: 0,
+            progress: 0, startTime: 0, active: false, color: '#ffffff'
+        }))
+    );
+    const tankSpellsRef = useRef<any[]>(
+        Array.from({ length: 150 }, () => ({
+            x: 0, y: 0, z: 0,
+            progress: 0, startTime: 0, active: false, color: '#ffffff'
+        }))
+    );
+    const assassinSpellsRef = useRef<any[]>(
+        Array.from({ length: 150 }, () => ({
+            x: 0, y: 0, z: 0,
+            progress: 0, startTime: 0, active: false, color: '#ffffff'
         }))
     );
 
@@ -164,6 +187,8 @@ export const useBattleSystem = () => {
         unitIndexRef.current.clear();
         damageBufferRef.current.clear();
         damageQueueRef.current.length = 0;
+        spellsRef.current.forEach(s => s.active = false);
+        mmSpellsRef.current.forEach(s => s.active = false);
     }, [entityManager]);
 
     const spawnUnit = useCallback((level: number = 1, userName: string = "Guest", type: "player" | "enemy" = "player", isBoss: boolean = false, forcedClass?: any) => {
@@ -220,6 +245,7 @@ export const useBattleSystem = () => {
         uData.hp = u.hp; uData.maxHp = u.maxHp; uData.position = [v.position.x, -0.4, v.position.z];
         uData.unitClass = unitClass; uData.isBoss = isBoss; uData.lastAttackTime = 0;
         uData.status = "marching"; uData.isDying = false;
+        uData.range = u.range; uData.speed = u.speed;
 
         unitIndexRef.current.set(u.id, u);
     }, [entityManager]);
@@ -366,16 +392,53 @@ export const useBattleSystem = () => {
                             dmg *= 2.5;
                             uData.pendingCrit = false;
                         }
-                        currentTarget.hp -= dmg; tData.hp = currentTarget.hp;
-                        
-                        // INSTANT PURGE IF DEAD
-                        if (currentTarget.hp <= 0) {
-                            currentTarget.isActive = false;
-                            tData.isActive = false;
-                            tData.position[1] = -100; // Teleport underground instantly
-                        }
 
-                        accumulateDamage(currentTarget.id, dmg, tData.position, u.type === 'player' ? "#0066FF" : "#FF0033");
+                        if (u.unitClass === 'mage') {
+                            // --- MAGE AOE LOGIC ---
+                            let hits = 0;
+                            const AOE_RADIUS_SQ = 12.25; // 3.5m radius
+                            const myBucket = Math.floor(tData.position[2] / 4.0);
+                            
+                            // Hit the main target first
+                            currentTarget.hp -= dmg; tData.hp = currentTarget.hp;
+                            if (currentTarget.hp <= 0) { currentTarget.isActive = false; tData.isActive = false; tData.position[1] = -100; }
+                            accumulateDamage(currentTarget.id, dmg, tData.position, u.type === 'player' ? "#0066FF" : "#FF0033");
+                            hits++;
+
+                            // Search for up to 3 more nearby enemies
+                            for (let bOff = -1; bOff <= 1; bOff++) {
+                                if (hits >= 4) break;
+                                const neighbors = bucketsMapRef.current.get(myBucket + bOff);
+                                if (!neighbors) continue;
+                                for (const neighborIdx of neighbors) {
+                                    if (hits >= 4) break;
+                                    const potential = unitPoolRef.current[neighborIdx];
+                                    if (potential.id === currentTarget.id || potential.type === u.type || potential.isDying || !potential.isActive) continue;
+                                    
+                                    const pData = unitDataPoolRef.current[neighborIdx];
+                                    const dx = tData.position[0] - pData.position[0];
+                                    const dz = tData.position[2] - pData.position[2];
+                                    if (dx*dx + dz*dz < AOE_RADIUS_SQ) {
+                                        potential.hp -= dmg; pData.hp = potential.hp;
+                                        if (potential.hp <= 0) { potential.isActive = false; pData.isActive = false; pData.position[1] = -100; }
+                                        accumulateDamage(potential.id, dmg, pData.position, u.type === 'player' ? "#0066FF" : "#FF0033");
+                                        hits++;
+                                    }
+                                }
+                            }
+                        } else {
+                            // Standard Single Target
+                            currentTarget.hp -= dmg; tData.hp = currentTarget.hp;
+                            
+                            // INSTANT PURGE IF DEAD
+                            if (currentTarget.hp <= 0) {
+                                currentTarget.isActive = false;
+                                tData.isActive = false;
+                                tData.position[1] = -100; // Teleport underground instantly
+                            }
+
+                            accumulateDamage(currentTarget.id, dmg, tData.position, u.type === 'player' ? "#0066FF" : "#FF0033");
+                        }
                         uData.lastAttackTime = simNow;
                     }
                 } else {
@@ -429,6 +492,10 @@ export const useBattleSystem = () => {
         unitIndex: unitIndexRef,
         updateSettingsRef: (newS: any) => { settingsRef.current = { ...settingsRef.current, ...newS }; },
         spellsRef: spellsRef,
+        mmSpellsRef: mmSpellsRef,
+        fighterSpellsRef: fighterSpellsRef,
+        tankSpellsRef: tankSpellsRef,
+        assassinSpellsRef: assassinSpellsRef,
         stats: statsRef.current,
         triggerAirstrike: (side: "player" | "enemy") => {
             for (let i = 0; i < WORLD_UNIT_POOL_SIZE; i++) {

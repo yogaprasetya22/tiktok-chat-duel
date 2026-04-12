@@ -35,6 +35,10 @@ export default function TrainingPage() {
     vehicles,
     unitIndex,
     spellsRef,
+    mmSpellsRef,
+    fighterSpellsRef,
+    tankSpellsRef,
+    assassinSpellsRef,
     downloadPerfLogs,
     clearVFXCache,
   } = useBattleSystem();
@@ -164,6 +168,10 @@ export default function TrainingPage() {
             vehicles={vehicles}
             unitIndex={unitIndex}
             spellsRef={spellsRef}
+            mmSpellsRef={mmSpellsRef}
+            fighterSpellsRef={fighterSpellsRef}
+            tankSpellsRef={tankSpellsRef}
+            assassinSpellsRef={assassinSpellsRef}
             downloadPerfLogs={downloadPerfLogs}
             clearVFXCache={clearVFXCache}
           />

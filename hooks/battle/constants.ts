@@ -24,7 +24,7 @@ export let CLASS_CONFIG: ClassConfig = {
         attack_speed_mult: 1.1,
         crit_chance: 0.15,
         crit_damage: 2.0,
-        range: 1.2,
+        range: 3.2,
         tenacity: 0.2,
         cooldown_reduction: 0.1,
         ai_behavior: {
@@ -49,7 +49,7 @@ export let CLASS_CONFIG: ClassConfig = {
         attack_speed_mult: 0.8,
         crit_chance: 0.05,
         crit_damage: 1.5,
-        range: 1.0,
+        range: 3.0,
         tenacity: 0.5,
         cooldown_reduction: 0.15,
         ai_behavior: {
@@ -71,12 +71,12 @@ export let CLASS_CONFIG: ClassConfig = {
         lifesteal: 0.0,
         spell_vamp: 0.25,
         move_speed_mult: 1.0,
-        attack_speed_mult: 0.6,
+        attack_speed_mult: 0.4,
         crit_chance: 0.05,
         crit_damage: 1.5,
         range: 15.0,
         tenacity: 0.0,
-        cooldown_reduction: 0.3,
+        cooldown_reduction: 0.1,
         ai_behavior: {
             separation: 2.5,
             encirclement: 1.5,
@@ -124,7 +124,7 @@ export let CLASS_CONFIG: ClassConfig = {
         attack_speed_mult: 1.25,
         crit_chance: 0.3,
         crit_damage: 2.5,
-        range: 1.2,
+        range: 2.0,
         tenacity: 0.1,
         cooldown_reduction: 0.2,
         ai_behavior: {
