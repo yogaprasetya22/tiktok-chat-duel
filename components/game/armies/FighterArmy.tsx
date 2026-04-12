@@ -39,11 +39,11 @@ const _hudTemp = new THREE.Object3D();
 const _healthColor = new THREE.Color();
 const _whiteColor = new THREE.Color('#ffffff');
 
-export function FighterArmy({
+const FighterArmyComponent = ({
   unitsMap, towerConfig, settingsRef, simTimeRef, vehicles, unitIndex,
   renderedIdsRef, shadowRef, healthBgRef, healthFillRef, notchRef, hudBaseIdx,
   namePoolMap, nameTextRefs, fighterSpellsRef
-}: FighterArmyProps) {
+}: FighterArmyProps) => {
   const poolMapRef = useRef<Map<string, number>>(new Map());
   const availableIndicesRef = useRef<number[]>([]);
   const activeSetRef = useRef<Set<string>>(new Set());
@@ -301,10 +301,7 @@ export function FighterArmy({
             seekB.target.set((uData.laneOffset || 0) + swagger, 0, baseZ);
           }
         }
-        const baseSpeed = (uData.speed || 3) * (settings.globalSpeedMultiplier || 1);
-        vehicle.maxSpeed = (uData.status === 'attacking' || uData.isDying) ? 0 : baseSpeed * weatherSpeedMult;
-
-        // Intelligence: Smoother Rotation (Fixed spinning bug)
+        // PERF: Velocity based rotation logic
         const velSq = vehicle.velocity.x ** 2 + vehicle.velocity.z ** 2;
         if (uData.status === 'marching' && velSq > 0.05) {
           const targetRot = Math.atan2(vehicle.velocity.x, vehicle.velocity.z);
@@ -379,8 +376,12 @@ export function FighterArmy({
 
       const tp = uData.position;
       const cp = pItem.group.position;
-      const lerpFactor = 1.0 - Math.exp(-25 * delta);
-      if (!pItem.initialized) {
+      
+      // Interpolation: Snap if jump is too large (Lag resilience)
+      const distSq = (tp[0]-cp.x)**2 + (tp[2]-cp.z)**2;
+
+      const lerpFactor = 1.0 - Math.exp(-45 * delta); // Snappier smoothing
+      if (!pItem.initialized || distSq > 25) { // Snap if > 5m
         cp.set(tp[0], tp[1], tp[2]);
         pItem.rotation = uData.rotation[1];
         pItem.group.rotation.y = pItem.rotation;
@@ -521,7 +522,9 @@ export function FighterArmy({
       {characterPool.map((item, idx) => (<primitive key={"pool-fighter-" + idx} object={item.group} />))}
     </group>
   );
-}
+};
+
+export const FighterArmy = React.memo(FighterArmyComponent);
 
 useGLTF.preload('/assets-model/Knight_Golden_Female.glb');
 useGLTF.preload('/assets-model/Knight_Golden_Male.glb');

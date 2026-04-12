@@ -126,7 +126,10 @@ export const useBattleSystem = () => {
         for (let i = 0; i < WORLD_UNIT_POOL_SIZE; i++) {
             units.push({ isActive: false, hp: 0, maxHp: 0, id: `pool-${i}`, isDying: false } as ActiveUnit);
             data.push({ isActive: false, id: `pool-${i}`, position: [0,0,0], rotation:[0,0,0], userName: "", isDying: false } as UnitRuntimeData);
-            const v = new YUKA.Vehicle(); v.maxSpeed = 3; v.updateOrientation = false;
+            const v = new YUKA.Vehicle(); 
+            v.maxSpeed = 3.2; 
+            v.mass = 1;
+            v.updateOrientation = false;
             vehs.push(v);
         }
         unitPoolRef.current = units;
@@ -228,7 +231,8 @@ export const useBattleSystem = () => {
         const laneOffset = isBoss ? 0 : pickRandom(LANE_OFFSETS);
         
         v.position.set(laneOffset + (Math.random()-0.5)*4, -0.4, spawnZ + (Math.random()-0.5)*4);
-        v.maxSpeed = u.speed; v.velocity.set(0,0,0);
+        v.maxSpeed = u.speed; 
+        v.velocity.set(0,0,0);
         v.steering.behaviors.length = 0;
         
         const targetZ = type === "player" ? -dist : dist;
@@ -281,24 +285,33 @@ export const useBattleSystem = () => {
 
             if (!u.isActive || u.hp <= 0) {
                 uData.position[1] = -100;
+                v.velocity.set(0,0,0); // Extra safety
                 continue;
             }
 
+            if (u.hp <= 0 && !u.isDying) { 
+                u.isDying = true; 
+                u.deathTime = simNow; // Use simulation time!
+                uData.isDying = true; 
+                v.maxSpeed = 0; 
+                v.velocity.set(0,0,0);
+                v.steering.behaviors.length = 0; 
+                entityManager.remove(v); 
+                continue; 
+            }
+
             if (u.isDying) {
-                if (now - (u.deathTime || 0) > CORPSE_DESPAWN_MS) {
+                if (simNow - (u.deathTime || 0) > CORPSE_DESPAWN_MS) {
                     u.isActive = false; uData.isActive = false;
                     unitIndexRef.current.delete(u.id);
-                    entityManager.remove(v);
                 }
                 continue;
             }
 
-            if (u.hp <= 0) { u.isDying = true; u.deathTime = now; uData.isDying = true; v.maxSpeed = 0; continue; }
-
-            // --- AI THINKING (Throttled per unit class) ---
+            // --- AI THINKING (Throttled per unit sim-time) ---
             const thinkThrottle = u.unitClass === 'fighter' ? 100 : 150;
-            if (!u.lastThinkTime || now - u.lastThinkTime > thinkThrottle) {
-                u.lastThinkTime = now;
+            if (!u.lastThinkTime || simNow - u.lastThinkTime > thinkThrottle) {
+                u.lastThinkTime = simNow;
                 const myBucket = Math.floor(uData.position[2] / 4.0);
                 const isFighter = u.unitClass === 'fighter';
                 const scanRange = isFighter ? 8 : 2; 
@@ -460,18 +473,48 @@ export const useBattleSystem = () => {
                     uData.lastAttackTime = simNow;
                 }
             } else {
-                uData.status = "marching"; v.maxSpeed = u.speed;
+                uData.status = "marching"; 
+                // Unified Speed Calculation
+                const baseSpeed = u.speed * (settings.globalSpeedMultiplier || 1.0);
+                v.maxSpeed = baseSpeed;
                 v.steering.behaviors.forEach((b: any) => { if (b.target) b.target.set(0, 0, targetBaseZ); });
             }
 
-            uData.position[0] = v.position.x; uData.position[2] = v.position.z;
+            // --- 2. PHYSICS DAMPING (Anti-Bleeding) ---
+            v.velocity.multiplyScalar(0.98); 
+
+            // --- 3. POSITION GUARD (Anti-Lightning Speed Limiter) ---
+            const oldX = uData.position[0];
+            const oldZ = uData.position[2];
+            const newX = v.position.x;
+            const newZ = v.position.z;
+            
+            // Calculate movement displacement this step
+            const dx = newX - oldX;
+            const dz = newZ - oldZ;
+            const moveDistSq = dx*dx + dz*dz;
+            
+            // Electronic speed limit: units can only move speed * delta (+ 10% safety margin)
+            const maxStepDist = v.maxSpeed * simDelta * 1.1; 
+            const maxStepDistSq = maxStepDist * maxStepDist;
+            
+            if (moveDistSq > maxStepDistSq && v.maxSpeed > 0) {
+                const ratio = maxStepDist / Math.sqrt(moveDistSq);
+                uData.position[0] = oldX + dx * ratio;
+                uData.position[2] = oldZ + dz * ratio;
+                // Sync back to physics engine so it doesn't "rubber band"
+                v.position.set(uData.position[0], -0.4, uData.position[2]);
+            } else {
+                uData.position[0] = newX;
+                uData.position[2] = newZ;
+            }
         }
 
         if (playerBaseHpRef.current <= 0 && gameStateRef.current === "PLAYING") { gameStateRef.current = "LOST"; useStore.getState().setGameState("LOST"); }
         if (enemyBaseHpRef.current <= 0 && gameStateRef.current === "PLAYING") { gameStateRef.current = "WON"; useStore.getState().setGameState("WON"); }
 
-        if (now - lastStateUpdate.current > 100) {
-            lastStateUpdate.current = now;
+        if (simNow - lastStateUpdate.current > 100) {
+            lastStateUpdate.current = simNow;
             let pC = 0, eC = 0;
             for (let i = 0; i < WORLD_UNIT_POOL_SIZE; i++) {
                 if (unitPoolRef.current[i].isActive && !unitPoolRef.current[i].isDying) {

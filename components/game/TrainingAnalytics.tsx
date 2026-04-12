@@ -29,17 +29,21 @@ export const TrainingAnalytics = ({ playerDamage, simulationTime, onReset, onDow
       return Math.round(currentTotal / elapsed);
    }, [currentTotal, sessionStartTime]);
 
+   const dpsRef = useRef(dps);
+   useEffect(() => { dpsRef.current = dps; }, [dps]);
+
    // Update DPS history and Best Score
    useEffect(() => {
       const timer = setInterval(() => {
+         const currentDps = dpsRef.current;
          setDpsHistory(prev => {
-            const next = [...prev, dps];
+            const next = [...prev, currentDps];
             return next.slice(-30);
          });
-         setSessionBestDps(prev => Math.max(prev, dps));
+         setSessionBestDps(prev => Math.max(prev, currentDps));
       }, 1000);
       return () => clearInterval(timer);
-   }, [dps]);
+   }, [sessionStartTime]);
 
 
    // Log "Big Hits"

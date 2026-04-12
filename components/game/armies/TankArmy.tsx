@@ -321,7 +321,6 @@ export function TankArmy({
             seekB.target.set((uData.laneOffset || 0) + swagger, 0, baseZ);
           }
         }
-        vehicle.maxSpeed = (uData.status === 'attacking' || uData.isDying) ? 0 : (uData.speed || 2) * (settings.globalSpeedMultiplier || 1);
 
         // Intelligence: Smoother Rotation (Fixed spinning bug)
         const velSq = vehicle.velocity.x ** 2 + vehicle.velocity.z ** 2;
@@ -407,8 +406,12 @@ export function TankArmy({
 
       const tp = uData.position;
       const cp = pItem.group.position;
-      const lerpFactor = 1.0 - Math.exp(-25 * delta);
-      if (!pItem.initialized) {
+      
+      // Interpolation: Snap if jump is too large (Lag resilience)
+      const distSq = (tp[0]-cp.x)**2 + (tp[2]-cp.z)**2;
+
+      const lerpFactor = 1.0 - Math.exp(-45 * delta); // Snappier smoothing
+      if (!pItem.initialized || distSq > 25) { // Snap if > 5m
         cp.set(tp[0], tp[1], tp[2]);
         pItem.rotation = uData.rotation[1];
         pItem.group.rotation.y = pItem.rotation;

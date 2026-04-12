@@ -139,12 +139,11 @@ const MLHealthBarShader = {
   `
 };
 
-export function BattleArmy({ 
+const BattleArmyComponent = ({ 
   unitRegistry, towerConfig, updateSimulation, settingsRef, simTimeRef, 
   vehicles, unitIndex, spellsRef, mmSpellsRef, fighterSpellsRef, 
   tankSpellsRef, assassinSpellsRef, vfxRef 
-}: BattleArmyProps) {
-
+}: BattleArmyProps) => {
   const shadowRef = useRef<THREE.InstancedMesh>(null!);
   const healthBgRef = useRef<THREE.InstancedMesh>(null!);
   const healthFillRef = useRef<THREE.InstancedMesh>(null!);
@@ -213,13 +212,31 @@ export function BattleArmy({
   const frameCountRef = useRef(0);
 
   const simAccumulator = useRef(0);
-  const SIM_STEP = 1 / 30; // 30Hz physics is stable and saves 50% CPU over 60Hz  // The master ECS physics and HUD lifecycle tick.
+  const SIM_STEP = 1 / 30; // 30Hz Logic
   useFrame((state, delta) => {
-    // 1. FIXED STEP SIMULATION (SAVES CPU/HEAT)
-    simAccumulator.current += Math.min(0.1, delta);
-    while (simAccumulator.current >= SIM_STEP) {
+    // 1. HARD CLAMPING (ANTI-FAST-FORWARD & AUTO SLOW-MO)
+    // Rule: If frame time > 100ms, we force the physics to process only 33ms or 66ms.
+    // This makes the game run in "Bullet Time" (slow-motion) during lag spikes
+    // instead of exploding with speed bursts once the lag ends.
+    let simulationDelta = delta;
+    if (delta > 0.1) simulationDelta = SIM_STEP; // Force Slow-Mo if lagging > 10fps
+    
+    const clampedDelta = Math.min(SIM_STEP * 2, simulationDelta); 
+    simAccumulator.current += clampedDelta;
+    
+    let steps = 0;
+    while (simAccumulator.current >= SIM_STEP && steps < 2) {
       updateSimulation(SIM_STEP);
       simAccumulator.current -= SIM_STEP;
+      steps++;
+    }
+    
+    // Safety: discard any extra accumulated time to prevent "Future Catch-up"
+    if (simAccumulator.current > SIM_STEP) simAccumulator.current = 0;
+
+    // DIAGNOSTIC LOCK: Prove to user the clock is stable
+    if (frameCountRef.current % 180 === 0) {
+      console.log(`[Jam Internal] Locked: ${SIM_STEP.toFixed(4)}s | Buffer: ${simAccumulator.current.toFixed(4)}s`);
     }
 
     const rawMap = unitRegistry.current;
@@ -382,4 +399,6 @@ export function BattleArmy({
       </group>
     </group>
   );
-}
+};
+
+export const BattleArmy = React.memo(BattleArmyComponent);
