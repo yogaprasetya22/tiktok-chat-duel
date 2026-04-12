@@ -167,6 +167,14 @@ export const useBattleSystem = () => {
     }, [entityManager]);
 
     const spawnUnit = useCallback((level: number = 1, userName: string = "Guest", type: "player" | "enemy" = "player", isBoss: boolean = false, forcedClass?: any) => {
+        // --- 1. CAPACITY CHECK (Sync with UI Settings) ---
+        const maxUnits = towerConfigRef.current.maxUnits || settingsRef.current.maxUnits || 200;
+        let currentActiveCount = 0;
+        for (let i = 0; i < WORLD_UNIT_POOL_SIZE; i++) {
+            if (unitPoolRef.current[i].isActive) currentActiveCount++;
+        }
+        if (currentActiveCount >= maxUnits) return;
+
         let poolIdx = -1;
         for (let i = 0; i < WORLD_UNIT_POOL_SIZE; i++) {
             if (!unitPoolRef.current[i].isActive) { poolIdx = i; break; }
@@ -200,7 +208,12 @@ export const useBattleSystem = () => {
         
         const targetZ = type === "player" ? -dist : dist;
         v.steering.add(new YUKA.SeekBehavior(new YUKA.Vector3(laneOffset, -0.4, targetZ)));
-        v.steering.add(new YUKA.SeparationBehavior());
+        
+        // Intelligence: Add separation to prevent clumping (making units feel smarter/individual)
+        const separation = new YUKA.SeparationBehavior();
+        separation.weight = 1.5; // Increased weight for better spacing
+        v.steering.add(separation);
+        
         entityManager.add(v);
 
         uData.isActive = true; uData.id = u.id; uData.type = type; uData.userName = name;
@@ -280,9 +293,7 @@ export const useBattleSystem = () => {
 
                         // Rule 3: Target Prioritization Scoring
                         let weight = 1.0;
-                        if (u.unitClass === 'assassin' && (potential.unitClass === 'mage' || potential.unitClass === 'marksman')) {
-                            weight = 10.0; 
-                        } else if (isFighter) {
+                        if (isFighter) {
                             weight = 3.0; 
                         } else if (potential.isBoss) {
                             weight = 2.0;

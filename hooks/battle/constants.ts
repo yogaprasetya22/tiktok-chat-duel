@@ -179,6 +179,7 @@ export let INITIAL_SETTINGS: SimulationSettings = {
     timeScale: 1.0,
     unitScale: 0.5,
     vfxIntensity: 1.0,
+    maxUnits: 200,
 
     // Performance & Diagnostics
     potatoMode: false,

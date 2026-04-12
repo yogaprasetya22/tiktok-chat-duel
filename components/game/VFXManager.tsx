@@ -78,7 +78,7 @@ export const VFXProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     lastSpawnAt.current[key] = now;
 
     const count = type === 'mega_explosion' ? 60 :
-      type === 'fireball_hit' ? 50 : 
+      type === 'fireball_hit' ? 20 : 
       type === 'blood' ? 12 : 
       type === 'boss-spawn' ? 40 :
         type === 'death' ? 15 :
@@ -95,7 +95,7 @@ export const VFXProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           type === 'death' ? 4 : 3;
 
     const baseSize = type === 'shockwave' ? 3.5 :
-      type === 'fireball_hit' ? 1.5 : 
+      type === 'fireball_hit' ? 0.45 : 
       type === 'blood' ? 0.35 : 
       type === 'mega_explosion' ? 0.4 :
         type === 'spark' ? 0.12 : 
@@ -103,7 +103,7 @@ export const VFXProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           type === 'slash' ? 0.8 : 0.25;
 
     const baseLife = type === 'shockwave' ? 0.3 :
-      type === 'fireball_hit' ? 2.0 : 
+      type === 'fireball_hit' ? 0.65 : 
       type === 'blood' ? 0.8 : 
       type === 'mega_explosion' ? 2.5 :
         type === 'spark' ? 0.3 : 
@@ -205,8 +205,8 @@ export const VFXProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const pSize = data.sizes[idx];
       let scale = typeId === 6 ? pSize * (1 - progress) : progress * pSize;
 
-      if (typeId === 7) { // smoke expansion
-          const expansion = 1.0 + (1.0 - progress) * 2.0;
+      if (typeId === 7) { // smoke expansion (Subtle)
+          const expansion = 1.0 + (1.0 - progress) * 0.8;
           scale = pSize * Math.sin(progress * Math.PI) * expansion;
       }
 

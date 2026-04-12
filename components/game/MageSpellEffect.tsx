@@ -36,6 +36,8 @@ const FireballShader = {
         varying vec2 vUv;
         varying vec3 vColor;
         varying vec3 vWorldPosition;
+        varying vec3 vViewDirection;
+        varying vec3 vNormal;
         
         void main() {
             vUv = uv;
@@ -43,47 +45,62 @@ const FireballShader = {
             
             vec4 worldPosition = instanceMatrix * vec4(position, 1.0);
             vWorldPosition = worldPosition.xyz;
+            vNormal = normalize(mat3(instanceMatrix) * normal);
             
-            gl_Position = projectionMatrix * modelViewMatrix * worldPosition;
+            vec4 mvPosition = modelViewMatrix * worldPosition;
+            vViewDirection = -mvPosition.xyz;
+            
+            gl_Position = projectionMatrix * mvPosition;
         }
-
     `,
     fragmentShader: `
         uniform float time;
         varying vec2 vUv;
         varying vec3 vColor;
         varying vec3 vWorldPosition;
-        
-        void main() {
-            // Distance from center of sphere
-            float d = distance(vUv, vec2(0.5));
-            
-            // Core bloom (bright center)
-            float core = 1.0 - smoothstep(0.0, 0.4, d);
-            
-            // Outer flicker using time
-            float flicker = sin(time * 20.0 + vWorldPosition.x * 10.0 + vWorldPosition.z * 10.0) * 0.1 + 0.9;
-            float outer = (1.0 - smoothstep(0.3, 0.5, d)) * flicker;
-            
-            // Colors
-            vec3 coreColor = vec3(1.0, 1.0, 1.0);
-            vec3 outerColor = vColor;
-            
-            // Mixing based on radial distance
-            vec3 finalColor = mix(outerColor, coreColor, core * 0.8);
-            
-            // Add a bit of "fire" energy modulation
-            float intensity = 2.5 + sin(time * 15.0) * 0.5;
-            vec3 emissive = finalColor * intensity * max(outer, core);
-            
-            // Soft edges
-            float alpha = smoothstep(0.5, 0.0, d) * max(outer, core) * 2.0;
-            
-            gl_FragColor = vec4(emissive, alpha);
-            
-            if (gl_FragColor.a < 0.1) discard;
+        varying vec3 vViewDirection;
+        varying vec3 vNormal;
+
+        // Pseudo-random noise for energy distortion
+        float noise(vec3 p) {
+            return fract(sin(dot(p, vec3(12.9898, 78.233, 45.164))) * 43758.5453);
         }
 
+        void main() {
+            vec2 center = vUv - 0.5;
+            float dist = length(center);
+            
+            // Fresnel / Rim Glow effect
+            vec3 viewDir = normalize(vViewDirection);
+            float rim = 1.0 - max(dot(viewDir, vNormal), 0.0);
+            rim = pow(rim, 3.0);
+
+            // Animated noise distortion
+            float n = noise(vWorldPosition * 2.0 + time * 5.0);
+            float energy = smoothstep(0.4 + n * 0.1, 0.0, dist);
+            
+            // Core bloom
+            float core = smoothstep(0.2, 0.0, dist);
+            
+            // Vibrant Color Palette (White-hot to team color)
+            vec3 coreColor = vec3(1.0, 1.0, 1.0);
+            vec3 midColor = vColor * 2.0;
+            vec3 edgeColor = vColor;
+            
+            vec3 finalColor = mix(edgeColor, midColor, core + rim * 0.5);
+            finalColor = mix(finalColor, coreColor, core * 1.5);
+            
+            // Pulsing intensity (Subtle)
+            float pulse = 1.2 + sin(time * 15.0) * 0.3;
+            vec3 emissive = finalColor * energy * pulse * 1.5;
+            
+            // Alpha handling with soft edges and rim glow (Subtle)
+            float alpha = (energy + rim * 0.4) * 0.9;
+            alpha *= (1.0 - smoothstep(0.45, 0.5, dist));
+            
+            gl_FragColor = vec4(emissive, alpha);
+            if (gl_FragColor.a < 0.05) discard;
+        }
     `
 };
 
@@ -109,9 +126,9 @@ const _whiteColor = new THREE.Color();
 const _rocketEase = gsap.parseEase("power2.in");
 
 export function MageSpellEffect({ spellsRef, unitRegistry, simTimeRef }: Props) {
+  const { spawnVFX } = useVFX();
   const meshRef = useRef<THREE.InstancedMesh>(null!);
   const _color = useMemo(() => new THREE.Color(), []);
-  
   const settings = useStore((s) => s.settings);
 
   // Capsule geometry for the rocket body (rotated 90deg to point along Z by default)
@@ -245,6 +262,10 @@ export function MageSpellEffect({ spellsRef, unitRegistry, simTimeRef }: Props) 
         }
         
         if (s.progress >= 1.0) {
+            // TRIGGER IMPACT VFX
+            if (spawnVFX) {
+                spawnVFX([s.toX, s.toY, s.toZ], 'fireball_hit', s.color);
+            }
             s.active = false;
         }
     }

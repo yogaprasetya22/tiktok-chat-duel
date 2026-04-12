@@ -201,19 +201,14 @@ export function BattleArmy({ unitRegistry, towerConfig, updateSimulation, settin
   const frameCountRef = useRef(0);
 
   const simAccumulator = useRef(0);
-  const SIM_STEP = 1 / 30; // 30Hz physics is stable and saves 50% CPU over 60Hz
-
-  // The master ECS physics and HUD logic tick.
+  const SIM_STEP = 1 / 30; // 30Hz physics is stable and saves 50% CPU over 60Hz  // The master ECS physics and HUD lifecycle tick.
   useFrame((state, delta) => {
     // 1. FIXED STEP SIMULATION (SAVES CPU/HEAT)
-    simAccumulator.current += Math.min(0.1, delta); // Cap delta to prevent "jumps" after alt-tab
+    simAccumulator.current += Math.min(0.1, delta);
     while (simAccumulator.current >= SIM_STEP) {
-      updateSimulation(SIM_STEP); // Run simulation at fixed 30fps
+      updateSimulation(SIM_STEP);
       simAccumulator.current -= SIM_STEP;
     }
-
-    // Armies will populate this in their useFrame, then ImpostorRenderer consumes and clears it
-
 
     const rawMap = unitRegistry.current;
     if (!rawMap) return;
@@ -222,10 +217,7 @@ export function BattleArmy({ unitRegistry, towerConfig, updateSimulation, settin
     const camPos = state.camera.position;
     frameCountRef.current++;
 
-
-
     // PERFORMANCE: Throttle sorting and unit filtering to every 5 frames
-
     if (frameCountRef.current % 5 === 0 || cachedActiveUnits.current.length === 0) {
       const activeUnits: any[] = [];
       for (let i = 0; i < rawMap.length; i++) {
@@ -245,123 +237,14 @@ export function BattleArmy({ unitRegistry, towerConfig, updateSimulation, settin
     }
 
     const activeUnits = cachedActiveUnits.current;
-    let hudIdx = 0;
-    const FRUSTUM_CULL_DIST_SQ = 250 * 250;
     const HUD_DETAIL_DIST_SQ = 180 * 180;
-    const maxHpAttr = notchRef.current?.geometry.getAttribute('aMaxHp');
-
-    // PERF: Cache camera state ONCE per frame — avoids per-unit property access
-    _cachedCamQuat.copy(state.camera.quaternion);
-    _cachedCamRotY = state.camera.rotation.y;
-    _cachedCosRotY = Math.cos(_cachedCamRotY);
-    _cachedSinRotY = Math.sin(_cachedCamRotY);
-    _cachedNow = Date.now();
-    // Pre-compute camera world direction once for health bar z-offset
-    state.camera.getWorldDirection(_camDir);
-
-    for (let i = 0; i < activeUnits.length; i++) {
-      const u = activeUnits[i];
-      // Setup master HUD limit
-      if (hudIdx >= MAX_UNITS) break;
-      if (!u || u.hp <= 0) continue;
-      if (u.dSq > FRUSTUM_CULL_DIST_SQ) continue;
-
-      // 1. Shadows
-      tempObject.position.set(u.position[0], -0.45, u.position[2]);
-      tempObject.rotation.set(-Math.PI / 2, 0, 0);
-      const ss = u.isBoss ? 4.5 : 1.6;
-      tempObject.scale.set(ss, ss, 1);
-      tempObject.updateMatrix();
-      shadowRef.current.setMatrixAt(hudIdx, tempObject.matrix);
-
-      // Only show detailed health bar if close enough
-      const showDetail = u.isBoss || u.dSq < HUD_DETAIL_DIST_SQ;
-
-      if (showDetail) {
-        // 2. Health Bar Background — use cached quaternion instead of per-unit copy
-        const pct = Math.max(0, u.hp / (u.maxHp || 100));
-        const by = u.isBoss ? 7.0 : 3.2;
-        const bs = u.isBoss ? 2.5 : 1.0;
-
-        tempObject.position.set(u.position[0], by, u.position[2]);
-        tempObject.quaternion.copy(_cachedCamQuat); // Cached once per frame
-        tempObject.scale.set(bs, bs, 1);
-        tempObject.updateMatrix();
-        healthBgRef.current.setMatrixAt(hudIdx, tempObject.matrix);
-
-        // 3. Health Bar Fill — use pre-computed cos/sin instead of per-unit Math.cos/sin
-        const fx = pct * bs;
-        tempObject.scale.set(fx, bs, 1);
-        const ox = (bs - fx) * 0.4;
-        tempObject.position.x -= _cachedCosRotY * ox; // Cached cos
-        tempObject.position.z += _cachedSinRotY * ox; // Cached sin
-        tempObject.updateMatrix();
-        healthFillRef.current.setMatrixAt(hudIdx, tempObject.matrix);
-
-        // Z-offset using pre-computed cam direction
-        tempObject.position.addScaledVector(_camDir, -0.02);
-        tempObject.updateMatrix();
-        healthFillRef.current.setMatrixAt(hudIdx, tempObject.matrix);
-
-        // 4. Hit Flashes & Team Color — use cached Date.now()
-        const teamC = u.type === 'player' ? towerConfig.player.color : towerConfig.enemy.color;
-        _healthColor.set(teamC);
-
-        const flashAge = _cachedNow - (u.lastDamageTime || 0);
-        if (flashAge < 100) {
-          _healthColor.lerpColors(_healthColor, _whiteColor, 1.0 - (flashAge / 100));
-          const lastSpawn = lastSpawnedRef.current.get(u.id) || 0;
-          if (_cachedNow - lastSpawn > 50) {
-            spawnVFX(u.position, 'blood', '#bb0000');
-            lastSpawnedRef.current.set(u.id, _cachedNow);
-          }
-        }
-        healthFillRef.current.setColorAt(hudIdx, _healthColor);
-
-        // 5. Notches
-        tempObject.scale.set(bs, bs, 1);
-        tempObject.position.set(u.position[0], by, u.position[2]);
-        tempObject.updateMatrix();
-        notchRef.current.setMatrixAt(hudIdx, tempObject.matrix);
-
-        if (maxHpAttr) (maxHpAttr as THREE.InstancedBufferAttribute).setX(hudIdx, u.maxHp || 100);
-      } else {
-        // Hide detailed HUD if too far — use pre-computed hide matrix
-        healthBgRef.current.setMatrixAt(hudIdx, _hideMatrix);
-        healthFillRef.current.setMatrixAt(hudIdx, _hideMatrix);
-        notchRef.current.setMatrixAt(hudIdx, _hideMatrix);
-      }
-
-      hudIdx++;
-    }
-
-    if (maxHpAttr) maxHpAttr.needsUpdate = true;
-
-    // 6. Name Labels Logic
     const isPotato = !!settingsRef.current.potatoMode;
 
-    for (const [unitId, slot] of namePoolMap.current.entries()) {
-      const mesh = nameTextRefs.current[slot];
-      if (!mesh) continue;
-      const uIdx = parseInt(unitId.split('-')[1]);
-      const unit = rawMap[uIdx];
-      if (unit && unit.isActive && unit.id === unitId && unit.hp > 0 && (unit.dSq || 0) < HUD_DETAIL_DIST_SQ && !isPotato) {
-        const hover = Math.sin(time * 3 + unitId.length) * 0.1;
-        mesh.position.set(unit.position[0], (unit.isBoss ? 7.2 : 3.4) + (unit.isBoss ? 1.8 : 0.7) + hover, unit.position[2]);
-        mesh.quaternion.copy(_cachedCamQuat);
-
-        if (unit.isBoss) {
-          const pulse = 1.1 + Math.sin(time * 6) * 0.1;
-          mesh.scale.set(pulse, pulse, 1);
-        } else {
-          mesh.scale.set(1, 1, 1);
-        }
-        mesh.visible = true;
-      } else { mesh.visible = false; }
-    }
-
+    // 2. Name Labels Lifecycle (Positioning is now delegated to Armies)
     if (time - lastNameCullTime.current > 0.1) {
       lastNameCullTime.current = time;
+      
+      // Cleanup names for units that are dead, too far, or if in potato mode
       for (const [uid, slot] of namePoolMap.current.entries()) {
         const uIdx = parseInt(uid.split('-')[1]);
         const u = rawMap[uIdx];
@@ -372,12 +255,15 @@ export function BattleArmy({ unitRegistry, towerConfig, updateSimulation, settin
           namePoolMap.current.delete(uid);
         }
       }
+
+      // Assign slots to new near units
       if (!isPotato) {
         for (let i = 0; i < activeUnits.length; i++) {
           const u = activeUnits[i];
           const id = u.id;
           if (namePoolMap.current.has(id) || namePoolMap.current.size >= NAME_POOL_SIZE || nameAvailableSlots.current.length === 0) continue;
           if (u.dSq > HUD_DETAIL_DIST_SQ) continue;
+
           const slot = nameAvailableSlots.current.shift()!;
           namePoolMap.current.set(id, slot);
           const mesh = nameTextRefs.current[slot];
@@ -385,8 +271,10 @@ export function BattleArmy({ unitRegistry, towerConfig, updateSimulation, settin
             const badge = getLevelBadge(u.level || 1);
             const label = badge + u.userName;
             if (nameSlotContent.current[slot] !== label) { mesh.text = label; nameSlotContent.current[slot] = label; }
+            
             const col = getLevelColor(u.level || 1);
             if (nameSlotColor.current[slot] !== col) { mesh.color = col; nameSlotColor.current[slot] = col; }
+            
             mesh.fontSize = u.isBoss ? 0.95 : 0.45;
             mesh.outlineWidth = 0.08;
             mesh.visible = true;
@@ -395,54 +283,28 @@ export function BattleArmy({ unitRegistry, towerConfig, updateSimulation, settin
       }
     }
 
-    // 7. Cleanup Unused HUD Slots — use pre-computed hide matrix (no position/scale/updateMatrix per slot)
-    const prevMax = lastHudIdxRef.current;
-    let matricesDirty = false;
-
-    if (settingsRef.current.potatoMode) {
-      if (prevMax > 0) { // Only set dirty if we had units before
-        for (let i = 0; i < MAX_UNITS; i++) {
-          healthBgRef.current.setMatrixAt(i, _hideMatrix);
-          healthFillRef.current.setMatrixAt(i, _hideMatrix);
-          shadowRef.current.setMatrixAt(i, _hideMatrix);
-        }
-        matricesDirty = true;
-      }
-      lastHudIdxRef.current = 0;
-    } else {
-      const clearTo = Math.max(hudIdx, prevMax);
-
-      if (clearTo > hudIdx) { // Only set if actually cleaning up
-        for (let i = hudIdx; i < clearTo; i++) {
-          shadowRef.current.setMatrixAt(i, _hideMatrix);
-          healthBgRef.current.setMatrixAt(i, _hideMatrix);
-          healthFillRef.current.setMatrixAt(i, _hideMatrix);
-          notchRef.current.setMatrixAt(i, _hideMatrix);
-        }
-        matricesDirty = true;
-      }
-      lastHudIdxRef.current = hudIdx;
+    // 3. Signal Updates for InstancedMeshes (Positions are updated by individual Armies)
+    if (shadowRef.current) shadowRef.current.instanceMatrix.needsUpdate = true;
+    if (healthBgRef.current) healthBgRef.current.instanceMatrix.needsUpdate = true;
+    if (healthFillRef.current) {
+        healthFillRef.current.instanceMatrix.needsUpdate = true;
+        if (healthFillRef.current.instanceColor) healthFillRef.current.instanceColor.needsUpdate = true;
     }
-
-    // PERF FIX #5: Only set needsUpdate if matrices actually changed
-    if (matricesDirty) {
-      healthBgRef.current.instanceMatrix.needsUpdate = true;
-      healthFillRef.current.instanceMatrix.needsUpdate = true;
-      notchRef.current.instanceMatrix.needsUpdate = true;
-      shadowRef.current.instanceMatrix.needsUpdate = true;
+    if (notchRef.current) {
+        notchRef.current.instanceMatrix.needsUpdate = true;
+        const maxHpAttr = notchRef.current.geometry.getAttribute('aMaxHp');
+        if (maxHpAttr) maxHpAttr.needsUpdate = true;
     }
-    if (maxHpAttr) maxHpAttr.needsUpdate = true;
-    if (healthFillRef.current.instanceColor) healthFillRef.current.instanceColor.needsUpdate = true;
   });
 
   return (
     <group>
       {/* Full-3D Animated Unit Rendering by Class */}
-      <FighterArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} renderedIdsRef={renderedIdsRef} />
-      <TankArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} renderedIdsRef={renderedIdsRef} />
-      <MageArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} spellsRef={spellsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} renderedIdsRef={renderedIdsRef} />
-      <MarksmanArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} renderedIdsRef={renderedIdsRef} />
-      <AssassinArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} renderedIdsRef={renderedIdsRef} />
+      <FighterArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} renderedIdsRef={renderedIdsRef} shadowRef={shadowRef} healthBgRef={healthBgRef} healthFillRef={healthFillRef} notchRef={notchRef} hudBaseIdx={0} namePoolMap={namePoolMap} nameTextRefs={nameTextRefs} />
+      <TankArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} renderedIdsRef={renderedIdsRef} shadowRef={shadowRef} healthBgRef={healthBgRef} healthFillRef={healthFillRef} notchRef={notchRef} hudBaseIdx={30} namePoolMap={namePoolMap} nameTextRefs={nameTextRefs} />
+      <MageArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} spellsRef={spellsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} renderedIdsRef={renderedIdsRef} shadowRef={shadowRef} healthBgRef={healthBgRef} healthFillRef={healthFillRef} notchRef={notchRef} hudBaseIdx={60} namePoolMap={namePoolMap} nameTextRefs={nameTextRefs} />
+      <MarksmanArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} spellsRef={spellsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} renderedIdsRef={renderedIdsRef} shadowRef={shadowRef} healthBgRef={healthBgRef} healthFillRef={healthFillRef} notchRef={notchRef} hudBaseIdx={80} namePoolMap={namePoolMap} nameTextRefs={nameTextRefs} />
+      <AssassinArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} renderedIdsRef={renderedIdsRef} shadowRef={shadowRef} healthBgRef={healthBgRef} healthFillRef={healthFillRef} notchRef={notchRef} hudBaseIdx={100} namePoolMap={namePoolMap} nameTextRefs={nameTextRefs} />
 
       {/* LOD Impostor Layer: far-away units rendered as InstancedMesh billboards (2 draw calls) */}
       <InstancedImpostorRenderer

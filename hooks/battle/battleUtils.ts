@@ -97,3 +97,14 @@ export const OUTFIT_COLORS = [
     "#ecf0f1",
     "#95a5a6",
 ];
+
+/**
+ * Interpolates between two angles in radians, taking the shortest path around the circle.
+ * Prevents "360-degree spins" when crossing the PI/-PI boundary.
+ */
+export const lerpAngle = (start: number, end: number, t: number): number => {
+    let diff = end - start;
+    while (diff < -Math.PI) diff += Math.PI * 2;
+    while (diff > Math.PI) diff -= Math.PI * 2;
+    return start + diff * t;
+};

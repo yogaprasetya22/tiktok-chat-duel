@@ -9,6 +9,7 @@ import { useVFX } from '../VFXManager';
 import { ActiveUnit, TowerConfig, SimulationSettings, UnitRuntimeData } from '../../../hooks/battle/types';
 import { useStore } from '../../../hooks/useStore';
 import { PLAYER_BASE_Z, ENEMY_BASE_Z } from '../../../hooks/battle/constants';
+import { lerpAngle } from '../../../hooks/battle/battleUtils';
 import * as YUKA from 'yuka';
 
 interface AssassinArmyProps {
@@ -19,11 +20,26 @@ interface AssassinArmyProps {
   vehicles: React.RefObject<YUKA.Vehicle[]>;
   unitIndex: React.RefObject<Map<string, ActiveUnit>>;
   renderedIdsRef: React.RefObject<Set<string>>;
+  shadowRef: React.RefObject<THREE.InstancedMesh>;
+  healthBgRef: React.RefObject<THREE.InstancedMesh>;
+  healthFillRef: React.RefObject<THREE.InstancedMesh>;
+  notchRef: React.RefObject<THREE.InstancedMesh>;
+  hudBaseIdx: number;
+  namePoolMap: React.MutableRefObject<Map<string, number>>;
+  nameTextRefs: React.RefObject<any[]>;
 }
 
 const POOL_SIZE = 8;
 
-export function AssassinArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, vehicles, unitIndex, renderedIdsRef }: AssassinArmyProps) {
+const _hudTemp = new THREE.Object3D();
+const _healthColor = new THREE.Color();
+const _whiteColor = new THREE.Color('#ffffff');
+
+export function AssassinArmy({ 
+  unitsMap, towerConfig, settingsRef, simTimeRef, vehicles, unitIndex, 
+  renderedIdsRef, shadowRef, healthBgRef, healthFillRef, notchRef, hudBaseIdx,
+  namePoolMap, nameTextRefs 
+}: AssassinArmyProps) {
   const poolMapRef = useRef<Map<string, number>>(new Map());
   const availableIndicesRef = useRef<number[]>([]);
   const activeSetRef = useRef<Set<string>>(new Set());
@@ -65,6 +81,8 @@ export function AssassinArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, v
             }
           }
         });
+        clone.position.set(0, -100, 0);
+        clone.visible = false;
         items.push({ group: clone, colorable, mixer, actions, currentAnim: '', lastUpdate: 0, rotation: 0, initialized: false });
     }
     return items;
@@ -126,10 +144,12 @@ export function AssassinArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, v
         const uData = myUnits[i];
         const id = uData.id;
 
-        // Targeting (Priority: Mage/Marksman > Fighter > Tank)
+        // Targeting (Strictly Nearest & Sticky)
         if (frameCountRef.current % 10 === 0 || !uData.targetId) {
             let bestScore = -Infinity;
             let bestTargetId = undefined;
+            const STICKY_MULT = 0.75; // 25% advantage for current target
+
             for (let j = 0; j < rawMap.length; j++) {
                 const potential = rawMap[j];
                 if (!potential.isActive || potential.hp <= 0 || potential.isDying) continue;
@@ -142,18 +162,15 @@ export function AssassinArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, v
                 const dz = uData.position[2] - potential.position[2];
                 const dSq = dx * dx + dz * dz;
                 
-                // Perception is infinite in training to find targets anywhere
+                // Perception
                 const perceptionThresholdSq = mode === 'TRAINING' ? 1000000 : (uData.perceptionRadiusSq || 14400); 
                 if (dSq > perceptionThresholdSq) continue;
 
-                // Priority Scoring
-                let score = -Math.sqrt(dSq); // Proximity penalty (negative score)
+                // Targeting Score: 1/distSq. 
+                let score = 1.0 / (dSq + 0.1);
                 
-                if (potential.unitClass === 'mage' || potential.unitClass === 'marksman') {
-                    score += 5000; // High priority items
-                } else if (potential.unitClass === 'tank') {
-                    score -= 500; // Low priority
-                }
+                // Stickiness
+                if (potential.id === uData.targetId) score /= STICKY_MULT;
 
                 if (score > bestScore) {
                     bestScore = score;
@@ -190,13 +207,23 @@ export function AssassinArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, v
             lastVFXRef.current.set(id + '-blink', lastBlink);
         }
 
-        // Decision: Melee Slashes
+        // Decision: Melee Slashes & Impact
         const currentAtk = uData.lastAttackTime || 0;
         const prevAtk = lastVFXRef.current.get(id + '-atk') || 0;
         if (currentAtk > prevAtk) {
             const forwardX = Math.sin(uData.rotation[1]) * 1.2;
             const forwardZ = Math.cos(uData.rotation[1]) * 1.2;
             spawnVFX([uData.position[0] + forwardX, 1.2, uData.position[2] + forwardZ], 'slash', '#ffffff');
+            
+            // Intelligence: Impact Spark at target's position
+            if (uData.targetId) {
+                const tIdx = parseInt(uData.targetId.split('-')[1]);
+                const tData = rawMap[tIdx];
+                if (tData && tData.isActive) {
+                    spawnVFX([tData.position[0], 0.8, tData.position[2]], 'spark', '#ffff55');
+                }
+            }
+            
             lastVFXRef.current.set(id + '-atk', currentAtk);
         }
 
@@ -209,15 +236,21 @@ export function AssassinArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, v
                 const tIdx = parseInt(uData.targetId.split('-')[1]);
                 const target = rawMap[tIdx];
                 if (target && target.isActive && target.id === uData.targetId) {
-                    // PERF: Find SeekBehavior directly
                     const seekB = (vehicle.steering.behaviors as any).find((b: any) => b.target !== undefined);
                     if (seekB) {
-                        const totalVal = id.split('-').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0);
-                        const angle = (totalVal % 360) * (Math.PI / 180);
-                        const orbitRadius = uData.encirclementRadius || 3.0;
-                        const offsetX = Math.cos(angle) * orbitRadius;
-                        const offsetZ = Math.sin(angle) * orbitRadius;
-                        seekB.target.set(target.position[0] + offsetX, 0, target.position[2] + offsetZ);
+                        const distToTargetSq = Math.pow(uData.position[0] - target.position[0], 2) + Math.pow(uData.position[2] - target.position[2], 2);
+                        
+                        // Intelligence: If far, run directly. If close, orbit slightly.
+                        if (distToTargetSq > 36) { // 6m+ away
+                           seekB.target.set(target.position[0], 0, target.position[2]);
+                           vehicle.maxForce = 8.0; // High force for sharp dash
+                        } else {
+                           const totalVal = id.split('-').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0);
+                           const angle = (totalVal % 360) * (Math.PI / 180);
+                           const orbitRadius = uData.encirclementRadius || 1.1; 
+                           seekB.target.set(target.position[0] + Math.cos(angle) * orbitRadius, 0, target.position[2] + Math.sin(angle) * orbitRadius);
+                           vehicle.maxForce = 3.0; // Normal combat force
+                        }
                         isChasing = true;
                     }
                 }
@@ -229,14 +262,16 @@ export function AssassinArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, v
                     const amp = uData.laneSwaggerAmp || 0.8;
                     const swagger = Math.sin((id.length * 10) + (uData.jitterOffset || 0)) * amp;
                     seekB.target.set((uData.laneOffset || 0) + swagger, 0, baseZ);
+                    vehicle.maxForce = 1.0;
                 }
             }
-            vehicle.maxSpeed = (uData.status === 'attacking' || uData.isDying) ? 0 : (uData.speed || 4) * (settings.globalSpeedMultiplier || 1);
+            vehicle.maxSpeed = (uData.status === 'attacking' || uData.isDying) ? 0 : (uData.speed || 4.5) * (settings.globalSpeedMultiplier || 1);
             
-            // Rotation
+            // Intelligence: Smoother Rotation (Fixed spinning bug)
             const velSq = vehicle.velocity.x ** 2 + vehicle.velocity.z ** 2;
-            if (uData.status === 'marching' && velSq > 0.01) {
-                uData.rotation[1] = Math.atan2(vehicle.velocity.x, vehicle.velocity.z);
+            if (uData.status === 'marching' && velSq > 0.05) {
+                const targetRot = Math.atan2(vehicle.velocity.x, vehicle.velocity.z);
+                uData.rotation[1] = lerpAngle(uData.rotation[1], targetRot, (settings.rotationSmoothing || 0.1) * 2);
             } else if (uData.status === 'attacking') {
                 const baseZ = uData.type === 'player' ? ENEMY_BASE_Z : PLAYER_BASE_Z;
                 const tIdx = uData.targetId ? parseInt(uData.targetId.split('-')[1]) : -1;
@@ -244,7 +279,7 @@ export function AssassinArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, v
                 const tx = (tData && tData.isActive && tData.id === uData.targetId) ? tData.position[0] : 0;
                 const tz = (tData && tData.isActive && tData.id === uData.targetId) ? tData.position[2] : baseZ;
                 const targetRot = Math.atan2(tx - uData.position[0], tz - uData.position[2]);
-                uData.rotation[1] = THREE.MathUtils.lerp(uData.rotation[1], targetRot, settings.rotationSmoothing || 0.1);
+                uData.rotation[1] = lerpAngle(uData.rotation[1], targetRot, settings.rotationSmoothing || 0.1);
             }
         }
     }
@@ -307,7 +342,7 @@ export function AssassinArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, v
 
       const tp = uData.position;
       const cp = pItem.group.position;
-      const lerpFactor = 1.0 - Math.exp(-20 * delta);
+      const lerpFactor = 1.0 - Math.exp(-25 * delta); 
       if (!pItem.initialized) {
         cp.set(tp[0], tp[1], tp[2]);
         pItem.rotation = uData.rotation[1];
@@ -323,6 +358,83 @@ export function AssassinArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, v
         while (diff > Math.PI) diff -= Math.PI * 2;
         pItem.rotation += diff * (1.0 - Math.exp(-15 * delta));
         pItem.group.rotation.y = pItem.rotation;
+      }
+
+      // --- HUD SYNC (Frame-Perfect) ---
+      pItem.group.updateMatrix();
+      
+      const hIdx = hudBaseIdx + poolIdx;
+      if (shadowRef.current && healthBgRef.current) {
+          const HUD_DETAIL_DIST_SQ = 180 * 180;
+          const showDetail = uData.isBoss || (uData.dSq || 0) < HUD_DETAIL_DIST_SQ;
+          
+          if (showDetail) {
+              const pct = Math.max(0, uData.hp / (uData.maxHp || 100));
+              const by = uData.isBoss ? 7.0 : 3.2;
+              const bs = uData.isBoss ? 2.5 : 1.0;
+
+              // 1. Shadow
+              _hudTemp.position.set(cp.x, -0.45, cp.z);
+              _hudTemp.rotation.set(-Math.PI / 2, 0, 0);
+              const ss = uData.isBoss ? 4.5 : 1.6;
+              _hudTemp.scale.set(ss, ss, 1);
+              _hudTemp.updateMatrix();
+              shadowRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
+
+              // 2. Health BG
+              _hudTemp.position.set(cp.x, by, cp.z);
+              _hudTemp.quaternion.copy(state.camera.quaternion);
+              _hudTemp.scale.set(bs, bs, 1);
+              _hudTemp.updateMatrix();
+              healthBgRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
+
+              // 3. Health Fill
+              const fx = pct * bs;
+              _hudTemp.scale.set(fx, bs, 1);
+              const ox = (bs - fx) * 0.4;
+              const camRotY = state.camera.rotation.y;
+              _hudTemp.position.x -= Math.cos(camRotY) * ox;
+              _hudTemp.position.z += Math.sin(camRotY) * ox;
+              _hudTemp.updateMatrix();
+              healthFillRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
+
+              // 4. Color & Flash
+              _healthColor.set(uData.type === 'player' ? towerConfig.player.color : towerConfig.enemy.color);
+              const flash = Date.now() - (uData.lastDamageTime || 0);
+              if (flash < 100) _healthColor.lerp(_whiteColor, 1.0 - (flash / 100));
+              healthFillRef.current.setColorAt(hIdx, _healthColor);
+
+              // 5. Notch
+              _hudTemp.position.set(cp.x, by, cp.z);
+              _hudTemp.scale.set(bs, bs, 1);
+              _hudTemp.updateMatrix();
+              notchRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
+
+              // 6. Name Sync (Glued to head)
+              if (namePoolMap.current.has(id) && nameTextRefs.current) {
+                  const nameSlot = namePoolMap.current.get(id)!;
+                  const nameMesh = nameTextRefs.current[nameSlot];
+                  if (nameMesh) {
+                      const hover = Math.sin(state.clock.elapsedTime * 3 + id.length) * 0.1;
+                      nameMesh.position.set(cp.x, (uData.isBoss ? 7.2 : 3.4) + (uData.isBoss ? 1.8 : 0.7) + hover, cp.z);
+                      nameMesh.quaternion.copy(state.camera.quaternion);
+                  }
+              }
+          } else {
+              // Standard low-detail shadow even if far
+              _hudTemp.position.set(cp.x, -0.45, cp.z);
+              _hudTemp.rotation.set(-Math.PI / 2, 0, 0);
+              _hudTemp.scale.set(uData.isBoss ? 4.5 : 1.6, uData.isBoss ? 4.5 : 1.6, 1);
+              _hudTemp.updateMatrix();
+              shadowRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
+
+              // Hide detailed HUD
+              _hudTemp.position.set(0, -100, 0);
+              _hudTemp.updateMatrix();
+              healthBgRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
+              healthFillRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
+              notchRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
+          }
       }
 
       const sf = (uData.dSq || 0) > 3600 ? 5 : (uData.dSq || 0) > 400 ? 2 : 1;
