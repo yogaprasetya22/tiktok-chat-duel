@@ -239,6 +239,20 @@ export function BattleArmy({ unitRegistry, towerConfig, updateSimulation, settin
     const activeUnits = cachedActiveUnits.current;
     const HUD_DETAIL_DIST_SQ = 180 * 180;
     const isPotato = !!settingsRef.current.potatoMode;
+    if (isPotato) {
+      if (frameCountRef.current % 15 === 0) {
+        for (let i = 0; i < MAX_UNITS; i++) {
+          shadowRef.current?.setMatrixAt(i, _hideMatrix);
+          healthBgRef.current?.setMatrixAt(i, _hideMatrix);
+          healthFillRef.current?.setMatrixAt(i, _hideMatrix);
+          notchRef.current?.setMatrixAt(i, _hideMatrix);
+        }
+        shadowRef.current.instanceMatrix.needsUpdate = true;
+        healthBgRef.current.instanceMatrix.needsUpdate = true;
+        healthFillRef.current.instanceMatrix.needsUpdate = true;
+        notchRef.current.instanceMatrix.needsUpdate = true;
+      }
+    }
 
     // 2. Name Labels Lifecycle (Positioning is now delegated to Armies)
     if (time - lastNameCullTime.current > 0.1) {
@@ -250,7 +264,10 @@ export function BattleArmy({ unitRegistry, towerConfig, updateSimulation, settin
         const u = rawMap[uIdx];
         const gone = !u || !u.isActive || u.id !== uid || u.hp <= 0 || (u.dSq || 0) > HUD_DETAIL_DIST_SQ || isPotato;
         if (gone) {
-          if (nameTextRefs.current[slot]) nameTextRefs.current[slot].visible = false;
+          if (nameTextRefs.current[slot]) {
+              nameTextRefs.current[slot].visible = false;
+              nameTextRefs.current[slot].position.set(0, -100, 0); // extra hide
+          }
           nameAvailableSlots.current.push(slot);
           namePoolMap.current.delete(uid);
         }

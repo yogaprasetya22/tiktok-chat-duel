@@ -78,7 +78,7 @@ export function FighterArmy({
             child.receiveShadow = false;
             child.frustumCulled = true;
             const name = child.name.toLowerCase();
-            const isColorable = name.includes('cape') || name.includes('cloth') || name.includes('trim') || name.includes('helmet') || name.includes('shoulder');
+            const isColorable = name.includes('cape') || name.includes('cloth') || name.includes('trim') || name.includes('helmet') || name.includes('shoulder') || name.includes('robe') || name.includes('cloak') || name.includes('primary') || name.includes('team');
             if (isColorable) {
                 if (child.material) child.material = child.material.clone();
                 colorable.push(child);
@@ -161,6 +161,10 @@ export function FighterArmy({
             let bestTargetId = undefined;
             const STICKY_MULT = 0.75; // 25% advantage for current target
 
+            // --- INITIAL SCORE ---
+            bestScore = -Infinity;
+            bestTargetId = undefined;
+
             for (let j = 0; j < rawMap.length; j++) {
                 const potential = rawMap[j];
                 if (!potential.isActive || potential.hp <= 0 || potential.isDying) continue;
@@ -186,6 +190,14 @@ export function FighterArmy({
                     bestTargetId = potential.id;
                 }
             }
+
+            // --- SCORE TOWER (ONLY if no units found) ---
+            if (bestTargetId === undefined) {
+                const targetBaseZ = uData.type === 'player' ? ENEMY_BASE_Z : PLAYER_BASE_Z;
+                const distToBaseSq = uData.position[0] * uData.position[0] + Math.pow(uData.position[2] - targetBaseZ, 2);
+                bestScore = 6.0 / (distToBaseSq + 0.1); 
+                bestTargetId = uData.type === 'player' ? 'enemy-base' : 'player-base';
+            }
             uData.targetId = bestTargetId;
             const coreUnit = unitIndex?.current?.get(id);
             if (coreUnit) coreUnit.targetId = bestTargetId;
@@ -193,16 +205,24 @@ export function FighterArmy({
 
         // Status
         if (uData.targetId) {
-            const tIdx = parseInt(uData.targetId.split('-')[1]);
-            const target = rawMap[tIdx];
-            if (target && target.isActive && target.id === uData.targetId) {
-                const dx = uData.position[0] - target.position[0];
-                const dz = uData.position[2] - target.position[2];
-                const distSq = dx * dx + dz * dz;
+            const isBase = uData.targetId === 'player-base' || uData.targetId === 'enemy-base';
+            if (isBase) {
+                const baseZ = uData.type === 'player' ? ENEMY_BASE_Z : PLAYER_BASE_Z;
+                const distSq = uData.position[0] * uData.position[0] + Math.pow(uData.position[2] - baseZ, 2);
                 const rangeSq = (uData.range || 2) * (uData.range || 2);
                 uData.status = distSq <= rangeSq ? 'attacking' : 'marching';
             } else {
-                uData.targetId = undefined;
+                const tIdx = parseInt(uData.targetId.split('-')[1]);
+                const target = rawMap[tIdx];
+                if (target && target.isActive && target.id === uData.targetId) {
+                    const dx = uData.position[0] - target.position[0];
+                    const dz = uData.position[2] - target.position[2];
+                    const distSq = dx * dx + dz * dz;
+                    const rangeSq = (uData.range || 2.5) * (uData.range || 2.5);
+                    uData.status = distSq <= rangeSq ? 'attacking' : 'marching';
+                } else {
+                    uData.targetId = undefined;
+                }
             }
         } else {
             const baseZ = uData.type === 'player' ? ENEMY_BASE_Z : PLAYER_BASE_Z; 

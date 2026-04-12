@@ -250,9 +250,13 @@ export const useBattleSystem = () => {
         // --- MAIN SIMULATION LOOP ---
         for (let i = 0; i < WORLD_UNIT_POOL_SIZE; i++) {
             const u = unitPoolRef.current[i];
-            if (!u.isActive) continue;
             const uData = unitDataPoolRef.current[i];
             const v = vehiclePoolRef.current[i];
+
+            if (!u.isActive || u.hp <= 0) {
+                uData.position[1] = -100;
+                continue;
+            }
 
             if (u.isDying) {
                 if (now - (u.deathTime || 0) > CORPSE_DESPAWN_MS) {
@@ -273,10 +277,22 @@ export const useBattleSystem = () => {
                 const isFighter = u.unitClass === 'fighter';
                 const scanRange = isFighter ? 8 : 2; 
                 const perceptionRadiusSq = isFighter ? 1024 : 144;
+                // Rule 3: Target Prioritization Scoring
                 let bestScore = -1;
                 let bestTargetIdx = -1;
-                let minDSq = perceptionRadiusSq;
                 
+                // --- SCORE TOWER ---
+                const dist = towerConfig.baseDistance ?? 24;
+                const targetBaseZ = u.type === "player" ? -dist : dist;
+                const dxB = uData.position[0]; 
+                const dzB = uData.position[2] - targetBaseZ;
+                const distToBaseSq = dxB * dxB + dzB * dzB;
+                
+                // Tower is the "Ultimate" target (highest weight)
+                const towerWeight = 6.0;
+                bestScore = towerWeight / (distToBaseSq + 0.1);
+                const targetedBaseId = u.type === 'player' ? 'enemy-base' : 'player-base';
+
                 for (let bOff = -scanRange; bOff <= scanRange; bOff++) {
                     const neighbors = bucketsMapRef.current.get(myBucket + bOff);
                     if (!neighbors) continue;
@@ -291,7 +307,6 @@ export const useBattleSystem = () => {
                         const dSq = dx*dx + dz*dz;
                         if (dSq > perceptionRadiusSq) continue;
 
-                        // Rule 3: Target Prioritization Scoring
                         let weight = 1.0;
                         if (isFighter) {
                             weight = 3.0; 
@@ -302,7 +317,6 @@ export const useBattleSystem = () => {
                         const score = weight / (dSq + 0.1); 
                         if (score > bestScore) {
                             bestScore = score;
-                            minDSq = dSq;
                             bestTargetIdx = neighborIdx;
                         }
                     }
@@ -312,7 +326,8 @@ export const useBattleSystem = () => {
                     u.targetId = unitPoolRef.current[bestTargetIdx].id;
                     uData.status = "chasing";
                 } else {
-                    u.targetId = undefined;
+                    // ONLY target the base if NO units were found in perception range
+                    u.targetId = targetedBaseId;
                     uData.status = "marching";
                 }
             }
@@ -320,12 +335,21 @@ export const useBattleSystem = () => {
             // --- COMBAT RESOLUTION ---
             const dist = towerConfig.baseDistance ?? 24;
             const targetBaseZ = u.type === "player" ? -dist : dist;
-            let currentTarget: ActiveUnit | undefined = u.targetId ? unitIndexRef.current.get(u.targetId) : undefined;
+            const isBaseTarget = u.targetId === 'player-base' || u.targetId === 'enemy-base';
+            
+            // SPECIAL: Mages/Marksmen move closer to Towers (Range Mult 0.82)
+            const isRanged = u.unitClass === 'mage' || u.unitClass === 'marksman';
+            const rangeMult = (isBaseTarget && isRanged) ? 0.82 : 1.0;
+            const effectiveRange = u.range * rangeMult;
+            const rangeSq = effectiveRange * effectiveRange;
+
+            let currentTarget: ActiveUnit | undefined = (u.targetId && !isBaseTarget) ? unitIndexRef.current.get(u.targetId) : undefined;
             if (currentTarget && (!currentTarget.isActive || currentTarget.isDying)) { currentTarget = undefined; u.targetId = undefined; }
 
-            const dxB = uData.position[0]; const dzB = uData.position[2] - targetBaseZ;
+            const dxB = uData.position[0]; 
+            const dzB = uData.position[2] - targetBaseZ;
             const distToBaseSq = dxB*dxB + dzB*dzB;
-            const baseInRange = distToBaseSq < (u.range * u.range);
+            const baseInRange = distToBaseSq < rangeSq; // Use adjusted range
 
             if (currentTarget) {
                 const tIdx = parseInt(currentTarget.id.split('-')[1]);
@@ -337,8 +361,20 @@ export const useBattleSystem = () => {
                 if (dSq < (u.range * u.range)) {
                     uData.status = "attacking"; v.maxSpeed = 0;
                     if (simNow - (uData.lastAttackTime || 0) > u.attackCooldown) {
-                        const dmg = u.attack;
+                        let dmg = u.attack;
+                        if (uData.pendingCrit) {
+                            dmg *= 2.5;
+                            uData.pendingCrit = false;
+                        }
                         currentTarget.hp -= dmg; tData.hp = currentTarget.hp;
+                        
+                        // INSTANT PURGE IF DEAD
+                        if (currentTarget.hp <= 0) {
+                            currentTarget.isActive = false;
+                            tData.isActive = false;
+                            tData.position[1] = -100; // Teleport underground instantly
+                        }
+
                         accumulateDamage(currentTarget.id, dmg, tData.position, u.type === 'player' ? "#0066FF" : "#FF0033");
                         uData.lastAttackTime = simNow;
                     }

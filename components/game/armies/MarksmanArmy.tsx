@@ -73,7 +73,7 @@ export function MarksmanArmy({
             child.receiveShadow = false;
             child.frustumCulled = true;
             const name = child.name.toLowerCase();
-            const isColorable = name.includes('cloth') || name.includes('pattern') || name.includes('trim') || name.includes('ribbon') || name.includes('quiver');
+            const isColorable = name.includes('cloth') || name.includes('pattern') || name.includes('trim') || name.includes('ribbon') || name.includes('quiver') || name.includes('robe') || name.includes('cloak') || name.includes('cape') || name.includes('primary') || name.includes('team');
             if (isColorable) {
                 if (child.material) child.material = child.material.clone();
                 colorable.push(child);
@@ -144,7 +144,7 @@ export function MarksmanArmy({
         const id = uData.id;
 
         // Targeting (Throttled & Sticky)
-        if (frameCountRef.current % 10 === 0 || !uData.targetId) {
+        if (frameCountRef.current % 12 === 0 || !uData.targetId) {
             let bestScore = -Infinity;
             let bestTargetId = undefined;
             const STICKY_MULT = 0.75; // 25% advantage for current target
@@ -174,6 +174,14 @@ export function MarksmanArmy({
                     bestTargetId = potential.id;
                 }
             }
+
+            // --- SCORE TOWER (ONLY if no units found) ---
+            if (bestTargetId === undefined) {
+                const targetBaseZ = uData.type === 'player' ? ENEMY_BASE_Z : PLAYER_BASE_Z;
+                const distToBaseSq = uData.position[0] * uData.position[0] + Math.pow(uData.position[2] - targetBaseZ, 2);
+                bestScore = 6.0 / (distToBaseSq + 0.1); 
+                bestTargetId = uData.type === 'player' ? 'enemy-base' : 'player-base';
+            }
             uData.targetId = bestTargetId;
             const coreUnit = unitIndex?.current?.get(id);
             if (coreUnit) coreUnit.targetId = bestTargetId;
@@ -187,8 +195,16 @@ export function MarksmanArmy({
                 const dx = uData.position[0] - target.position[0];
                 const dz = uData.position[2] - target.position[2];
                 const distSq = dx * dx + dz * dz;
-                const rangeSq = (uData.range || 7.5) * (uData.range || 7.5);
+                const rangeSq = (uData.range || 8.5) * (uData.range || 8.5);
                 uData.status = distSq <= rangeSq ? 'attacking' : 'marching';
+            } else if (uData.targetId === 'player-base' || uData.targetId === 'enemy-base') {
+                const baseZ = uData.type === 'player' ? ENEMY_BASE_Z : PLAYER_BASE_Z;
+                const distSq = uData.position[0] * uData.position[0] + Math.pow(uData.position[2] - baseZ, 2);
+                
+                // MM range reduction for Tower (0.82)
+                const range = (uData.range || 8.5) * 0.82;
+                const rangeSq = range * range;
+                uData.status = (distSq <= rangeSq) ? 'attacking' : 'marching';
             } else { uData.targetId = undefined; }
         } else {
             const baseZ = uData.type === 'player' ? ENEMY_BASE_Z : PLAYER_BASE_Z;

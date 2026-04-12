@@ -59,6 +59,17 @@ export const VFXProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const lastSpawnAt = useRef<{ [key: string]: number }>({});
 
   useEffect(() => {
+    // Initialize all particles to hidden state
+    if (meshRef.current) {
+        dummy.position.set(0, -100, 0);
+        dummy.scale.set(0, 0, 0);
+        dummy.updateMatrix();
+        for (let i = 0; i < MAX_PARTICLES; i++) {
+            meshRef.current.setMatrixAt(i, dummy.matrix);
+        }
+        meshRef.current.instanceMatrix.needsUpdate = true;
+    }
+
     return () => {
       if (meshRef.current) {
         meshRef.current.geometry.dispose();
@@ -205,7 +216,10 @@ export const VFXProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const pSize = data.sizes[idx];
       let scale = typeId === 6 ? pSize * (1 - progress) : progress * pSize;
 
-      if (typeId === 7) { // smoke expansion (Subtle)
+      if (typeId === 4) { // mega_explosion expansion logic
+          const expansion = 1.0 + (1.0 - progress) * 2.5; 
+          scale = pSize * Math.sin(progress * Math.PI) * expansion;
+      } else if (typeId === 7) { // fireball_hit expansion (Subtle)
           const expansion = 1.0 + (1.0 - progress) * 0.8;
           scale = pSize * Math.sin(progress * Math.PI) * expansion;
       }
@@ -239,11 +253,11 @@ export const VFXProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     <VFXContext.Provider value={{ spawnVFX }}>
       {children}
       <instancedMesh ref={meshRef} args={[undefined, undefined, MAX_PARTICLES]} frustumCulled={false}>
-        <sphereGeometry args={[1, 4, 4]} />
+        <sphereGeometry args={[1, 16, 16]} />
         <meshStandardMaterial 
           transparent 
-          opacity={0.7} 
-          emissiveIntensity={2.0}
+          opacity={0.85} 
+          emissiveIntensity={3.0}
           toneMapped={false}
           blending={THREE.AdditiveBlending}
           depthWrite={false}

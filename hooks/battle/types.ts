@@ -104,6 +104,7 @@ export interface ActiveUnit extends UnitStats {
     lastBlinkTime?: number;
     lastThinkTime?: number;
     isActive: boolean;
+    pendingCrit?: boolean;
     isCriticalReady?: boolean;
     untargetableUntil?: number;
 }
@@ -184,6 +185,7 @@ export interface UnitRuntimeData {
     perceptionRadiusSq: number;
     chaseRange: number;
     dSq?: number;
+    pendingCrit?: boolean;
 }
 
 export interface DamageQueueEntry {

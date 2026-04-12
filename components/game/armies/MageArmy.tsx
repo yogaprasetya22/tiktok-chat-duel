@@ -76,7 +76,7 @@ export function MageArmy({
             child.receiveShadow = false;
             child.frustumCulled = true;
             const name = child.name.toLowerCase();
-            const isColorable = name.includes('cloth') || name.includes('trim') || name.includes('jewel') || name.includes('robe') || name.includes('scarf');
+            const isColorable = name.includes('cloth') || name.includes('trim') || name.includes('jewel') || name.includes('robe') || name.includes('cloak') || name.includes('cape') || name.includes('scarf') || name.includes('primary') || name.includes('team');
             if (isColorable) {
                 if (child.material) child.material = child.material.clone();
                 colorable.push(child);
@@ -183,6 +183,15 @@ export function MageArmy({
                     bestTargetId = potential.id;
                 }
             }
+
+            // --- SCORE TOWER (ONLY if no units found) ---
+            if (bestTargetId === undefined) {
+                const targetBaseZ = uData.type === 'player' ? ENEMY_BASE_Z : PLAYER_BASE_Z;
+                const distToBaseSq = uData.position[0] * uData.position[0] + Math.pow(uData.position[2] - targetBaseZ, 2);
+                bestScore = 6.0 / (distToBaseSq + 0.1); 
+                bestTargetId = uData.type === 'player' ? 'enemy-base' : 'player-base';
+            }
+ 
             uData.targetId = bestTargetId;
             const coreUnit = unitIndex?.current?.get(id);
             if (coreUnit) coreUnit.targetId = bestTargetId;
@@ -212,9 +221,20 @@ export function MageArmy({
                             spells[sIdx].fromX = uData.position[0];
                             spells[sIdx].fromY = launchY;
                             spells[sIdx].fromZ = uData.position[2];
-                            spells[sIdx].toX = target.position[0];
-                            spells[sIdx].toY = target.position[1] + 1.0;
-                            spells[sIdx].toZ = target.position[2];
+                            
+                            // Target Base Logic
+                            const isBase = uData.targetId === 'enemy-base' || uData.targetId === 'player-base';
+                            if (isBase) {
+                                const baseZ = uData.type === 'player' ? ENEMY_BASE_Z : PLAYER_BASE_Z;
+                                spells[sIdx].toX = 0;
+                                spells[sIdx].toY = 1.8;
+                                spells[sIdx].toZ = baseZ;
+                            } else {
+                                spells[sIdx].toX = target.position[0];
+                                spells[sIdx].toY = target.position[1] + 1.0;
+                                spells[sIdx].toZ = target.position[2];
+                            }
+
                             spells[sIdx].targetId = uData.targetId;
                             spells[sIdx].startTime = simTimeRef.current || 0;
                             spells[sIdx].color = teamColor;
@@ -239,7 +259,15 @@ export function MageArmy({
                 const dx = uData.position[0] - target.position[0];
                 const dz = uData.position[2] - target.position[2];
                 const distSq = dx * dx + dz * dz;
-                const range = uData.range || 15.0; // Synced with simulation range
+                const range = uData.range || 15.0; 
+                const rangeSq = range * range;
+                uData.status = (distSq <= rangeSq) ? 'attacking' : 'marching';
+            } else if (uData.targetId === 'player-base' || uData.targetId === 'enemy-base') {
+                const baseZ = uData.type === 'player' ? ENEMY_BASE_Z : PLAYER_BASE_Z;
+                const distSq = uData.position[0] * uData.position[0] + Math.pow(uData.position[2] - baseZ, 2);
+                
+                // Mage range reduction for Tower (0.82)
+                const range = (uData.range || 15.0) * 0.82;
                 const rangeSq = range * range;
                 uData.status = (distSq <= rangeSq) ? 'attacking' : 'marching';
             } else {

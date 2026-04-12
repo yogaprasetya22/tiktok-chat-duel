@@ -224,9 +224,9 @@ export function InstancedImpostorRenderer({
       idx++;
     }
 
-    // Hide remaining instances from previous frame
-    const prevCount = lastCountRef.current;
-    for (let i = idx; i < Math.max(idx, prevCount); i++) {
+    // Hide remaining instances from previous frame to avoid "Ghosting"
+    const MAX_CLEANUP = 150; // Performance safe cleanup window
+    for (let i = idx; i < Math.min(idx + MAX_CLEANUP, LOD_IMPOSTOR_MAX); i++) {
       mesh.setMatrixAt(i, _hidePos);
     }
     lastCountRef.current = idx;

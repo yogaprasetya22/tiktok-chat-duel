@@ -61,45 +61,51 @@ const FireballShader = {
         varying vec3 vViewDirection;
         varying vec3 vNormal;
 
-        // Pseudo-random noise for energy distortion
-        float noise(vec3 p) {
-            return fract(sin(dot(p, vec3(12.9898, 78.233, 45.164))) * 43758.5453);
+        // Noise for heat distortion
+        float noise3D(vec3 p) {
+            vec3 s = vec3(7, 157, 113);
+            vec3 ip = floor(p); p -= ip;
+            vec4 h = vec4(0, s.yz, s.y + s.z) + dot(ip, s);
+            p = p * p * (3.0 - 2.0 * p);
+            h = mix(fract(sin(h) * 43758.545), fract(sin(h + s.x) * 43758.545), p.x);
+            h.xy = mix(h.xz, h.yw, p.y);
+            return mix(h.x, h.y, p.z);
         }
 
         void main() {
             vec2 center = vUv - 0.5;
             float dist = length(center);
             
-            // Fresnel / Rim Glow effect
+            // Fresnel / Rim Glow effect (Blurred edges)
             vec3 viewDir = normalize(vViewDirection);
             float rim = 1.0 - max(dot(viewDir, vNormal), 0.0);
-            rim = pow(rim, 3.0);
+            rim = pow(rim, 1.5); // Softer than before
 
-            // Animated noise distortion
-            float n = noise(vWorldPosition * 2.0 + time * 5.0);
-            float energy = smoothstep(0.4 + n * 0.1, 0.0, dist);
+            // Heat Noise
+            float n = noise3D(vWorldPosition * 3.0 + time * 12.0);
+            float energy = smoothstep(0.48 + n * 0.08, 0.0, dist);
+            float core = smoothstep(0.18, 0.0, dist);
             
-            // Core bloom
-            float core = smoothstep(0.2, 0.0, dist);
+            // Fire Colors (Derived from Team Color)
+            vec3 fireMid = vColor;
+            vec3 fireEdge = mix(vColor, vec3(0.0), 0.4); // Darker rim
+            vec3 firePulse = mix(vColor, vec3(1.0), 0.5); // Lighter core
+            vec3 coreWhite = vec3(1.0, 1.0, 1.0);
             
-            // Vibrant Color Palette (White-hot to team color)
-            vec3 coreColor = vec3(1.0, 1.0, 1.0);
-            vec3 midColor = vColor * 2.0;
-            vec3 edgeColor = vColor;
+            vec3 fireColor = mix(fireEdge, fireMid, energy);
+            fireColor = mix(fireColor, firePulse, core + rim * 0.4);
+            fireColor = mix(fireColor, coreWhite, core * 1.8);
             
-            vec3 finalColor = mix(edgeColor, midColor, core + rim * 0.5);
-            finalColor = mix(finalColor, coreColor, core * 1.5);
+            // Glow intensity
+            float pulse = 1.4 + sin(time * 30.0) * 0.3;
+            vec3 emissive = fireColor * energy * pulse * 4.2;
             
-            // Pulsing intensity (Restored for high visibility)
-            float pulse = 1.3 + sin(time * 25.0) * 0.4;
-            vec3 emissive = finalColor * energy * pulse * 3.5;
-            
-            // Alpha handling (Restored saturation)
-            float alpha = (energy + rim * 0.5) * 1.8;
-            alpha *= (1.0 - smoothstep(0.45, 0.5, dist));
+            // Blur & Alpha (Volumetric feel)
+            float alpha = (energy + rim * 0.8) * 1.5;
+            alpha *= (1.0 - smoothstep(0.42, 0.5, dist)); // Soft falloff
             
             gl_FragColor = vec4(emissive, alpha);
-            if (gl_FragColor.a < 0.02) discard;
+            if (gl_FragColor.a < 0.01) discard;
         }
     `
 };
@@ -261,10 +267,13 @@ export function MageSpellEffect({ spellsRef, unitRegistry, simTimeRef }: Props) 
             instanceIdx++;
         }
         
-        if (s.progress >= 1.0) {
+        if (s.progress >= 0.99) {
             // TRIGGER IMPACT VFX
             if (spawnVFX) {
-                spawnVFX([s.toX, s.toY, s.toZ], 'fireball_hit', s.color);
+                const pos: [number, number, number] = [s.toX, s.toY, s.toZ];
+                spawnVFX(pos, 'fireball_hit', s.color);
+                spawnVFX(pos, 'spark', s.color); 
+                spawnVFX(pos, 'shockwave', s.color); 
             }
             s.active = false;
         }
