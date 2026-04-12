@@ -74,7 +74,7 @@ export let CLASS_CONFIG: ClassConfig = {
         attack_speed_mult: 0.6,
         crit_chance: 0.05,
         crit_damage: 1.5,
-        range: 6.5,
+        range: 15.0,
         tenacity: 0.0,
         cooldown_reduction: 0.3,
         ai_behavior: {
@@ -82,7 +82,7 @@ export let CLASS_CONFIG: ClassConfig = {
             encirclement: 1.5,
             swagger: 0.4,
             perception_radius: 85 * 85,
-            chase_range: 8.0,
+            chase_range: 18.0,
         },
     },
     marksman: {

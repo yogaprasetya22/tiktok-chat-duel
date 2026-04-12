@@ -239,7 +239,7 @@ export function MageArmy({
                 const dx = uData.position[0] - target.position[0];
                 const dz = uData.position[2] - target.position[2];
                 const distSq = dx * dx + dz * dz;
-                const range = uData.range || 12; // Synced with visual range
+                const range = uData.range || 15.0; // Synced with simulation range
                 const rangeSq = range * range;
                 uData.status = (distSq <= rangeSq) ? 'attacking' : 'marching';
             } else {
