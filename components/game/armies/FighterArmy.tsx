@@ -33,7 +33,7 @@ interface FighterArmyProps {
   fighterSpellsRef: React.RefObject<any[]>;
 }
 
-const POOL_SIZE = 25;
+const POOL_SIZE = 120; // Ultimate Warfare Capacity
 
 const _hudTemp = new THREE.Object3D();
 const _healthColor = new THREE.Color();
@@ -148,13 +148,14 @@ const FighterArmyComponent = ({
     const fighterMults = wMults['fighter'] || {};
     const cachedWeatherSpeedMult = (fighterMults.move_speed_mult || 1.0) * (wMults.globalSpeedMultiplier || 1.0);
 
-    // Filter units of this class
+    // Filter and SORT units by distance to prioritize close units for the 3D pool
     const myUnits: UnitRuntimeData[] = [];
     for (let i = 0; i < rawMap.length; i++) {
       const u = rawMap[i];
       if (!u.isActive || u.hp <= 0 || u.unitClass !== 'fighter') continue;
       myUnits.push(u);
     }
+    myUnits.sort((a, b) => (a.dSq || 0) - (b.dSq || 0));
 
     // --- 1. BRAIN LOOP: Process ALL units of this class for AI/Steering ---
     for (let i = 0; i < myUnits.length; i++) {

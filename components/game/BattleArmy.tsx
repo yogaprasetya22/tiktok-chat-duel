@@ -37,8 +37,8 @@ interface BattleArmyProps {
 
 
 
-const MAX_UNITS = 350;
-const NAME_POOL_SIZE = 120; // Increased for more visible players
+const MAX_UNITS = 1200; // Matched with simulation pool
+const NAME_POOL_SIZE = 500; // Safe high-performance limit
 
 const _healthColor = new THREE.Color();
 const _c1 = new THREE.Color('#22c55e');
@@ -139,10 +139,10 @@ const MLHealthBarShader = {
   `
 };
 
-const BattleArmyComponent = ({ 
-  unitRegistry, towerConfig, updateSimulation, settingsRef, simTimeRef, 
-  vehicles, unitIndex, spellsRef, mmSpellsRef, fighterSpellsRef, 
-  tankSpellsRef, assassinSpellsRef, vfxRef 
+const BattleArmyComponent = ({
+  unitRegistry, towerConfig, updateSimulation, settingsRef, simTimeRef,
+  vehicles, unitIndex, spellsRef, mmSpellsRef, fighterSpellsRef,
+  tankSpellsRef, assassinSpellsRef, vfxRef
 }: BattleArmyProps) => {
   const shadowRef = useRef<THREE.InstancedMesh>(null!);
   const healthBgRef = useRef<THREE.InstancedMesh>(null!);
@@ -220,17 +220,17 @@ const BattleArmyComponent = ({
     // instead of exploding with speed bursts once the lag ends.
     let simulationDelta = delta;
     if (delta > 0.1) simulationDelta = SIM_STEP; // Force Slow-Mo if lagging > 10fps
-    
-    const clampedDelta = Math.min(SIM_STEP * 2, simulationDelta); 
+
+    const clampedDelta = Math.min(SIM_STEP * 2, simulationDelta);
     simAccumulator.current += clampedDelta;
-    
+
     let steps = 0;
     while (simAccumulator.current >= SIM_STEP && steps < 2) {
       updateSimulation(SIM_STEP);
       simAccumulator.current -= SIM_STEP;
       steps++;
     }
-    
+
     // Safety: discard any extra accumulated time to prevent "Future Catch-up"
     if (simAccumulator.current > SIM_STEP) simAccumulator.current = 0;
 
@@ -266,7 +266,8 @@ const BattleArmyComponent = ({
     }
 
     const activeUnits = cachedActiveUnits.current;
-    const HUD_DETAIL_DIST_SQ = 180 * 180;
+    // Ultimate Visibility: Names stay visible even when zoomed out far (200m)
+    const HUD_DETAIL_DIST_SQ = 200 * 200;
     const isPotato = !!settingsRef.current.potatoMode;
     if (isPotato) {
       if (frameCountRef.current % 15 === 0) {
@@ -286,16 +287,17 @@ const BattleArmyComponent = ({
     // 2. Name Labels Lifecycle (Positioning is now delegated to Armies)
     if (time - lastNameCullTime.current > 0.1) {
       lastNameCullTime.current = time;
-      
+
       // Cleanup names for units that are dead, too far, or if in potato mode
       for (const [uid, slot] of namePoolMap.current.entries()) {
         const uIdx = parseInt(uid.split('-')[1]);
         const u = rawMap[uIdx];
+        // Release name slot if unit is dead, too far, or potato mode is on
         const gone = !u || !u.isActive || u.id !== uid || u.hp <= 0 || (u.dSq || 0) > HUD_DETAIL_DIST_SQ || isPotato;
         if (gone) {
           if (nameTextRefs.current[slot]) {
-              nameTextRefs.current[slot].visible = false;
-              nameTextRefs.current[slot].position.set(0, -100, 0); // extra hide
+            nameTextRefs.current[slot].visible = false;
+            nameTextRefs.current[slot].position.set(0, -100, 0); // extra hide
           }
           nameAvailableSlots.current.push(slot);
           namePoolMap.current.delete(uid);
@@ -317,10 +319,10 @@ const BattleArmyComponent = ({
             const badge = getLevelBadge(u.level || 1);
             const label = badge + u.userName;
             if (nameSlotContent.current[slot] !== label) { mesh.text = label; nameSlotContent.current[slot] = label; }
-            
+
             const col = getLevelColor(u.level || 1);
             if (nameSlotColor.current[slot] !== col) { mesh.color = col; nameSlotColor.current[slot] = col; }
-            
+
             mesh.fontSize = u.isBoss ? 0.95 : 0.45;
             mesh.outlineWidth = 0.08;
             mesh.visible = true;
@@ -333,24 +335,24 @@ const BattleArmyComponent = ({
     if (shadowRef.current) shadowRef.current.instanceMatrix.needsUpdate = true;
     if (healthBgRef.current) healthBgRef.current.instanceMatrix.needsUpdate = true;
     if (healthFillRef.current) {
-        healthFillRef.current.instanceMatrix.needsUpdate = true;
-        if (healthFillRef.current.instanceColor) healthFillRef.current.instanceColor.needsUpdate = true;
+      healthFillRef.current.instanceMatrix.needsUpdate = true;
+      if (healthFillRef.current.instanceColor) healthFillRef.current.instanceColor.needsUpdate = true;
     }
     if (notchRef.current) {
-        notchRef.current.instanceMatrix.needsUpdate = true;
-        const maxHpAttr = notchRef.current.geometry.getAttribute('aMaxHp');
-        if (maxHpAttr) maxHpAttr.needsUpdate = true;
+      notchRef.current.instanceMatrix.needsUpdate = true;
+      const maxHpAttr = notchRef.current.geometry.getAttribute('aMaxHp');
+      if (maxHpAttr) maxHpAttr.needsUpdate = true;
     }
   });
 
   return (
     <group>
-      {/* Full-3D Animated Unit Rendering by Class */}
+      {/* Full-3D Animated Unit Rendering by Class — Each gets 120-200 slot offset in the HUD buffer */}
       <FighterArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} renderedIdsRef={renderedIdsRef} shadowRef={shadowRef} healthBgRef={healthBgRef} healthFillRef={healthFillRef} notchRef={notchRef} hudBaseIdx={0} namePoolMap={namePoolMap} nameTextRefs={nameTextRefs} fighterSpellsRef={fighterSpellsRef} />
-      <TankArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} renderedIdsRef={renderedIdsRef} shadowRef={shadowRef} healthBgRef={healthBgRef} healthFillRef={healthFillRef} notchRef={notchRef} hudBaseIdx={30} namePoolMap={namePoolMap} nameTextRefs={nameTextRefs} tankSpellsRef={tankSpellsRef} />
-      <MageArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} spellsRef={spellsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} renderedIdsRef={renderedIdsRef} shadowRef={shadowRef} healthBgRef={healthBgRef} healthFillRef={healthFillRef} notchRef={notchRef} hudBaseIdx={60} namePoolMap={namePoolMap} nameTextRefs={nameTextRefs} />
-      <MarksmanArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} spellsRef={spellsRef} mmSpellsRef={mmSpellsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} renderedIdsRef={renderedIdsRef} shadowRef={shadowRef} healthBgRef={healthBgRef} healthFillRef={healthFillRef} notchRef={notchRef} hudBaseIdx={80} namePoolMap={namePoolMap} nameTextRefs={nameTextRefs} />
-      <AssassinArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} renderedIdsRef={renderedIdsRef} shadowRef={shadowRef} healthBgRef={healthBgRef} healthFillRef={healthFillRef} notchRef={notchRef} hudBaseIdx={100} namePoolMap={namePoolMap} nameTextRefs={nameTextRefs} assassinSpellsRef={assassinSpellsRef} />
+      <TankArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} renderedIdsRef={renderedIdsRef} shadowRef={shadowRef} healthBgRef={healthBgRef} healthFillRef={healthFillRef} notchRef={notchRef} hudBaseIdx={250} namePoolMap={namePoolMap} nameTextRefs={nameTextRefs} tankSpellsRef={tankSpellsRef} />
+      <MageArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} spellsRef={spellsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} renderedIdsRef={renderedIdsRef} shadowRef={shadowRef} healthBgRef={healthBgRef} healthFillRef={healthFillRef} notchRef={notchRef} hudBaseIdx={500} namePoolMap={namePoolMap} nameTextRefs={nameTextRefs} />
+      <MarksmanArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} spellsRef={spellsRef} mmSpellsRef={mmSpellsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} renderedIdsRef={renderedIdsRef} shadowRef={shadowRef} healthBgRef={healthBgRef} healthFillRef={healthFillRef} notchRef={notchRef} hudBaseIdx={750} namePoolMap={namePoolMap} nameTextRefs={nameTextRefs} />
+      <AssassinArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} renderedIdsRef={renderedIdsRef} shadowRef={shadowRef} healthBgRef={healthBgRef} healthFillRef={healthFillRef} notchRef={notchRef} hudBaseIdx={1000} namePoolMap={namePoolMap} nameTextRefs={nameTextRefs} assassinSpellsRef={assassinSpellsRef} />
 
       {/* LOD Impostor Layer: far-away units rendered as InstancedMesh billboards (2 draw calls) */}
       <InstancedImpostorRenderer
@@ -363,7 +365,7 @@ const BattleArmyComponent = ({
 
       {/* Mage GLSL Spell Projectiles */}
       <MageSpellEffect spellsRef={spellsRef} unitRegistry={unitRegistry} simTimeRef={simTimeRef} />
-      
+
       {/* Marksman GLSL Projectiles */}
       <MMSpellEffect spellsRef={mmSpellsRef} unitRegistry={unitRegistry} simTimeRef={simTimeRef} />
 

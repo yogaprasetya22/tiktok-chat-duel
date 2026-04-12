@@ -185,9 +185,9 @@ export function InstancedImpostorRenderer({
       const dz = camPos.z - u.position[2];
       const dSq = dx * dx + dz * dz;
 
-      // Skip units too close (they should be rendered by pool but aren't — edge case)
-      // In potato mode, render ALL non-pooled units as impostors regardless of distance
-      if (!isPotato && dSq < LOD_IMPOSTOR_DIST_SQ) continue;
+      // Fallback: If not rendered by full-3D pool, ALWAYS render as impostor
+      // This prevents "invisible units" if the 3D pools are full.
+      // Potato mode still forces everyone to be impostors.
 
       // Compose the impostor transform via dummy Object3D
       const scale = u.isBoss ? LOD_IMPOSTOR_BOSS_SCALE : LOD_IMPOSTOR_SCALE;

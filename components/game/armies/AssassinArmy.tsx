@@ -32,7 +32,7 @@ interface AssassinArmyProps {
     assassinSpellsRef: React.RefObject<any[]>;
 }
 
-const POOL_SIZE = 8;
+const POOL_SIZE = 120; // Ultimate Warfare Capacity
 
 const _hudTemp = new THREE.Object3D();
 const _healthColor = new THREE.Color();
