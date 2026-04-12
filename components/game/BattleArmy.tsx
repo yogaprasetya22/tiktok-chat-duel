@@ -5,7 +5,8 @@ import React, { useRef, useMemo, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Text } from '@react-three/drei';
 import { useVFX } from './VFXManager';
-import { ActiveUnit, TowerConfig, SimulationSettings } from '../../hooks/battle/types';
+import { ActiveUnit, TowerConfig, SimulationSettings, UnitRuntimeData } from '../../hooks/battle/types';
+import * as YUKA from 'yuka';
 import { FighterArmy } from './armies/FighterArmy';
 import { TankArmy } from './armies/TankArmy';
 import { MageArmy } from './armies/MageArmy';
@@ -15,13 +16,13 @@ import { InstancedImpostorRenderer } from './armies/InstancedImpostorRenderer';
 import { MageSpellEffect, SpellEntry } from './MageSpellEffect';
 
 interface BattleArmyProps {
-  unitRegistry: React.RefObject<Map<string, any>>;
+  unitRegistry: React.RefObject<UnitRuntimeData[]>;
   towerConfig: TowerConfig;
   updateSimulation: (delta: number) => void;
   settingsRef: React.RefObject<SimulationSettings>;
   simTimeRef: React.RefObject<number>;
-  vehicles: React.RefObject<Map<string, any>>;
-  unitIndex: React.RefObject<Map<string, any>>;
+  vehicles: React.RefObject<YUKA.Vehicle[]>;
+  unitIndex: React.RefObject<Map<string, ActiveUnit>>;
   spellsRef: React.RefObject<SpellEntry[]>;
   vfxRef?: React.RefObject<any>;
 }
@@ -54,7 +55,7 @@ let _cachedSinRotY = 0;
 let _cachedNow = 0;
 
 const LEVEL_COLORS: Record<number, string> = {
-  1: '#FFFFFF', 2: '#4CAF50', 3: '#2196F3', 4: '#9c27b0', 5: '#facc15', 
+  1: '#FFFFFF', 2: '#4CAF50', 3: '#2196F3', 4: '#9c27b0', 5: '#facc15',
 };
 const getLevelColor = (level: number): string => LEVEL_COLORS[Math.min(level, 5)] ?? '#FFFFFF';
 const getLevelBadge = (level: number): string => {
@@ -66,39 +67,39 @@ const getLevelBadge = (level: number): string => {
 
 // Optimization: Sub-component for individual name labels to avoid full list updates
 const UnitNameLabel = React.memo(({ unit, isVisible, camera }: { unit: any, isVisible: boolean, camera: any }) => {
-    const textRef = useRef<any>(null);
-    useFrame(({ clock }) => {
-        if (!textRef.current || !isVisible) return;
-        const time = clock.elapsedTime;
-        const hover = Math.sin(time * 3 + unit.id.length) * 0.1;
-        textRef.current.position.set(unit.position[0], (unit.isBoss ? 7.2 : 3.4) + (unit.isBoss ? 1.8 : 0.7) + hover, unit.position[2]);
-        textRef.current.quaternion.copy(camera.quaternion);
-        
-        if (unit.isBoss) {
-            const pulse = 1.0 + Math.sin(time * 5) * 0.1;
-            textRef.current.scale.set(pulse, pulse, 1);
-        }
-    });
-    const col = useMemo(() => getLevelColor(unit.level || 1), [unit.level]);
-    const label = useMemo(() => getLevelBadge(unit.level || 1) + (unit.userName || 'Pasukan'), [unit.level, unit.userName]);
+  const textRef = useRef<any>(null);
+  useFrame(({ clock }) => {
+    if (!textRef.current || !isVisible) return;
+    const time = clock.elapsedTime;
+    const hover = Math.sin(time * 3 + unit.id.length) * 0.1;
+    textRef.current.position.set(unit.position[0], (unit.isBoss ? 7.2 : 3.4) + (unit.isBoss ? 1.8 : 0.7) + hover, unit.position[2]);
+    textRef.current.quaternion.copy(camera.quaternion);
 
-    return (
-        <Text
-            ref={textRef}
-            visible={isVisible}
-            color={col}
-            fontSize={unit.isBoss ? 0.95 : 0.45}
-            font="/fonts/Inter-Bold.ttf"
-            outlineWidth={0.07}
-            outlineColor="#000000"
-            anchorX="center"
-            anchorY="middle"
-            renderOrder={10}
-            depthOffset={-2}
-        >
-            {label}
-        </Text>
-    );
+    if (unit.isBoss) {
+      const pulse = 1.0 + Math.sin(time * 5) * 0.1;
+      textRef.current.scale.set(pulse, pulse, 1);
+    }
+  });
+  const col = useMemo(() => getLevelColor(unit.level || 1), [unit.level]);
+  const label = useMemo(() => getLevelBadge(unit.level || 1) + (unit.userName || 'Pasukan'), [unit.level, unit.userName]);
+
+  return (
+    <Text
+      ref={textRef}
+      visible={isVisible}
+      color={col}
+      fontSize={unit.isBoss ? 0.95 : 0.45}
+      font="/fonts/Inter-Bold.ttf"
+      outlineWidth={0.07}
+      outlineColor="#000000"
+      anchorX="center"
+      anchorY="middle"
+      renderOrder={10}
+      depthOffset={-2}
+    >
+      {label}
+    </Text>
+  );
 });
 
 const MLHealthBarShader = {
@@ -144,10 +145,14 @@ export function BattleArmy({ unitRegistry, towerConfig, updateSimulation, settin
   // The InstancedImpostorRenderer reads this to skip already-rendered units.
   const renderedIdsRef = useRef<Set<string>>(new Set());
 
+  // PERF FIX #5: Track if matrices actually changed to avoid unnecessary needsUpdate
+  const prevHudIdxRef = useRef<number>(0);
+  const matrixDirtyRef = useRef<boolean>(false);
+
   // --- VFX BRIDGE: Link the context to the ref ---
   useEffect(() => {
     if (vfxRef && !vfxRef.current) {
-        vfxRef.current = { spawnVFX };
+      vfxRef.current = { spawnVFX };
     }
   }, [spawnVFX, vfxRef]);
 
@@ -155,22 +160,22 @@ export function BattleArmy({ unitRegistry, towerConfig, updateSimulation, settin
 
   useEffect(() => {
     if (notchRef.current) {
-        const maxHpArray = new Float32Array(MAX_UNITS).fill(250);
-        const attr = new THREE.InstancedBufferAttribute(maxHpArray, 1);
-        notchRef.current.geometry.setAttribute('aMaxHp', attr);
+      const maxHpArray = new Float32Array(MAX_UNITS).fill(250);
+      const attr = new THREE.InstancedBufferAttribute(maxHpArray, 1);
+      notchRef.current.geometry.setAttribute('aMaxHp', attr);
     }
-    
+
     tempObject.position.set(0, -1000, 0);
     tempObject.scale.set(0, 0, 0);
     tempObject.updateMatrix();
     if (shadowRef.current) {
-        for(let i=0; i<MAX_UNITS; i++) {
-            shadowRef.current.setMatrixAt(i, tempObject.matrix);
-            healthBgRef.current?.setMatrixAt(i, tempObject.matrix);
-            healthFillRef.current?.setMatrixAt(i, tempObject.matrix);
-            notchRef.current?.setMatrixAt(i, tempObject.matrix);
-        }
-        shadowRef.current.instanceMatrix.needsUpdate = true;
+      for (let i = 0; i < MAX_UNITS; i++) {
+        shadowRef.current.setMatrixAt(i, tempObject.matrix);
+        healthBgRef.current?.setMatrixAt(i, tempObject.matrix);
+        healthFillRef.current?.setMatrixAt(i, tempObject.matrix);
+        notchRef.current?.setMatrixAt(i, tempObject.matrix);
+      }
+      shadowRef.current.instanceMatrix.needsUpdate = true;
     }
   }, []);
 
@@ -196,19 +201,19 @@ export function BattleArmy({ unitRegistry, towerConfig, updateSimulation, settin
   const frameCountRef = useRef(0);
 
   const simAccumulator = useRef(0);
-  const SIM_STEP = 1/30; // 30Hz physics is stable and saves 50% CPU over 60Hz
+  const SIM_STEP = 1 / 30; // 30Hz physics is stable and saves 50% CPU over 60Hz
 
   // The master ECS physics and HUD logic tick.
   useFrame((state, delta) => {
     // 1. FIXED STEP SIMULATION (SAVES CPU/HEAT)
     simAccumulator.current += Math.min(0.1, delta); // Cap delta to prevent "jumps" after alt-tab
     while (simAccumulator.current >= SIM_STEP) {
-        updateSimulation(SIM_STEP); // Run simulation at fixed 30fps
-        simAccumulator.current -= SIM_STEP;
+      updateSimulation(SIM_STEP); // Run simulation at fixed 30fps
+      simAccumulator.current -= SIM_STEP;
     }
 
     // Armies will populate this in their useFrame, then ImpostorRenderer consumes and clears it
-    
+
 
     const rawMap = unitRegistry.current;
     if (!rawMap) return;
@@ -222,27 +227,27 @@ export function BattleArmy({ unitRegistry, towerConfig, updateSimulation, settin
     // PERFORMANCE: Throttle sorting and unit filtering to every 5 frames
 
     if (frameCountRef.current % 5 === 0 || cachedActiveUnits.current.length === 0) {
-        const activeUnits: any[] = [];
-        rawMap.forEach((u: any, id: string) => {
-            if (!u || u.hp <= 0) return;
-            const dx = camPos.x - u.position[0];
-            const dz = camPos.z - u.position[2];
-            u.id = id;
-            u.dSq = dx*dx + dz*dz;
-            activeUnits.push(u);
-        });
-        
-        activeUnits.sort((a, b) => {
-            if (a.isBoss !== b.isBoss) return a.isBoss ? -1 : 1;
-            return a.dSq - b.dSq;
-        });
-        cachedActiveUnits.current = activeUnits;
+      const activeUnits: any[] = [];
+      for (let i = 0; i < rawMap.length; i++) {
+        const u = rawMap[i];
+        if (!u.isActive || u.hp <= 0) continue;
+        const dx = camPos.x - u.position[0];
+        const dz = camPos.z - u.position[2];
+        u.dSq = dx * dx + dz * dz;
+        activeUnits.push(u);
+      }
+
+      activeUnits.sort((a, b) => {
+        if (a.isBoss !== b.isBoss) return a.isBoss ? -1 : 1;
+        return a.dSq - b.dSq;
+      });
+      cachedActiveUnits.current = activeUnits;
     }
 
     const activeUnits = cachedActiveUnits.current;
     let hudIdx = 0;
-    const FRUSTUM_CULL_DIST_SQ = 250 * 250; 
-    const HUD_DETAIL_DIST_SQ = 180 * 180; 
+    const FRUSTUM_CULL_DIST_SQ = 250 * 250;
+    const HUD_DETAIL_DIST_SQ = 180 * 180;
     const maxHpAttr = notchRef.current?.geometry.getAttribute('aMaxHp');
 
     // PERF: Cache camera state ONCE per frame — avoids per-unit property access
@@ -254,14 +259,16 @@ export function BattleArmy({ unitRegistry, towerConfig, updateSimulation, settin
     // Pre-compute camera world direction once for health bar z-offset
     state.camera.getWorldDirection(_camDir);
 
-    activeUnits.forEach((u: any) => {
+    for (let i = 0; i < activeUnits.length; i++) {
+      const u = activeUnits[i];
       // Setup master HUD limit
-      if (hudIdx >= MAX_UNITS || !u || u.hp <= 0) return;
-      if (u.dSq > FRUSTUM_CULL_DIST_SQ) return;
+      if (hudIdx >= MAX_UNITS) break;
+      if (!u || u.hp <= 0) continue;
+      if (u.dSq > FRUSTUM_CULL_DIST_SQ) continue;
 
       // 1. Shadows
       tempObject.position.set(u.position[0], -0.45, u.position[2]);
-      tempObject.rotation.set(-Math.PI/2, 0, 0);
+      tempObject.rotation.set(-Math.PI / 2, 0, 0);
       const ss = u.isBoss ? 4.5 : 1.6;
       tempObject.scale.set(ss, ss, 1);
       tempObject.updateMatrix();
@@ -299,15 +306,15 @@ export function BattleArmy({ unitRegistry, towerConfig, updateSimulation, settin
         // 4. Hit Flashes & Team Color — use cached Date.now()
         const teamC = u.type === 'player' ? towerConfig.player.color : towerConfig.enemy.color;
         _healthColor.set(teamC);
-        
+
         const flashAge = _cachedNow - (u.lastDamageTime || 0);
         if (flashAge < 100) {
-            _healthColor.lerpColors(_healthColor, _whiteColor, 1.0 - (flashAge / 100));
-            const lastSpawn = lastSpawnedRef.current.get(u.id) || 0;
-            if (_cachedNow - lastSpawn > 50) {
-                spawnVFX(u.position, 'blood', '#bb0000');
-                lastSpawnedRef.current.set(u.id, _cachedNow);
-            }
+          _healthColor.lerpColors(_healthColor, _whiteColor, 1.0 - (flashAge / 100));
+          const lastSpawn = lastSpawnedRef.current.get(u.id) || 0;
+          if (_cachedNow - lastSpawn > 50) {
+            spawnVFX(u.position, 'blood', '#bb0000');
+            lastSpawnedRef.current.set(u.id, _cachedNow);
+          }
         }
         healthFillRef.current.setColorAt(hudIdx, _healthColor);
 
@@ -316,7 +323,7 @@ export function BattleArmy({ unitRegistry, towerConfig, updateSimulation, settin
         tempObject.position.set(u.position[0], by, u.position[2]);
         tempObject.updateMatrix();
         notchRef.current.setMatrixAt(hudIdx, tempObject.matrix);
-        
+
         if (maxHpAttr) (maxHpAttr as THREE.InstancedBufferAttribute).setX(hudIdx, u.maxHp || 100);
       } else {
         // Hide detailed HUD if too far — use pre-computed hide matrix
@@ -326,48 +333,51 @@ export function BattleArmy({ unitRegistry, towerConfig, updateSimulation, settin
       }
 
       hudIdx++;
-    });
+    }
 
     if (maxHpAttr) maxHpAttr.needsUpdate = true;
 
     // 6. Name Labels Logic
     const isPotato = !!settingsRef.current.potatoMode;
 
-    namePoolMap.current.forEach((slot, unitId) => {
+    for (const [unitId, slot] of namePoolMap.current.entries()) {
       const mesh = nameTextRefs.current[slot];
-      if (!mesh) return;
-      const unit = rawMap.get(unitId);
-      if (unit && unit.hp > 0 && unit.dSq < HUD_DETAIL_DIST_SQ && !isPotato) {
+      if (!mesh) continue;
+      const uIdx = parseInt(unitId.split('-')[1]);
+      const unit = rawMap[uIdx];
+      if (unit && unit.isActive && unit.id === unitId && unit.hp > 0 && (unit.dSq || 0) < HUD_DETAIL_DIST_SQ && !isPotato) {
         const hover = Math.sin(time * 3 + unitId.length) * 0.1;
-        mesh.position.set(unit.position![0], (unit.isBoss ? 7.2 : 3.4) + (unit.isBoss ? 1.8 : 0.7) + hover, unit.position![2]);
+        mesh.position.set(unit.position[0], (unit.isBoss ? 7.2 : 3.4) + (unit.isBoss ? 1.8 : 0.7) + hover, unit.position[2]);
         mesh.quaternion.copy(_cachedCamQuat);
-        
+
         if (unit.isBoss) {
-            const pulse = 1.1 + Math.sin(time * 6) * 0.1;
-            mesh.scale.set(pulse, pulse, 1);
+          const pulse = 1.1 + Math.sin(time * 6) * 0.1;
+          mesh.scale.set(pulse, pulse, 1);
         } else {
-            mesh.scale.set(1, 1, 1);
+          mesh.scale.set(1, 1, 1);
         }
         mesh.visible = true;
       } else { mesh.visible = false; }
-    });
+    }
 
-    if (time - lastNameCullTime.current > 0.1) { 
+    if (time - lastNameCullTime.current > 0.1) {
       lastNameCullTime.current = time;
-      namePoolMap.current.forEach((slot, uid) => {
-        const u = rawMap.get(uid);
-        const gone = !u || u.hp <=0 || u.dSq > HUD_DETAIL_DIST_SQ || isPotato;
+      for (const [uid, slot] of namePoolMap.current.entries()) {
+        const uIdx = parseInt(uid.split('-')[1]);
+        const u = rawMap[uIdx];
+        const gone = !u || !u.isActive || u.id !== uid || u.hp <= 0 || (u.dSq || 0) > HUD_DETAIL_DIST_SQ || isPotato;
         if (gone) {
           if (nameTextRefs.current[slot]) nameTextRefs.current[slot].visible = false;
           nameAvailableSlots.current.push(slot);
           namePoolMap.current.delete(uid);
         }
-      });
+      }
       if (!isPotato) {
-        activeUnits.forEach((u: any) => {
+        for (let i = 0; i < activeUnits.length; i++) {
+          const u = activeUnits[i];
           const id = u.id;
-          if (!u || u.hp <= 0 || namePoolMap.current.has(id) || namePoolMap.current.size >= NAME_POOL_SIZE || nameAvailableSlots.current.length === 0) return;
-          if (u.dSq > HUD_DETAIL_DIST_SQ) return;
+          if (namePoolMap.current.has(id) || namePoolMap.current.size >= NAME_POOL_SIZE || nameAvailableSlots.current.length === 0) continue;
+          if (u.dSq > HUD_DETAIL_DIST_SQ) continue;
           const slot = nameAvailableSlots.current.shift()!;
           namePoolMap.current.set(id, slot);
           const mesh = nameTextRefs.current[slot];
@@ -381,35 +391,47 @@ export function BattleArmy({ unitRegistry, towerConfig, updateSimulation, settin
             mesh.outlineWidth = 0.08;
             mesh.visible = true;
           }
-        });
+        }
       }
     }
 
     // 7. Cleanup Unused HUD Slots — use pre-computed hide matrix (no position/scale/updateMatrix per slot)
     const prevMax = lastHudIdxRef.current;
+    let matricesDirty = false;
+
     if (settingsRef.current.potatoMode) {
+      if (prevMax > 0) { // Only set dirty if we had units before
         for (let i = 0; i < MAX_UNITS; i++) {
-            healthBgRef.current.setMatrixAt(i, _hideMatrix);
-            healthFillRef.current.setMatrixAt(i, _hideMatrix);
-            shadowRef.current.setMatrixAt(i, _hideMatrix);
+          healthBgRef.current.setMatrixAt(i, _hideMatrix);
+          healthFillRef.current.setMatrixAt(i, _hideMatrix);
+          shadowRef.current.setMatrixAt(i, _hideMatrix);
         }
-        lastHudIdxRef.current = 0;
+        matricesDirty = true;
+      }
+      lastHudIdxRef.current = 0;
     } else {
-        const clearTo = Math.max(hudIdx, prevMax);
-        lastHudIdxRef.current = hudIdx;
-        
+      const clearTo = Math.max(hudIdx, prevMax);
+
+      if (clearTo > hudIdx) { // Only set if actually cleaning up
         for (let i = hudIdx; i < clearTo; i++) {
-            shadowRef.current.setMatrixAt(i, _hideMatrix);
-            healthBgRef.current.setMatrixAt(i, _hideMatrix);
-            healthFillRef.current.setMatrixAt(i, _hideMatrix);
-            notchRef.current.setMatrixAt(i, _hideMatrix);
+          shadowRef.current.setMatrixAt(i, _hideMatrix);
+          healthBgRef.current.setMatrixAt(i, _hideMatrix);
+          healthFillRef.current.setMatrixAt(i, _hideMatrix);
+          notchRef.current.setMatrixAt(i, _hideMatrix);
         }
+        matricesDirty = true;
+      }
+      lastHudIdxRef.current = hudIdx;
     }
 
-    healthBgRef.current.instanceMatrix.needsUpdate = true;
-    healthFillRef.current.instanceMatrix.needsUpdate = true;
-    notchRef.current.instanceMatrix.needsUpdate = true;
-    shadowRef.current.instanceMatrix.needsUpdate = true;
+    // PERF FIX #5: Only set needsUpdate if matrices actually changed
+    if (matricesDirty) {
+      healthBgRef.current.instanceMatrix.needsUpdate = true;
+      healthFillRef.current.instanceMatrix.needsUpdate = true;
+      notchRef.current.instanceMatrix.needsUpdate = true;
+      shadowRef.current.instanceMatrix.needsUpdate = true;
+    }
+    if (maxHpAttr) maxHpAttr.needsUpdate = true;
     if (healthFillRef.current.instanceColor) healthFillRef.current.instanceColor.needsUpdate = true;
   });
 
@@ -439,20 +461,20 @@ export function BattleArmy({ unitRegistry, towerConfig, updateSimulation, settin
       <instancedMesh ref={healthBgRef} args={[null as any, null as any, MAX_UNITS]} geometry={healthGeo} material={healthBgMat} renderOrder={4} />
       <instancedMesh ref={healthFillRef} args={[null as any, null as any, MAX_UNITS]} geometry={healthGeo} material={healthFillMat} renderOrder={5} />
       <instancedMesh ref={notchRef} args={[null as any, null as any, MAX_UNITS]} geometry={healthGeo} material={notchMat} renderOrder={6} />
-      
+
       <group ref={nameGroupRef}>
         {Array.from({ length: NAME_POOL_SIZE }, (_, i) => (
-          <Text 
-            key={"name-" + i} 
-            ref={(el) => { nameTextRefs.current[i] = el; }} 
-            visible={false} 
-            fontSize={0.45} 
-            color="#ffffff" 
-            outlineWidth={0.08} 
-            outlineColor="#000000" 
-            anchorX="center" 
-            anchorY="middle" 
-            renderOrder={10} 
+          <Text
+            key={"name-" + i}
+            ref={(el) => { nameTextRefs.current[i] = el; }}
+            visible={false}
+            fontSize={0.45}
+            color="#ffffff"
+            outlineWidth={0.08}
+            outlineColor="#000000"
+            anchorX="center"
+            anchorY="middle"
+            renderOrder={10}
             depthOffset={-2}
           >
             {''}

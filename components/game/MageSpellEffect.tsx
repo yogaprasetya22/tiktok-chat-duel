@@ -91,9 +91,11 @@ const FireballShader = {
 const MAX_SPELLS = 600; // 200 spells * 3 segments
 
 
+import { UnitRuntimeData } from '../../hooks/battle/types';
+
 interface Props {
   spellsRef: SpellsRegistryRef;
-  unitRegistry: React.RefObject<Map<string, any>>;
+  unitRegistry: React.RefObject<UnitRuntimeData[]>;
   simTimeRef: React.RefObject<number>;
 }
 
@@ -152,8 +154,9 @@ export function MageSpellEffect({ spellsRef, unitRegistry, simTimeRef }: Props) 
 
         // --- LEAD TARGETING & HOMING ---
         if (s.targetId && unitRegistry.current) {
-            const target = unitRegistry.current.get(s.targetId);
-            if (target && target.hp > 0) {
+            const tIdx = parseInt(s.targetId.split('-')[1]);
+            const target = unitRegistry.current[tIdx];
+            if (target && target.isActive && target.id === s.targetId && target.hp > 0) {
                 // Pure Homing: Track the target precisely without twitchy velocity prediction
                 _targetPos.set(
                     target.position[0], 

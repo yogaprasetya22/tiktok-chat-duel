@@ -28,8 +28,10 @@ import {
  * Result: 2 draw calls for potentially 600+ far-away units
  */
 
+import { UnitRuntimeData } from '../../../hooks/battle/types';
+
 interface InstancedImpostorRendererProps {
-  unitRegistry: React.RefObject<Map<string, any>>;
+  unitRegistry: React.RefObject<UnitRuntimeData[]>;
   renderedIdsRef: React.RefObject<Set<string>>;
   playerColor: string;
   enemyColor: string;
@@ -39,7 +41,6 @@ interface InstancedImpostorRendererProps {
 // Reusable dummy Object3D for matrix composition — zero-alloc pattern
 const _dummy = new THREE.Object3D();
 const _color = new THREE.Color();
-const _whiteColor = new THREE.Color('#ffffff');
 const _hidePos = new THREE.Matrix4().compose(
   new THREE.Vector3(0, -1000, 0),
   new THREE.Quaternion(),
@@ -169,12 +170,15 @@ export function InstancedImpostorRenderer({
 
     let idx = 0;
 
-    rawMap.forEach((u: any, id: string) => {
-      if (idx >= LOD_IMPOSTOR_MAX) return;
-      if (!u || u.hp <= 0) return;
+    for (let i = 0; i < rawMap.length; i++) {
+      if (idx >= LOD_IMPOSTOR_MAX) break;
+      const u = rawMap[i];
+      if (!u.isActive || u.hp <= 0) continue;
+
+      const id = u.id;
 
       // Skip units already rendered as full 3D by army pools
-      if (renderedIds.has(id)) return;
+      if (renderedIds.has(id)) continue;
 
       // Compute distance to camera
       const dx = camPos.x - u.position[0];
@@ -183,7 +187,7 @@ export function InstancedImpostorRenderer({
 
       // Skip units too close (they should be rendered by pool but aren't — edge case)
       // In potato mode, render ALL non-pooled units as impostors regardless of distance
-      if (!isPotato && dSq < LOD_IMPOSTOR_DIST_SQ) return;
+      if (!isPotato && dSq < LOD_IMPOSTOR_DIST_SQ) continue;
 
       // Compose the impostor transform via dummy Object3D
       const scale = u.isBoss ? LOD_IMPOSTOR_BOSS_SCALE : LOD_IMPOSTOR_SCALE;
@@ -213,12 +217,12 @@ export function InstancedImpostorRenderer({
       const flashAge = now - (u.lastDamageTime || 0);
       if (flashAge < 120) {
         const t = 1.0 - flashAge / 120;
-        _color.lerp(_whiteColor, t * 0.6);
+        _color.lerp(new THREE.Color('#ffffff'), t * 0.6);
       }
 
       mesh.setColorAt(idx, _color);
       idx++;
-    });
+    }
 
     // Hide remaining instances from previous frame
     const prevCount = lastCountRef.current;

@@ -6,20 +6,20 @@ import { useFrame } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
 import { SkeletonUtils } from 'three-stdlib';
 import { useVFX } from '../VFXManager';
-import { ActiveUnit, TowerConfig, SimulationSettings } from '../../../hooks/battle/types';
+import { ActiveUnit, TowerConfig, SimulationSettings, UnitRuntimeData } from '../../../hooks/battle/types';
 import { useStore } from '../../../hooks/useStore';
 import { SpellEntry, SpellsRegistryRef } from '../MageSpellEffect';
 import { ENEMY_BASE_Z, PLAYER_BASE_Z, WEATHER_CONFIG } from "../../../hooks/battle/constants";
+import * as YUKA from 'yuka';
 
 interface MageArmyProps {
-
-  unitsMap: React.RefObject<Map<string, any>>;
+  unitsMap: React.RefObject<UnitRuntimeData[]>;
   towerConfig: TowerConfig;
   settingsRef: React.RefObject<SimulationSettings>;
   spellsRef: SpellsRegistryRef;
   simTimeRef: React.RefObject<number>;
-  vehicles: React.RefObject<Map<string, any>>;
-  unitIndex: React.RefObject<Map<string, any>>;
+  vehicles: React.RefObject<YUKA.Vehicle[]>;
+  unitIndex: React.RefObject<Map<string, ActiveUnit>>;
   renderedIdsRef: React.RefObject<Set<string>>;
 }
 
@@ -123,73 +123,75 @@ export function MageArmy({ unitsMap, towerConfig, settingsRef, spellsRef, simTim
     const cachedWeatherSpeedMult = (mageMults.move_speed_mult || 1.0) * (wMults.globalSpeedMultiplier || 1.0);
 
     // Filter units of this class
-    const myUnits: any[] = [];
-    rawMap.forEach((u: any, id: string) => {
-        if (!u || u.hp <= 0 || u.unitClass !== 'mage') return;
-        u.id = id;
+    const myUnits: UnitRuntimeData[] = [];
+    for (let i = 0; i < rawMap.length; i++) {
+        const u = rawMap[i];
+        if (!u.isActive || u.hp <= 0 || u.unitClass !== 'mage') continue;
         myUnits.push(u);
-    });
+    }
 
     // --- 1. BRAIN LOOP: Process ALL units of this class for AI/Steering ---
-    myUnits.forEach((u) => {
-        const id = u.id;
-        const uData = rawMap.get(id);
-        if (!uData) return;
+    for (let i = 0; i < myUnits.length; i++) {
+        const uData = myUnits[i];
+        const id = uData.id;
 
-        // Targeting (Throttled & Staggered to prevent CPU spikes)
-        const staggerOffset = id.charCodeAt(id.length - 1) % 10;
-        if ((frameCountRef.current + staggerOffset) % 10 === 0 || !u.targetId) {
+        // Targeting (Throttled)
+        if (frameCountRef.current % 10 === 0 || !uData.targetId) {
             let bestDistSq = uData.perceptionRadiusSq || 3600; 
             let bestTargetId = undefined;
-            rawMap.forEach((potential, pid) => {
-                if (pid === id || potential.hp <= 0 || potential.isDying) return;
-                if (potential.type === u.type) return;
-                if (mode === 'TRAINING' && u.type === 'player' && potential.userName !== 'Training') return;
+            for (let j = 0; j < rawMap.length; j++) {
+                const potential = rawMap[j];
+                if (!potential.isActive || potential.hp <= 0 || potential.isDying) continue;
+                if (potential.id === id) continue;
+                if (potential.type === uData.type) continue;
+                if (mode === 'TRAINING' && uData.type === 'player' && potential.userName !== 'Training') continue;
                 const dx = uData.position[0] - potential.position[0];
                 const dz = uData.position[2] - potential.position[2];
                 const dSq = dx * dx + dz * dz;
                 const perceptionRadiusSq = uData.perceptionRadiusSq || 2025;
                 const chaseRangeSq = (uData.chaseRange || 60) * (uData.chaseRange || 60);
-                const switchThreshold = pid === u.targetId ? 1.0 : 0.5;
+                const switchThreshold = potential.id === uData.targetId ? 1.0 : 0.5;
                 if (dSq < perceptionRadiusSq && dSq < bestDistSq * switchThreshold && dSq < chaseRangeSq) {
                     bestDistSq = dSq;
-                    bestTargetId = pid;
+                    bestTargetId = potential.id;
                 }
-            });
-            u.targetId = bestTargetId;
+            }
+            uData.targetId = bestTargetId;
             const coreUnit = unitIndex?.current?.get(id);
             if (coreUnit) coreUnit.targetId = bestTargetId;
         }
 
         // VFX & Spark Logic (Ensure launch effects always show)
-        const currentAtk = u.lastAttackTime || 0;
+        const currentAtk = uData.lastAttackTime || 0;
         const prevAtk = lastVFXRef.current.get(id) || 0;
         if (currentAtk > prevAtk) {
              const launchY = uData.position[1] + 1.8;
-             spawnVFX([uData.position[0], launchY, uData.position[2]], 'spark', u.type === 'player' ? towerConfig.player.color : towerConfig.enemy.color);
+             spawnVFX([uData.position[0], launchY, uData.position[2]], 'spark', uData.type === 'player' ? towerConfig.player.color : towerConfig.enemy.color);
              lastVFXRef.current.set(id, currentAtk);
         }
 
         // Status
-        if (u.targetId) {
-            const target = rawMap.get(u.targetId);
-            if (target) {
+        if (uData.targetId) {
+            const tIdx = parseInt(uData.targetId.split('-')[1]);
+            const target = rawMap[tIdx];
+            if (target && target.isActive && target.id === uData.targetId) {
                 const dx = uData.position[0] - target.position[0];
                 const dz = uData.position[2] - target.position[2];
                 const distSq = dx * dx + dz * dz;
-                const rangeSq = (u.range || 12) * (u.range || 12);
+                const rangeSq = (uData.range || 12) * (uData.range || 12);
                 uData.status = distSq <= rangeSq ? 'attacking' : 'marching';
             } else {
-                u.targetId = undefined;
+                uData.targetId = undefined;
             }
         } else {
-            const baseZ = u.type === 'player' ? ENEMY_BASE_Z : PLAYER_BASE_Z; 
+            const baseZ = uData.type === 'player' ? ENEMY_BASE_Z : PLAYER_BASE_Z; 
             const distToBaseSq = Math.pow(uData.position[2] - baseZ, 2);
             uData.status = distToBaseSq < 225 ? 'attacking' : 'marching';
         }
 
         // Steering & Rotation
-        const vehicle = vehicles?.current?.get(id);
+        const vIdx = parseInt(id.split('-')[1]);
+        const vehicle = vehicles?.current?.[vIdx];
         if (vehicle) {
             // PERF: Use frame-cached weather multiplier
             const weatherSpeedMult = cachedWeatherSpeedMult;
@@ -198,18 +200,19 @@ export function MageArmy({ unitsMap, towerConfig, settingsRef, spellsRef, simTim
             let isKiting = false;
 
             // Chase Target with Steering
-            if (u.targetId) {
-                const target = rawMap.get(u.targetId);
-                if (target) {
+            if (uData.targetId) {
+                const tIdx = parseInt(uData.targetId.split('-')[1]);
+                const target = rawMap[tIdx];
+                if (target && target.isActive && target.id === uData.targetId) {
                     const dx = uData.position[0] - target.position[0];
                     const dz = uData.position[2] - target.position[2];
                     const distSq = dx * dx + dz * dz;
                     const kitingThresholdSq = 49; 
                     // PERF: Find SeekBehavior directly
-                    const seekB = vehicle.steering.behaviors.find((b: any) => b.target !== undefined);
+                    const seekB = (vehicle.steering.behaviors as any).find((b: any) => b.target !== undefined);
                     if (seekB) {
                         if (distSq < kitingThresholdSq) {
-                            const safeDirZ = u.type === 'player' ? 1 : -1;
+                            const safeDirZ = uData.type === 'player' ? 1 : -1;
                             const retreatX = uData.position[0] + (uData.position[0] - target.position[0]) * 2;
                             const retreatZ = uData.position[2] + (uData.position[2] - target.position[2]) * 2 + (safeDirZ * 5);
                             seekB.target.set(retreatX, 0, retreatZ);
@@ -228,43 +231,42 @@ export function MageArmy({ unitsMap, towerConfig, settingsRef, spellsRef, simTim
             }
 
             if (!isChasing) {
-                let seekB = vehicle._seekB;
-                if (!seekB) {
-                    seekB = vehicle.steering.behaviors.find((b: any) => b.target !== undefined);
-                    vehicle._seekB = seekB;
-                }
+                const seekB = (vehicle.steering.behaviors as any).find((b: any) => b.target !== undefined);
                 if (seekB) {
-                    const baseZ = u.type === 'player' ? ENEMY_BASE_Z : PLAYER_BASE_Z;
+                    const baseZ = uData.type === 'player' ? ENEMY_BASE_Z : PLAYER_BASE_Z;
                     const amp = uData.laneSwaggerAmp || 0.5;
                     const swagger = Math.sin((id.length * 8) + (uData.jitterOffset || 0)) * amp;
                     seekB.target.set((uData.laneOffset || 0) + swagger, 0, baseZ);
                 }
             }
-            const baseSpeed = (u.speed || 3) * (settings.globalSpeedMultiplier || 1);
-            vehicle.maxSpeed = (uData.status === 'attacking' || u.isDying) ? 0 : baseSpeed * weatherSpeedMult;
+            const baseSpeed = (uData.speed || 3) * (settings.globalSpeedMultiplier || 1);
+            vehicle.maxSpeed = (uData.status === 'attacking' || uData.isDying) ? 0 : baseSpeed * weatherSpeedMult;
             
             // Rotation
             const velSq = vehicle.velocity.x ** 2 + vehicle.velocity.z ** 2;
             if (uData.status === 'marching' && velSq > 0.01) {
                 uData.rotation[1] = Math.atan2(vehicle.velocity.x, vehicle.velocity.z);
             } else if (uData.status === 'attacking') {
-                const baseZ = u.type === 'player' ? ENEMY_BASE_Z : PLAYER_BASE_Z;
-                const tData = u.targetId ? rawMap.get(u.targetId) : null;
-                const tx = tData ? tData.position[0] : 0;
-                const tz = tData ? tData.position[2] : baseZ;
+                const baseZ = uData.type === 'player' ? ENEMY_BASE_Z : PLAYER_BASE_Z;
+                const tIdx = uData.targetId ? parseInt(uData.targetId.split('-')[1]) : -1;
+                const tData = tIdx !== -1 ? rawMap[tIdx] : null;
+                const tx = (tData && tData.isActive && tData.id === uData.targetId) ? tData.position[0] : 0;
+                const tz = (tData && tData.isActive && tData.id === uData.targetId) ? tData.position[2] : baseZ;
                 const targetRot = Math.atan2(tx - uData.position[0], tz - uData.position[2]);
                 uData.rotation[1] = THREE.MathUtils.lerp(uData.rotation[1], targetRot, settings.rotationSmoothing || 0.1);
             }
         }
-    });
+    }
 
     // --- 2. ACTOR LOOP: Process POOL_SIZE units for rendering ---
+    myUnits.sort((a, b) => {
+        if (a.isBoss !== b.isBoss) return -1;
+        return (a.dSq || 0) - (b.dSq || 0);
+    });
     const visibleUnits = myUnits.slice(0, POOL_SIZE);
 
-    visibleUnits.forEach((u: any) => {
-      const id = u.id;
-      const uData = rawMap.get(id);
-      if (!uData) return;
+    visibleUnits.forEach((uData) => {
+      const id = uData.id;
       _activeSet.add(id);
       renderedIdsRef.current.add(id);
 
@@ -273,7 +275,7 @@ export function MageArmy({ unitsMap, towerConfig, settingsRef, spellsRef, simTim
           const pIdx = availableIndicesRef.current.shift()!;
           poolMapRef.current.set(id, pIdx);
           const pItem = characterPool[pIdx];
-          const teamColor = u.type === 'player' ? towerConfig.player.color : towerConfig.enemy.color;
+          const teamColor = uData.type === 'player' ? towerConfig.player.color : towerConfig.enemy.color;
           pItem.colorable.forEach((mesh: THREE.Mesh) => {
               (mesh.material as THREE.MeshStandardMaterial).color.set(teamColor);
           });
@@ -289,11 +291,11 @@ export function MageArmy({ unitsMap, towerConfig, settingsRef, spellsRef, simTim
       }
       pItem.group.visible = true;
 
-      const baseScale = u.isBoss ? 4.0 : (1.3 + (u.level || 1) * 0.1);
+      const baseScale = uData.isBoss ? 4.0 : (1.3 + (uData.level || 1) * 0.1);
       pItem.group.scale.setScalar(baseScale * settings.unitScale);
 
       let targetAnim = 'Idle';
-      if (u.isDying) targetAnim = 'Death';
+      if (uData.isDying) targetAnim = 'Death';
       else if (uData.status === 'marching') targetAnim = 'Run';
       else if (uData.status === 'attacking') {
         // Dynamic search for attack animation
@@ -340,7 +342,7 @@ export function MageArmy({ unitsMap, towerConfig, settingsRef, spellsRef, simTim
         pItem.group.rotation.y = pItem.rotation;
       }
 
-      const sf = u.dSq > 3600 ? 5 : u.dSq > 400 ? 2 : 1;
+      const sf = (uData.dSq || 0) > 3600 ? 5 : (uData.dSq || 0) > 400 ? 2 : 1;
       if (time - pItem.lastUpdate >= 0.016 * sf) {
         pItem.mixer.update(delta * sf);
         pItem.lastUpdate = time;

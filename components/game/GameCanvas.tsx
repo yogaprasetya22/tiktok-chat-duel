@@ -27,7 +27,8 @@ import { VFXProvider, useVFX } from "./VFXManager";
 import { BattleArmy } from "./BattleArmy";
 import { StormEnvironment } from "./StormEnvironment";
 import { DamageHUDBatcher } from "./DamageHUDBatcher";
-import { ActiveUnit, TowerConfig, MapObstacle } from "../../hooks/useBattleSystem";
+import { ActiveUnit, TowerConfig, MapObstacle, UnitRuntimeData } from "../../hooks/battle/types";
+import * as YUKA from "yuka";
 import { useStore } from "../../hooks/useStore";
 import React, { useState, useEffect, useRef } from "react";
 import { Sword, Trophy, Zap, Skull, Maximize2, Activity, RefreshCw } from "lucide-react";
@@ -92,14 +93,14 @@ interface GameCanvasProps {
   setMapObstacles: (obs: MapObstacle[]) => void;
   mapObstacles: MapObstacle[];
   debug: boolean;
-  unitRegistry: React.RefObject<Map<string, { hp: number; status: string; position: number[]; isBoss: boolean; maxHp?: number }>>;
+  unitRegistry: React.RefObject<UnitRuntimeData[]>;
   isFullscreen?: boolean;
   updateSimulation: (delta: number) => void;
   damageQueue: React.RefObject<any[]>;
   settingsRef: React.RefObject<any>;
   simTimeRef: React.RefObject<number>;
   setTowerConfig?: (config: TowerConfig | ((prev: TowerConfig) => TowerConfig)) => void;
-  vehicles: React.RefObject<Map<string, any>>;
+  vehicles: React.RefObject<YUKA.Vehicle[]>;
   unitIndex: React.RefObject<Map<string, any>>;
   spellsRef: React.RefObject<any[]>;
   downloadPerfLogs: () => void;
@@ -188,7 +189,7 @@ export const GameCanvas = React.memo(({
     triangles: { value: 0, label: "Estimated Triangles", editable: false },
     suspect: { value: "OPTIMAL", label: "Lag Suspect", editable: false },
     "Performance Tool": folder({
-      showPerf: { value: false, label: "Show R3F-Perf Tools" },
+      showPerf: { value: true, label: "Show R3F-Perf" },
       perfPosition: {
         value: "top-right",
         options: ["top-right", "top-left", "bottom-right", "bottom-left"],
@@ -232,7 +233,15 @@ export const GameCanvas = React.memo(({
           titleBar={{ title: "Supreme Engine Tuning", drag: false }}
         />
 
-
+        {/* Performance Downloader */}
+        <button
+          onClick={downloadPerfLogs}
+          title="Download Performance Analysis Report"
+          className="mt-4 w-full py-3 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 rounded-2xl flex items-center justify-center gap-3 text-indigo-400 hover:text-indigo-300 transition-all group"
+        >
+          <Activity className="w-4 h-4 group-hover:scale-110 transition-transform" />
+          <span className="text-[10px] font-black uppercase tracking-widest">Download Performance Report</span>
+        </button>
 
         <button
           onClick={clearVFXCache}
@@ -247,7 +256,7 @@ export const GameCanvas = React.memo(({
         DPR: {dpr.toFixed(2)}
       </div>
       <Canvas
-        dpr={[0.8, 1.0]}
+        dpr={dpr}
         shadows={false}
         camera={{ position: [0, 45, 60], fov: 35, far: 800 }}
         gl={{
@@ -259,8 +268,8 @@ export const GameCanvas = React.memo(({
         }}
         className="select-none touch-none "
       >
-        {showPerf && <StatsGl className="!absolute !top-24 !left-2 !right-auto !bottom-auto !z-[2000]" />}
-
+        <StatsGl className="!absolute !top-24 !left-2 !right-auto !bottom-auto !z-[2000]" />
+        <PerformanceMonitor onIncline={() => setDpr(Math.min(dpr + 0.1, 1.0))} onDecline={() => setDpr(Math.max(dpr - 0.1, 0.7))} />
         <AdaptiveEvents />
         <AdaptiveDpr pixelated={true} />
 

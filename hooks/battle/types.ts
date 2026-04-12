@@ -102,6 +102,8 @@ export interface ActiveUnit extends UnitStats {
     attackCooldown: number;
     critChance: number;
     lastBlinkTime?: number;
+    lastThinkTime?: number;
+    isActive: boolean;
     isCriticalReady?: boolean;
     untargetableUntil?: number;
 }
@@ -147,6 +149,7 @@ export interface BattleStats {
 /** Internal runtime data for each unit, stored in unitDataRef */
 export interface UnitRuntimeData {
     id: string;
+    isActive: boolean;
     hp: number;
     maxHp: number;
     status: string;
@@ -160,6 +163,9 @@ export interface UnitRuntimeData {
     laneOffset: number;
     lastAttackTime: number;
     isAttackingBase?: boolean;
+    targetId?: string;
+    range?: number;
+    speed?: number;
     animationOffset: number;
     lastDamageTime: number;
     lastBlinkTime: number;
@@ -177,6 +183,7 @@ export interface UnitRuntimeData {
     laneSwaggerAmp: number;
     perceptionRadiusSq: number;
     chaseRange: number;
+    dSq?: number;
 }
 
 export interface DamageQueueEntry {

@@ -6,17 +6,18 @@ import { useFrame } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
 import { SkeletonUtils } from 'three-stdlib';
 import { useVFX } from '../VFXManager';
-import { ActiveUnit, TowerConfig, SimulationSettings } from '../../../hooks/battle/types';
+import { ActiveUnit, TowerConfig, SimulationSettings, UnitRuntimeData } from '../../../hooks/battle/types';
 import { useStore } from '../../../hooks/useStore';
 import { PLAYER_BASE_Z, ENEMY_BASE_Z } from '../../../hooks/battle/constants';
+import * as YUKA from 'yuka';
 
 interface MarksmanArmyProps {
-  unitsMap: React.RefObject<Map<string, any>>;
+  unitsMap: React.RefObject<UnitRuntimeData[]>;
   towerConfig: TowerConfig;
   settingsRef: React.RefObject<SimulationSettings>;
   simTimeRef: React.RefObject<number>;
-  vehicles: React.RefObject<Map<string, any>>;
-  unitIndex: React.RefObject<Map<string, any>>;
+  vehicles: React.RefObject<YUKA.Vehicle[]>;
+  unitIndex: React.RefObject<Map<string, ActiveUnit>>;
   renderedIdsRef: React.RefObject<Set<string>>;
 }
 
@@ -110,77 +111,80 @@ export function MarksmanArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, v
     }
 
     // Filter units of this class
-    const myUnits: any[] = [];
-    rawMap.forEach((u: any, id: string) => {
-        if (!u || u.hp <= 0 || u.unitClass !== 'marksman') return;
-        u.id = id;
+    const myUnits: UnitRuntimeData[] = [];
+    for (let i = 0; i < rawMap.length; i++) {
+        const u = rawMap[i];
+        if (!u.isActive || u.hp <= 0 || u.unitClass !== 'marksman') continue;
         myUnits.push(u);
-    });
+    }
 
     // --- 1. BRAIN LOOP ---
-    myUnits.forEach((u) => {
-        const id = u.id;
-        const uData = rawMap.get(id);
-        if (!uData) return;
+    for (let i = 0; i < myUnits.length; i++) {
+        const uData = myUnits[i];
+        const id = uData.id;
 
-        // Targeting (Throttled & Staggered to prevent CPU spikes)
-        const staggerOffset = id.charCodeAt(id.length - 1) % 10;
-        if ((frameCountRef.current + staggerOffset) % 10 === 0 || !u.targetId) {
+        // Targeting
+        if (frameCountRef.current % 10 === 0 || !uData.targetId) {
             let bestDistSq = uData.perceptionRadiusSq || 6400;
             let bestTargetId = undefined;
-            rawMap.forEach((potential, pid) => {
-                if (pid === id || potential.hp <= 0 || potential.isDying) return;
-                if (potential.type === u.type) return;
-                if (mode === 'TRAINING' && u.type === 'player' && potential.userName !== 'Training') return;
+            for (let j = 0; j < rawMap.length; j++) {
+                const potential = rawMap[j];
+                if (!potential.isActive || potential.hp <= 0 || potential.isDying) continue;
+                if (potential.id === id) continue;
+                if (potential.type === uData.type) continue;
+                if (mode === 'TRAINING' && uData.type === 'player' && potential.userName !== 'Training') continue;
                 const dx = uData.position[0] - potential.position[0];
                 const dz = uData.position[2] - potential.position[2];
                 const dSq = dx * dx + dz * dz;
                 const chaseRangeSq = mode === 'TRAINING' ? 1000000 : 6400;
                 if (dSq < (uData.perceptionRadiusSq || chaseRangeSq) && dSq < bestDistSq) {
                     bestDistSq = dSq;
-                    bestTargetId = pid;
+                    bestTargetId = potential.id;
                 }
-            });
-            u.targetId = bestTargetId;
+            }
+            uData.targetId = bestTargetId;
             const coreUnit = unitIndex?.current?.get(id);
             if (coreUnit) coreUnit.targetId = bestTargetId;
         }
 
         // Status
-        if (u.targetId) {
-            const target = rawMap.get(u.targetId);
-            if (target) {
+        if (uData.targetId) {
+            const tIdx = parseInt(uData.targetId.split('-')[1]);
+            const target = rawMap[tIdx];
+            if (target && target.isActive && target.id === uData.targetId) {
                 const dx = uData.position[0] - target.position[0];
                 const dz = uData.position[2] - target.position[2];
                 const distSq = dx * dx + dz * dz;
-                const rangeSq = (u.range || 7.5) * (u.range || 7.5);
+                const rangeSq = (uData.range || 7.5) * (uData.range || 7.5);
                 uData.status = distSq <= rangeSq ? 'attacking' : 'marching';
-            } else { u.targetId = undefined; }
+            } else { uData.targetId = undefined; }
         } else {
-            const baseZ = u.type === 'player' ? ENEMY_BASE_Z : PLAYER_BASE_Z;
+            const baseZ = uData.type === 'player' ? ENEMY_BASE_Z : PLAYER_BASE_Z;
             const distToBaseSq = Math.pow(uData.position[2] - baseZ, 2);
             uData.status = distToBaseSq < 225 ? 'attacking' : 'marching';
         }
 
         // VFX (Muzzle Flashes)
-        const currentAtk = u.lastAttackTime || 0;
+        const currentAtk = uData.lastAttackTime || 0;
         const prevAtk = lastVFXRef.current.get(id) || 0;
         if (currentAtk > prevAtk) {
             const forwardX = Math.sin(uData.rotation[1]) * 2.5;
             const forwardZ = Math.cos(uData.rotation[1]) * 2.5;
-            spawnVFX([uData.position[0] + forwardX, 1.8, uData.position[2] + forwardZ], 'muzzle', u.type === 'player' ? towerConfig.player.color : towerConfig.enemy.color);
+            spawnVFX([uData.position[0] + forwardX, 1.8, uData.position[2] + forwardZ], 'muzzle', uData.type === 'player' ? towerConfig.player.color : towerConfig.enemy.color);
             lastVFXRef.current.set(id, currentAtk);
         }
 
         // Steering
-        const vehicle = vehicles?.current?.get(id);
+        const vIdx = parseInt(id.split('-')[1]);
+        const vehicle = vehicles?.current?.[vIdx];
         if (vehicle) {
             let isChasing = false;
-            if (u.targetId) {
-                const target = rawMap.get(u.targetId);
-                if (target) {
+            if (uData.targetId) {
+                const tIdx = parseInt(uData.targetId.split('-')[1]);
+                const target = rawMap[tIdx];
+                if (target && target.isActive && target.id === uData.targetId) {
                     // PERF: Find SeekBehavior directly
-                    const seekB = vehicle.steering.behaviors.find((b: any) => b.target !== undefined);
+                    const seekB = (vehicle.steering.behaviors as any).find((b: any) => b.target !== undefined);
                     if (seekB) {
                         const totalVal = id.split('-').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0);
                         const angle = (totalVal % 360) * (Math.PI / 180);
@@ -193,42 +197,41 @@ export function MarksmanArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, v
                 }
             }
             if (!isChasing) {
-                const seekB = vehicle.steering.behaviors.find((b: any) => b.target !== undefined);
+                const seekB = (vehicle.steering.behaviors as any).find((b: any) => b.target !== undefined);
                 if (seekB) {
-                    const baseZ = u.type === 'player' ? ENEMY_BASE_Z : PLAYER_BASE_Z;
+                    const baseZ = uData.type === 'player' ? ENEMY_BASE_Z : PLAYER_BASE_Z;
                     const amp = uData.laneSwaggerAmp || 0.3;
                     const swagger = Math.sin((id.length * 7) + (uData.jitterOffset || 0)) * amp;
                     seekB.target.set((uData.laneOffset || 0) + swagger, 0, baseZ);
                 }
             }
-            vehicle.maxSpeed = (uData.status === 'attacking' || u.isDying) ? 0 : (u.speed || 3) * (settings.globalSpeedMultiplier || 1);
+            vehicle.maxSpeed = (uData.status === 'attacking' || uData.isDying) ? 0 : (uData.speed || 3) * (settings.globalSpeedMultiplier || 1);
             
             // Rotation
             const velSq = vehicle.velocity.x ** 2 + vehicle.velocity.z ** 2;
             if (uData.status === 'marching' && velSq > 0.01) {
                 uData.rotation[1] = Math.atan2(vehicle.velocity.x, vehicle.velocity.z);
             } else if (uData.status === 'attacking') {
-                const baseZ = u.type === 'player' ? ENEMY_BASE_Z : PLAYER_BASE_Z;
-                const tData = u.targetId ? rawMap.get(u.targetId) : null;
-                const tx = tData ? tData.position[0] : 0;
-                const tz = tData ? tData.position[2] : baseZ;
+                const baseZ = uData.type === 'player' ? ENEMY_BASE_Z : PLAYER_BASE_Z;
+                const tIdx = uData.targetId ? parseInt(uData.targetId.split('-')[1]) : -1;
+                const tData = tIdx !== -1 ? rawMap[tIdx] : null;
+                const tx = (tData && tData.isActive && tData.id === uData.targetId) ? tData.position[0] : 0;
+                const tz = (tData && tData.isActive && tData.id === uData.targetId) ? tData.position[2] : baseZ;
                 const targetRot = Math.atan2(tx - uData.position[0], tz - uData.position[2]);
                 uData.rotation[1] = THREE.MathUtils.lerp(uData.rotation[1], targetRot, settings.rotationSmoothing || 0.1);
             }
         }
-    });
+    }
 
     // --- 2. ACTOR LOOP ---
     myUnits.sort((a, b) => {
       if (a.isBoss !== b.isBoss) return -1;
-      return a.dSq - b.dSq;
+      return (a.dSq || 0) - (b.dSq || 0);
     });
     const visibleUnits = myUnits.slice(0, POOL_SIZE);
 
-    visibleUnits.forEach((u: any) => {
-      const id = u.id;
-      const uData = rawMap.get(id);
-      if (!uData) return;
+    visibleUnits.forEach((uData) => {
+      const id = uData.id;
       _activeSet.add(id);
       renderedIdsRef.current.add(id);
 
@@ -237,7 +240,7 @@ export function MarksmanArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, v
           const pIdx = availableIndicesRef.current.shift()!;
           poolMapRef.current.set(id, pIdx);
           const pItem = characterPool[pIdx];
-          const teamColor = u.type === 'player' ? towerConfig.player.color : towerConfig.enemy.color;
+          const teamColor = uData.type === 'player' ? towerConfig.player.color : towerConfig.enemy.color;
           pItem.colorable.forEach((mesh: THREE.Mesh) => {
               (mesh.material as THREE.MeshStandardMaterial).color.set(teamColor);
           });
@@ -253,14 +256,14 @@ export function MarksmanArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, v
       }
       pItem.group.visible = true;
 
-      const baseScale = u.isBoss ? 4.2 : (1.3 + (u.level || 1) * 0.1);
+      const baseScale = uData.isBoss ? 4.2 : (1.3 + (uData.level || 1) * 0.1);
       pItem.group.scale.setScalar(baseScale * settings.unitScale);
 
       let targetAnim = 'Idle';
-      if (u.isDying) targetAnim = 'Death';
+      if (uData.isDying) targetAnim = 'Death';
       else if (uData.status === 'marching') targetAnim = 'Run';
       else if (uData.status === 'attacking') {
-        const timeSinceAtk = (simTimeRef.current || 0) - (u.lastAttackTime || 0);
+        const timeSinceAtk = (simTimeRef.current || 0) - (uData.lastAttackTime || 0);
         const shootName = pItem.actions['Shoot_OneHanded'] ? 'Shoot_OneHanded' : 
                           (pItem.actions['Shoot'] ? 'Shoot' : 
                           (pItem.actions['Attack'] ? 'Attack' : 'Idle'));
@@ -296,7 +299,7 @@ export function MarksmanArmy({ unitsMap, towerConfig, settingsRef, simTimeRef, v
         pItem.group.rotation.y = pItem.rotation;
       }
 
-      const sf = u.dSq > 3600 ? 5 : u.dSq > 400 ? 2 : 1;
+      const sf = (uData.dSq || 0) > 3600 ? 5 : (uData.dSq || 0) > 400 ? 2 : 1;
       if (time - pItem.lastUpdate >= 0.016 * sf) {
         pItem.mixer.update(delta * sf);
         pItem.lastUpdate = time;
