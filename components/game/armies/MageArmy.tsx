@@ -195,8 +195,9 @@ export function MageArmy({
              const launchY = uData.position[1] + 1.8;
              const teamColor = uData.type === 'player' ? towerConfig.player.color : towerConfig.enemy.color;
              
-             // 1. Muzzle Spark
-             spawnVFX([uData.position[0], launchY, uData.position[2]], 'spark', teamColor);
+             // 1. Muzzle Bloom & Spark
+             spawnVFX([uData.position[0], launchY, uData.position[2]], 'spark', '#ffffff'); // bright core
+             spawnVFX([uData.position[0], launchY, uData.position[2]], 'muzzle', teamColor); // energy burst
              
              // 2. Launch Magic Bolt (Projectile)
              if (uData.targetId && spellsRef?.current) {
@@ -238,8 +239,9 @@ export function MageArmy({
                 const dx = uData.position[0] - target.position[0];
                 const dz = uData.position[2] - target.position[2];
                 const distSq = dx * dx + dz * dz;
-                const rangeSq = (uData.range || 12) * (uData.range || 12);
-                uData.status = distSq <= rangeSq ? 'attacking' : 'marching';
+                const range = uData.range || 12; // Synced with visual range
+                const rangeSq = range * range;
+                uData.status = (distSq <= rangeSq) ? 'attacking' : 'marching';
             } else {
                 uData.targetId = undefined;
             }
@@ -495,6 +497,18 @@ export function MageArmy({
       if (!_activeSet.has(unitId)) {
         const pItem = characterPool[poolIdx];
         if (pItem) pItem.group.visible = false;
+        
+        // --- CLEANUP HUD (Ghost Shadow fix) ---
+        const hIdx = hudBaseIdx + poolIdx;
+        _hudTemp.position.set(0, -100, 0);
+        _hudTemp.updateMatrix();
+        if (shadowRef.current) shadowRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
+        if (healthBgRef.current) {
+            healthBgRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
+            healthFillRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
+            notchRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
+        }
+
         availableIndicesRef.current.push(poolIdx);
         poolMapRef.current.delete(unitId);
       }

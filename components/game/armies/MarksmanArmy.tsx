@@ -454,6 +454,18 @@ export function MarksmanArmy({
       if (!_activeSet.has(unitId)) {
         const pItem = characterPool[poolIdx];
         if (pItem) pItem.group.visible = false;
+        
+        // --- CLEANUP HUD (Ghost Shadow fix) ---
+        const hIdx = hudBaseIdx + poolIdx;
+        _hudTemp.position.set(0, -100, 0);
+        _hudTemp.updateMatrix();
+        if (shadowRef.current) shadowRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
+        if (healthBgRef.current) {
+            healthBgRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
+            healthFillRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
+            notchRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
+        }
+
         availableIndicesRef.current.push(poolIdx);
         poolMapRef.current.delete(unitId);
       }

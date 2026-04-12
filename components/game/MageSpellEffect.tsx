@@ -90,16 +90,16 @@ const FireballShader = {
             vec3 finalColor = mix(edgeColor, midColor, core + rim * 0.5);
             finalColor = mix(finalColor, coreColor, core * 1.5);
             
-            // Pulsing intensity (Subtle)
-            float pulse = 1.2 + sin(time * 15.0) * 0.3;
-            vec3 emissive = finalColor * energy * pulse * 1.5;
+            // Pulsing intensity (Restored for high visibility)
+            float pulse = 1.3 + sin(time * 25.0) * 0.4;
+            vec3 emissive = finalColor * energy * pulse * 3.5;
             
-            // Alpha handling with soft edges and rim glow (Subtle)
-            float alpha = (energy + rim * 0.4) * 0.9;
+            // Alpha handling (Restored saturation)
+            float alpha = (energy + rim * 0.5) * 1.8;
             alpha *= (1.0 - smoothstep(0.45, 0.5, dist));
             
             gl_FragColor = vec4(emissive, alpha);
-            if (gl_FragColor.a < 0.05) discard;
+            if (gl_FragColor.a < 0.02) discard;
         }
     `
 };
@@ -131,9 +131,9 @@ export function MageSpellEffect({ spellsRef, unitRegistry, simTimeRef }: Props) 
   const _color = useMemo(() => new THREE.Color(), []);
   const settings = useStore((s) => s.settings);
 
-  // Capsule geometry for the rocket body (rotated 90deg to point along Z by default)
+  // Capsule geometry for the magic bolt (Larger for visibility)
   const rocketGeo = useMemo(() => {
-    const geo = new THREE.CapsuleGeometry(0.18, 0.45, 4, 12);
+    const geo = new THREE.CapsuleGeometry(0.24, 0.55, 4, 12);
     geo.rotateX(Math.PI / 2); // Orient head along Z
     return geo;
   }, []);
@@ -245,8 +245,8 @@ export function MageSpellEffect({ spellsRef, unitRegistry, simTimeRef }: Props) 
             const headScale = (isBullet ? 0.4 : 1.3) + pulse;
             const trailScale = (isBullet ? 0.2 : (0.7 - (j * 0.2))) + pulse;
             
-            const finalScale = (j === 0 ? headScale : Math.max(0.1, trailScale * 0.8));
-            _tempObj.scale.setScalar(finalScale);
+            const finalScale = (j === 0 ? headScale : Math.max(0.15, trailScale * 0.8));
+            _tempObj.scale.setScalar(finalScale * 1.25);
             _tempObj.updateMatrix();
             
             mesh.setMatrixAt(instanceIdx, _tempObj.matrix);

@@ -199,12 +199,42 @@ export function AssassinArmy({
             uData.status = distToBaseSq < 9 ? 'attacking' : 'marching';
         }
 
-        // Decision: Teleport Detection (Visuals)
+        // Decision: Blink Teleport (Logic)
+        const simNow = simTimeRef.current || 0;
         const lastBlink = uData.lastBlinkTime || 0;
+        if (uData.targetId && (simNow - lastBlink > 6)) {
+            const tIdx = parseInt(uData.targetId.split('-')[1]);
+            const target = rawMap[tIdx];
+            if (target && target.isActive && (target.unitClass === 'mage' || target.unitClass === 'marksman')) {
+                const dx = uData.position[0] - target.position[0];
+                const dz = uData.position[2] - target.position[2];
+                const dSq = dx * dx + dz * dz;
+                
+                if (dSq > 45 && dSq < 400) { // 7m to 20m range
+                    const vIdx = parseInt(id.split('-')[1]);
+                    const vehicle = vehicles?.current?.[vIdx];
+                    if (vehicle) {
+                        const angle = Math.atan2(dz, dx);
+                        const bx = target.position[0] + Math.cos(angle) * 1.5;
+                        const bz = target.position[2] + Math.sin(angle) * 1.5;
+                        
+                        vehicle.position.set(bx, 0, bz);
+                        uData.position[0] = bx;
+                        uData.position[2] = bz;
+                        uData.lastBlinkTime = simNow;
+                        
+                        spawnVFX([bx, 0.5, bz], 'shockwave', '#a855f7'); 
+                        spawnVFX([uData.position[0], 0.5, uData.position[2]], 'death', '#333333');
+                    }
+                }
+            }
+        }
+
+        // Decision: Teleport Detection (Visuals)
         const prevBlink = lastVFXRef.current.get(id + '-blink') || 0;
-        if (lastBlink > prevBlink) {
+        if (uData.lastBlinkTime && uData.lastBlinkTime > prevBlink) {
             spawnVFX([uData.position[0], 0.5, uData.position[2]], 'death', '#333333');
-            lastVFXRef.current.set(id + '-blink', lastBlink);
+            lastVFXRef.current.set(id + '-blink', uData.lastBlinkTime);
         }
 
         // Decision: Melee Slashes & Impact
@@ -448,6 +478,18 @@ export function AssassinArmy({
       if (!_activeSet.has(unitId)) {
         const pItem = characterPool[poolIdx];
         if (pItem) pItem.group.visible = false;
+        
+        // --- CLEANUP HUD (Ghost Shadow fix) ---
+        const hIdx = hudBaseIdx + poolIdx;
+        _hudTemp.position.set(0, -100, 0);
+        _hudTemp.updateMatrix();
+        if (shadowRef.current) shadowRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
+        if (healthBgRef.current) {
+            healthBgRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
+            healthFillRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
+            notchRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
+        }
+
         availableIndicesRef.current.push(poolIdx);
         poolMapRef.current.delete(unitId);
       }

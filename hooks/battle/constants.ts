@@ -193,7 +193,7 @@ export let INITIAL_SETTINGS: SimulationSettings = {
 };
 
 // --- MAGE PROJECTILE SYNC ---
-export const MAGE_PROJECTILE_TIME_MS = 350;
+export const MAGE_PROJECTILE_TIME_MS = 520;
 export const CORPSE_DESPAWN_MS = 5000; // Time in ms before a corpse is removed from the field
 export const ASSASSIN_BLINK_DISTANCE = 18.0; // Increased range for "far" feel
 export const ASSASSIN_BLINK_COOLDOWN = 6000;
