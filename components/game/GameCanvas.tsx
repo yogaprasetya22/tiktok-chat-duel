@@ -25,8 +25,12 @@ import { Base } from "./Base";
 import { Chessboard } from "./Chessboard";
 import { VFXProvider, useVFX } from "./VFXManager";
 import { BattleArmy } from "./BattleArmy";
+import { WhimsicalDiorama } from "./WhimsicalDiorama";
 import { StormEnvironment } from "./StormEnvironment";
 import { DamageHUDBatcher } from "./DamageHUDBatcher";
+
+import { EffectComposer, Bloom, ToneMapping } from "@react-three/postprocessing";
+
 import { ActiveUnit, TowerConfig, MapObstacle, UnitRuntimeData } from "../../hooks/battle/types";
 import * as YUKA from "yuka";
 import { useStore } from "../../hooks/useStore";
@@ -138,6 +142,9 @@ export const GameCanvas = React.memo(({
   const [dpr, setDpr] = useState(1.0);
   const gameState = useStore(s => s.gameState);
   const isSettingsOpen = useStore(s => s.isSettingsOpen);
+  const environment = useStore(s => s.environment);
+  const setEnvironment = useStore(s => s.setEnvironment);
+
 
   // --- High-Performance Simulation Controls (Leva) ---
   useControls("Military Tuning", {
@@ -187,6 +194,12 @@ export const GameCanvas = React.memo(({
     potato: {
       value: !!settingsRef.current.potatoMode, label: "Potato Mode (Extreme FPS)",
       onChange: (v) => { settingsRef.current.potatoMode = v; }
+    },
+    mapType: {
+      value: environment,
+      options: ["DIORAMA", "STORM"],
+      label: "Map Environment",
+      onChange: (v) => setEnvironment(v)
     }
   }, { collapsed: true });
 
@@ -304,10 +317,17 @@ export const GameCanvas = React.memo(({
 
 
 
-        <StormEnvironment
-          baseDistance={towerConfig.baseDistance || 24}
-          potatoMode={settingsRef.current.potatoMode}
-        />
+        {environment === 'DIORAMA' ? (
+          <WhimsicalDiorama
+            baseDistance={towerConfig.baseDistance || 24}
+          />
+        ) : (
+          <StormEnvironment
+            baseDistance={towerConfig.baseDistance || 24}
+            potatoMode={settingsRef.current.potatoMode}
+          />
+        )}
+
 
         <DiagnosticsBridge />
 
@@ -358,7 +378,18 @@ export const GameCanvas = React.memo(({
         {/* Damage text removed for maximum performance and clarity as requested */}
 
 
-        {/* Removed ContactShadows for massive performance boost on low-end hardware */}
+        {/* Post Processing for Whimsical Feel */}
+        {!settingsRef.current.potatoMode && (
+          <EffectComposer enableNormalPass={false} multisampling={0}>
+            <Bloom 
+              luminanceThreshold={1.0} 
+              mipmapBlur 
+              intensity={0.5} 
+              radius={0.4} 
+            />
+            <ToneMapping adaptive={false} />
+          </EffectComposer>
+        )}
       </Canvas>
     </div>
   );

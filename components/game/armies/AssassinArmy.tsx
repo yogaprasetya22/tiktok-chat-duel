@@ -11,6 +11,8 @@ import { useStore } from '../../../hooks/useStore';
 import { PLAYER_BASE_Z, ENEMY_BASE_Z } from '../../../hooks/battle/constants';
 import { lerpAngle } from '../../../hooks/battle/battleUtils';
 import * as YUKA from 'yuka';
+import { applyPainterlyStyle } from '../effects/PainterlyMaterials';
+
 
 interface AssassinArmyProps {
     unitsMap: React.RefObject<UnitRuntimeData[]>;
@@ -77,7 +79,10 @@ export function AssassinArmy({
                     const name = child.name.toLowerCase();
                     const isColorable = name.includes('cloth') || name.includes('mask') || name.includes('hood') || name.includes('wrap') || name.includes('ribbon') || name.includes('robe') || name.includes('cloak') || name.includes('cape') || name.includes('primary') || name.includes('team');
                     if (isColorable) {
-                        if (child.material) child.material = child.material.clone();
+                        if (child.material) {
+                            child.material = child.material.clone();
+                            applyPainterlyStyle(child.material);
+                        }
                         colorable.push(child);
                     }
                 }
@@ -548,7 +553,18 @@ export function AssassinArmy({
                 poolMapRef.current.delete(unitId);
             }
         });
+
+        // Painterly Shader Uniform Update
+        characterPool.forEach(item => {
+            item.colorable.forEach((mesh: THREE.Mesh) => {
+                const mat = mesh.material as THREE.Material;
+                if (mat.userData.painterlyShader) {
+                    mat.userData.painterlyShader.uniforms.time.value = (simTimeRef.current || 0) * 0.001;
+                }
+            });
+        });
     });
+
 
     return (
         <group>

@@ -48,6 +48,10 @@ interface BattleState {
   weather: "CLEAR" | "RAIN" | "STORM" | "THUNDER";
   setWeather: (weather: "CLEAR" | "RAIN" | "STORM" | "THUNDER") => void;
 
+  // Environment Systems
+  environment: "DIORAMA" | "STORM";
+  setEnvironment: (env: "DIORAMA" | "STORM") => void;
+
   // Reset
   resetStore: (config: TowerConfig) => void;
 }
@@ -89,6 +93,9 @@ export const useStore = create<BattleState>((set) => ({
 
   weather: "CLEAR",
   setWeather: (weather) => set({ weather }),
+
+  environment: "DIORAMA",
+  setEnvironment: (environment) => set({ environment }),
 
   resetStore: (config) => set({
     gameState: "PLAYING",

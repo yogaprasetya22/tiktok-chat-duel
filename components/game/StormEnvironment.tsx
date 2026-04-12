@@ -3,6 +3,8 @@ import { useFrame } from "@react-three/fiber";
 import { Sky } from "@react-three/drei";
 import * as THREE from "three";
 import { useStore } from "../../hooks/useStore";
+import { applyPainterlyStyle, PainterlyShaderUtils } from './effects/PainterlyMaterials';
+
 
 // --- 1. Terrain Shader ---
 const TerrainMaterial = new THREE.ShaderMaterial({
@@ -63,23 +65,22 @@ const TerrainMaterial = new THREE.ShaderMaterial({
     varying vec2 vUv;
     uniform vec3 baseColor;
     uniform vec3 peakColor;
+    ${PainterlyShaderUtils.brushstrokeNoise}
+    ${PainterlyShaderUtils.toonMix}
 
     void main() {
-      float t = smoothstep(0.0, 20.0, vElevation);
-      vec3 finalColor = mix(baseColor, peakColor, t);
+      float strokes = brushstrokes(vUv * 100.0, 0.4);
+      float t = smoothstep(0.0, 20.0, vElevation) + strokes * 0.1;
+      vec3 finalColor = toonMix(baseColor, peakColor, t * 1.5);
       
       // Battlefield Road / Path (Z-axis focal point)
       float roadMask = smoothstep(6.0, 3.0, abs(vUv.x - 0.5) * 100.0);
       vec3 roadColor = vec3(0.5, 0.45, 0.4); // Dirt/Soil color
       finalColor = mix(finalColor, roadColor, roadMask * 0.4);
       
-      // Subtle Grid / Tactical look
-      float grid = (sin(vUv.x * 200.0) * sin(vUv.y * 200.0));
-      grid = smoothstep(0.98, 1.0, grid);
-      finalColor += grid * 0.05;
-
       gl_FragColor = vec4(finalColor, 1.0);
     }
+
   `,
   wireframe: false,
 });
@@ -125,8 +126,13 @@ const Rock = () => {
   return (
     <instancedMesh ref={meshRef} args={[null as any, null as any, ROCK_COUNT]} castShadow receiveShadow>
       <icosahedronGeometry args={[1, 0]} />
-      <meshStandardMaterial color="#666666" roughness={0.8} />
+      <meshStandardMaterial 
+        color="#666666" 
+        roughness={0.8} 
+        onBeforeCompile={applyPainterlyStyle} 
+      />
     </instancedMesh>
+
   );
 };
 
@@ -168,12 +174,14 @@ const Forest = ({ potatoMode }: { potatoMode?: boolean }) => {
         <group>
             <instancedMesh ref={trunkRef} args={[null as any, null as any, TREE_COUNT]} castShadow>
                 <cylinderGeometry args={[0.2, 0.4, 4, 6]} />
-                <meshStandardMaterial color="#4d2915" />
+                <meshStandardMaterial color="#4d2915" onBeforeCompile={(s: any) => applyPainterlyStyle(s as any)} />
             </instancedMesh>
             <instancedMesh ref={topRef} args={[null as any, null as any, TREE_COUNT]} castShadow>
                 <coneGeometry args={[1, 2, 6]} />
-                <meshStandardMaterial color="#1a3d1a" />
+                <meshStandardMaterial color="#1a3d1a" onBeforeCompile={(s: any) => applyPainterlyStyle(s as any)} />
             </instancedMesh>
+
+
         </group>
     );
 };
