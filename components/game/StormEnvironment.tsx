@@ -1,8 +1,9 @@
 import React, { useRef, useMemo, useEffect } from "react";
-import { useFrame } from "@react-three/fiber";
+import { useFrame, useThree } from "@react-three/fiber";
 import { Sky } from "@react-three/drei";
 import * as THREE from "three";
 import { useStore } from "../../hooks/useStore";
+import { useVFX } from './VFXManager';
 import { applyPainterlyStyle, PainterlyShaderUtils } from './effects/PainterlyMaterials';
 
 
@@ -370,6 +371,27 @@ export const StormEnvironment = ({ baseDistance = 24, potatoMode = false }: { ba
   const setWeather = useStore(s => s.setWeather);
   const gameState = useStore(s => s.gameState);
   const isSetup = gameState === 'SETUP';
+  const { spawnVFX } = useVFX();
+
+  // Atmospheric Particles Spawning
+  useFrame((state) => {
+    if (isSetup || potatoMode) return;
+    
+    // Spawn atmospheric particles every ~100-200ms
+    if (state.clock.elapsedTime % 0.2 < 0.02) {
+      if (weather === 'CLEAR') {
+        // Dust motes in sun
+        const x = (Math.random() - 0.5) * 60;
+        const z = (Math.random() - 0.5) * 60;
+        spawnVFX([x, 1 + Math.random() * 5, z], 'dust-mote', '#ffffff');
+      } else if (weather === 'RAIN' || weather === 'STORM' || weather === 'THUNDER') {
+        // Mist during rain
+        const x = (Math.random() - 0.5) * 80;
+        const z = (Math.random() - 0.5) * 80;
+        spawnVFX([x, 0.5, z], 'environment-mist', weather === 'THUNDER' ? '#a855f7' : '#ffffff');
+      }
+    }
+  });
 
   // Random Weather Cycle
   useEffect(() => {
@@ -427,7 +449,7 @@ export const StormEnvironment = ({ baseDistance = 24, potatoMode = false }: { ba
       {(weather === 'RAIN' || weather === 'THUNDER') && <Rain />}
       {weather === 'THUNDER' && <Lightning />}
       
-      <fog attach="fog" args={[weather === 'CLEAR' ? "#f0f5ff" : "#2a2a2a", weather === 'CLEAR' ? 60 : 40, weather === 'CLEAR' ? 300 : 180]} />
+      <fog attach="fog" args={[weather === 'CLEAR' ? "#f0f5ff" : "#1a1a1a", weather === 'CLEAR' ? 80 : 35, weather === 'CLEAR' ? 350 : 160]} />
     </group>
   );
 };

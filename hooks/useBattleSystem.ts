@@ -37,12 +37,13 @@ import {
     CLASS_CONFIG,
     CORPSE_DESPAWN_MS,
     MAGE_PROJECTILE_TIME_MS,
+    WEATHER_CONFIG,
 } from "./battle/constants";
 
 import { getUnitStats, pickRandom } from "./battle/battleUtils";
 
 // --- GLOBAL SCRATCH VARIABLES (Zero-Allocation Loop) ---
-const WORLD_UNIT_POOL_SIZE = 1200;
+const WORLD_UNIT_POOL_SIZE = 250;
 
 export const useBattleSystem = () => {
     const [mapObstacles, setMapObstacles] = useState<MapObstacle[]>([]);
@@ -455,32 +456,57 @@ export const useBattleSystem = () => {
         [entityManager],
     );
 
+    const currentWeather = useStore((s) => s.weather);
+    const freezeTimeRef = useRef(0);
+
+    // Grid config (4x4m cells)
+    const GRID_SIZE = 4;
+    const GRID_PACK = 10000;
+    const getGridKey = (x: number, z: number) => {
+        return (
+            Math.floor(x / GRID_SIZE) +
+            1000 +
+            (Math.floor(z / GRID_SIZE) + 1000) * GRID_PACK
+        );
+    };
+
     const updateSimulation = useCallback(
         (delta: number) => {
-            const now = Date.now();
+            const now = performance.now();
+
+            // Handle Freeze Time (Hit-stop effect)
+            if (freezeTimeRef.current > 0) {
+                freezeTimeRef.current -= delta * 1000;
+                return; // Early exit simulation logic
+            }
+
             const simDelta = delta * (settingsRef.current.timeScale || 1.0);
             simulationTimeRef.current += simDelta * 1000;
             const simNow = simulationTimeRef.current;
             const settings = settingsRef.current;
+            const weather = useStore.getState().weather;
+            const weatherCfg = (WEATHER_CONFIG as any)[weather] || {};
+            const weatherMults = weatherCfg.multipliers || {};
 
             // PERFORMANCE: Skip intensive loops if no units are active
             let activeCount = 0;
             for (let i = 0; i < WORLD_UNIT_POOL_SIZE; i++) {
                 if (unitPoolRef.current[i].isActive) activeCount++;
             }
-            if (activeCount === 0 && gameStateRef.current !== 'PLAYING') return;
+            if (activeCount === 0 && gameStateRef.current !== "PLAYING") return;
 
-            // --- GRID BUCKET UPDATE (Zero-Allocation) ---
+            // --- 2D GRID BUCKET UPDATE (Zero-Allocation) ---
             bucketsMapRef.current.clear();
-            const gridThrottle = gameStateRef.current === 'SETUP' ? 10 : 1; 
-            const shouldUpdateStore = (now - lastStateUpdate.current > 1000);
-            
+
             if (activeCount > 0) {
                 for (let i = 0; i < WORLD_UNIT_POOL_SIZE; i++) {
                     const u = unitPoolRef.current[i];
                     if (!u.isActive || u.isDying) continue;
                     const uData = unitDataPoolRef.current[i];
-                    const bucketKey = Math.floor(uData.position[2] / 4.0); // 4m chunks
+                    const bucketKey = getGridKey(
+                        uData.position[0],
+                        uData.position[2],
+                    );
                     let b = bucketsMapRef.current.get(bucketKey);
                     if (!b) {
                         b = [];
@@ -513,6 +539,11 @@ export const useBattleSystem = () => {
                     v.velocity.set(0, 0, 0);
                     v.steering.behaviors.length = 0;
                     entityManager.remove(v);
+
+                    // SUPREME IMPACT: Freeze Frame on Boss Death
+                    if (u.isBoss) {
+                        freezeTimeRef.current = 200; // 0.2s Hit-stop
+                    }
                     continue;
                 }
 
@@ -532,9 +563,7 @@ export const useBattleSystem = () => {
                     simNow - u.lastThinkTime > thinkThrottle
                 ) {
                     u.lastThinkTime = simNow;
-                    const myBucket = Math.floor(uData.position[2] / 4.0);
                     const isFighter = u.unitClass === "fighter";
-                    const scanRange = isFighter ? 8 : 2;
                     const perceptionRadiusSq = isFighter ? 1024 : 144;
                     // Rule 3: Target Prioritization Scoring
                     let bestScore = -1;
@@ -553,33 +582,45 @@ export const useBattleSystem = () => {
                     const targetedBaseId =
                         u.type === "player" ? "enemy-base" : "player-base";
 
-                    for (let bOff = -scanRange; bOff <= scanRange; bOff++) {
-                        const neighbors = bucketsMapRef.current.get(
-                            myBucket + bOff,
-                        );
-                        if (!neighbors) continue;
-                        for (const neighborIdx of neighbors) {
-                            if (neighborIdx === i) continue;
-                            const potential = unitPoolRef.current[neighborIdx];
-                            if (potential.type === u.type) continue;
+                    const currentX = Math.floor(uData.position[0] / GRID_SIZE);
+                    const currentZ = Math.floor(uData.position[2] / GRID_SIZE);
 
-                            const pData = unitDataPoolRef.current[neighborIdx];
-                            const dx = uData.position[0] - pData.position[0];
-                            const dz = uData.position[2] - pData.position[2];
-                            const dSq = dx * dx + dz * dz;
-                            if (dSq > perceptionRadiusSq) continue;
+                    for (let xOff = -1; xOff <= 1; xOff++) {
+                        for (let zOff = -1; zOff <= 1; zOff++) {
+                            const key =
+                                currentX +
+                                xOff +
+                                1000 +
+                                (currentZ + zOff + 1000) * GRID_PACK;
+                            const neighbors = bucketsMapRef.current.get(key);
+                            if (!neighbors) continue;
+                            for (const neighborIdx of neighbors) {
+                                if (neighborIdx === i) continue;
+                                const potential =
+                                    unitPoolRef.current[neighborIdx];
+                                if (potential.type === u.type) continue;
 
-                            let weight = 1.0;
-                            if (isFighter) {
-                                weight = 3.0;
-                            } else if (potential.isBoss) {
-                                weight = 2.0;
-                            }
+                                const pData =
+                                    unitDataPoolRef.current[neighborIdx];
+                                const dx =
+                                    uData.position[0] - pData.position[0];
+                                const dz =
+                                    uData.position[2] - pData.position[2];
+                                const dSq = dx * dx + dz * dz;
+                                if (dSq > perceptionRadiusSq) continue;
 
-                            const score = weight / (dSq + 0.1);
-                            if (score > bestScore) {
-                                bestScore = score;
-                                bestTargetIdx = neighborIdx;
+                                let weight = 1.0;
+                                if (isFighter) {
+                                    weight = 3.0;
+                                } else if (potential.isBoss) {
+                                    weight = 2.0;
+                                }
+
+                                const score = weight / (dSq + 0.1);
+                                if (score > bestScore) {
+                                    bestScore = score;
+                                    bestTargetIdx = neighborIdx;
+                                }
                             }
                         }
                     }
@@ -639,6 +680,14 @@ export const useBattleSystem = () => {
                             u.attackCooldown
                         ) {
                             let dmg = u.attack;
+
+                            // Weather damage modifiers
+                            const classDmgMult =
+                                weatherMults[u.unitClass]?.atk || 1.0;
+                            const globalDmgMult =
+                                weatherMults.globalDamageMultiplier || 1.0;
+                            dmg *= classDmgMult * globalDmgMult;
+
                             if (uData.pendingCrit) {
                                 dmg *= 2.5;
                                 uData.pendingCrit = false;
@@ -648,11 +697,14 @@ export const useBattleSystem = () => {
                                 // --- MAGE AOE LOGIC ---
                                 let hits = 0;
                                 const AOE_RADIUS_SQ = 12.25; // 3.5m radius
-                                const myBucket = Math.floor(
-                                    tData.position[2] / 4.0,
+                                const tGridX = Math.floor(
+                                    tData.position[0] / GRID_SIZE,
+                                );
+                                const tGridZ = Math.floor(
+                                    tData.position[2] / GRID_SIZE,
                                 );
 
-                                // Hit the main target first
+                                // Main target logic inside AOE
                                 currentTarget.hp -= dmg;
                                 tData.hp = currentTarget.hp;
                                 if (currentTarget.hp <= 0) {
@@ -668,52 +720,58 @@ export const useBattleSystem = () => {
                                 );
                                 hits++;
 
-                                // Search for up to 3 more nearby enemies
-                                for (let bOff = -1; bOff <= 1; bOff++) {
-                                    if (hits >= 4) break;
-                                    const neighbors = bucketsMapRef.current.get(
-                                        myBucket + bOff,
-                                    );
-                                    if (!neighbors) continue;
-                                    for (const neighborIdx of neighbors) {
+                                // Adjacent 2D search for AOE
+                                for (let xOff = -1; xOff <= 1; xOff++) {
+                                    for (let zOff = -1; zOff <= 1; zOff++) {
                                         if (hits >= 4) break;
-                                        const potential =
-                                            unitPoolRef.current[neighborIdx];
-                                        if (
-                                            potential.id === currentTarget.id ||
-                                            potential.type === u.type ||
-                                            potential.isDying ||
-                                            !potential.isActive
-                                        )
-                                            continue;
+                                        const key =
+                                            tGridX +
+                                            xOff +
+                                            1000 +
+                                            (tGridZ + zOff + 1000) * GRID_PACK;
+                                        const neighbors =
+                                            bucketsMapRef.current.get(key);
+                                        if (!neighbors) continue;
+                                        for (const nIdx of neighbors) {
+                                            if (hits >= 4) break;
+                                            const p = unitPoolRef.current[nIdx];
+                                            if (
+                                                p.id === currentTarget.id ||
+                                                p.type === u.type ||
+                                                p.isDying ||
+                                                !p.isActive
+                                            )
+                                                continue;
 
-                                        const pData =
-                                            unitDataPoolRef.current[
-                                                neighborIdx
-                                            ];
-                                        const dx =
-                                            tData.position[0] -
-                                            pData.position[0];
-                                        const dz =
-                                            tData.position[2] -
-                                            pData.position[2];
-                                        if (dx * dx + dz * dz < AOE_RADIUS_SQ) {
-                                            potential.hp -= dmg;
-                                            pData.hp = potential.hp;
-                                            if (potential.hp <= 0) {
-                                                potential.isActive = false;
-                                                pData.isActive = false;
-                                                pData.position[1] = -100;
+                                            const pD =
+                                                unitDataPoolRef.current[nIdx];
+                                            const dx =
+                                                tData.position[0] -
+                                                pD.position[0];
+                                            const dz =
+                                                tData.position[2] -
+                                                pD.position[2];
+                                            if (
+                                                dx * dx + dz * dz <
+                                                AOE_RADIUS_SQ
+                                            ) {
+                                                p.hp -= dmg;
+                                                pD.hp = p.hp;
+                                                if (p.hp <= 0) {
+                                                    p.isActive = false;
+                                                    pD.isActive = false;
+                                                    pD.position[1] = -100;
+                                                }
+                                                accumulateDamage(
+                                                    p.id,
+                                                    dmg,
+                                                    pD.position,
+                                                    u.type === "player"
+                                                        ? "#0066FF"
+                                                        : "#FF0033",
+                                                );
+                                                hits++;
                                             }
-                                            accumulateDamage(
-                                                potential.id,
-                                                dmg,
-                                                pData.position,
-                                                u.type === "player"
-                                                    ? "#0066FF"
-                                                    : "#FF0033",
-                                            );
-                                            hits++;
                                         }
                                     }
                                 }
@@ -721,14 +779,11 @@ export const useBattleSystem = () => {
                                 // Standard Single Target
                                 currentTarget.hp -= dmg;
                                 tData.hp = currentTarget.hp;
-
-                                // INSTANT PURGE IF DEAD
                                 if (currentTarget.hp <= 0) {
                                     currentTarget.isActive = false;
                                     tData.isActive = false;
-                                    tData.position[1] = -100; // Teleport underground instantly
+                                    tData.position[1] = -100;
                                 }
-
                                 accumulateDamage(
                                     currentTarget.id,
                                     dmg,
@@ -740,7 +795,9 @@ export const useBattleSystem = () => {
                         }
                     } else {
                         uData.status = "chasing";
-                        v.maxSpeed = u.speed;
+                        const classWeatherMult =
+                            weatherMults[u.unitClass]?.move_speed_mult || 1.0;
+                        v.maxSpeed = u.speed * classWeatherMult;
                         v.steering.behaviors.forEach((b: any) => {
                             if (b.target)
                                 b.target.set(
@@ -760,12 +817,16 @@ export const useBattleSystem = () => {
                         const dmg = u.attack;
                         if (u.type === "player") {
                             enemyBaseHpRef.current -= dmg;
-                            if (enemyBaseHpRef.current <= 0)
+                            if (enemyBaseHpRef.current <= 0) {
                                 addKillEvent(u.userName, "ENEMY BASE", "base");
+                                freezeTimeRef.current = 100; // Hit-stop
+                            }
                         } else {
                             playerBaseHpRef.current -= dmg;
-                            if (playerBaseHpRef.current <= 0)
+                            if (playerBaseHpRef.current <= 0) {
                                 addKillEvent(u.userName, "PLAYER BASE", "base");
+                                freezeTimeRef.current = 100; // Hit-stop
+                            }
                         }
                         accumulateDamage(
                             u.type === "player" ? "enemy-base" : "player-base",
@@ -773,13 +834,31 @@ export const useBattleSystem = () => {
                             [0, 2, targetBaseZ],
                             u.type === "player" ? "#0066FF" : "#FF0033",
                         );
+
+                        // Optimize: Base impact effect
+                        if (simNow - (uData.lastEffectTime || 0) > 400) {
+                            uData.lastEffectTime = simNow;
+                            // Trigger base explosion/impact if damage is high
+                            if (dmg > 50) {
+                                // We'll add this to VFXManager later
+                            }
+                        }
+
                         uData.lastAttackTime = simNow;
                     }
                 } else {
                     uData.status = "marching";
-                    // Unified Speed Calculation
+                    // Unified Speed Calculation + Weather Modifiers
+                    const classWeatherMult =
+                        weatherMults[u.unitClass]?.move_speed_mult || 1.0;
+                    const globalWeatherMult =
+                        weatherMults.globalSpeedMultiplier || 1.0;
                     const baseSpeed =
-                        u.speed * (settings.globalSpeedMultiplier || 1.0);
+                        u.speed *
+                        (settings.globalSpeedMultiplier || 1.0) *
+                        classWeatherMult *
+                        globalWeatherMult;
+
                     v.maxSpeed = baseSpeed;
                     v.steering.behaviors.forEach((b: any) => {
                         if (b.target) b.target.set(0, 0, targetBaseZ);

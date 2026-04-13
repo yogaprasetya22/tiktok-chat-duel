@@ -201,12 +201,14 @@ export const ASSASSIN_INVUL_MS = 800;
 export const NAME_POOL_SIZE = 500;
 
 // --- LOD IMPOSTOR SYSTEM ---
-// Units beyond this distance² from camera are rendered as flat billboard impostors
-// instead of full 3D animated models (1-2 draw calls vs hundreds)
-export const LOD_IMPOSTOR_DIST_SQ = 48 * 48;
-export const LOD_IMPOSTOR_MAX = 1200; // Max billboard instances (player+enemy combined)
-export const LOD_IMPOSTOR_SCALE = 1.8; // Visual scale of impostor billboards
-export const LOD_IMPOSTOR_BOSS_SCALE = 5.0; // Boss impostor scale
+export const LOD_IMPOSTOR_DIST_SQ = 32 * 32; // Optimized for 32m range
+export const LOD_IMPOSTOR_MAX = 1200; 
+export const LOD_IMPOSTOR_SCALE = 1.8; 
+export const LOD_IMPOSTOR_BOSS_SCALE = 5.0; 
+
+// --- CENTRALIZED PERFORMANCE CONFIG ---
+export const ARMY_POOL_SIZE = 25; // Number of high-detail 3D models per class
+export const ANIM_CULL_DIST_SQ = 70 * 70; // Distance where bone animations stop (50m)
 
 // --- WEATHER SYSTEM CONFIG ---
 export const WEATHER_CONFIG = {

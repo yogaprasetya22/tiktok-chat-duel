@@ -9,7 +9,7 @@ import { SkeletonUtils } from 'three-stdlib';
 import { useVFX } from '../VFXManager';
 import { ActiveUnit, TowerConfig, SimulationSettings, UnitRuntimeData } from '../../../hooks/battle/types';
 import { useStore } from '../../../hooks/useStore';
-import { ENEMY_BASE_Z, PLAYER_BASE_Z, WEATHER_CONFIG } from '../../../hooks/battle/constants';
+import { PLAYER_BASE_Z, ENEMY_BASE_Z, ARMY_POOL_SIZE, ANIM_CULL_DIST_SQ, WEATHER_CONFIG } from '../../../hooks/battle/constants';
 import { lerpAngle } from '../../../hooks/battle/battleUtils';
 import * as YUKA from 'yuka';
 import { applyPainterlyStyle } from '../effects/PainterlyMaterials';
@@ -34,7 +34,7 @@ interface FighterArmyProps {
   fighterSpellsRef: React.RefObject<any[]>;
 }
 
-const POOL_SIZE = 120; // Ultimate Warfare Capacity
+const POOL_SIZE = ARMY_POOL_SIZE; // Controlled from constants.ts
 
 const _hudTemp = new THREE.Object3D();
 const _healthColor = new THREE.Color();
@@ -366,7 +366,10 @@ const FighterArmyComponent = ({
       if (uData.isDying) targetAnim = 'Death';
       else if (uData.status === 'marching') targetAnim = 'Run';
       else if (uData.status === 'attacking') {
-        targetAnim = pItem.actions['SwordSlash'] ? 'SwordSlash' : (pItem.actions['Attack'] ? 'Attack' : 'Idle');
+        const timeSinceAtk = (simTimeRef.current || 0) - (uData.lastAttackTime || 0);
+        const atkName = pItem.actions['SwordSlash'] ? 'SwordSlash' : (pItem.actions['Attack'] ? 'Attack' : 'Idle');
+        // KINETIC OPTIMIZATION: Only animate attack for 600ms after a hit
+        targetAnim = timeSinceAtk < 650 ? atkName : 'Idle';
       }
       if (!pItem.actions[targetAnim]) targetAnim = 'Idle';
 
@@ -384,9 +387,9 @@ const FighterArmyComponent = ({
 
       const tp = uData.position;
       const cp = pItem.group.position;
-      
+
       // Interpolation: Snap if jump is too large (Lag resilience)
-      const distSq = (tp[0]-cp.x)**2 + (tp[2]-cp.z)**2;
+      const distSq = (tp[0] - cp.x) ** 2 + (tp[2] - cp.z) ** 2;
 
       const lerpFactor = 1.0 - Math.exp(-45 * delta); // Snappier smoothing
       if (!pItem.initialized || distSq > 25) { // Snap if > 5m
@@ -484,8 +487,12 @@ const FighterArmyComponent = ({
         }
       }
 
+      // SUPREME OPTIMIZATION: Animation Mixer Culling
+      // If unit is too far (impostor range), stop the heavy bone calculations entirely
       const sf = (uData.dSq || 0) > 3600 ? 5 : (uData.dSq || 0) > 400 ? 2 : 1;
-      if (time - pItem.lastUpdate >= 0.016 * sf) {
+      const isTooFar = (uData.dSq || 0) > ANIM_CULL_DIST_SQ; 
+
+      if (!isTooFar && time - pItem.lastUpdate >= 0.016 * sf) {
         pItem.mixer.update(delta * sf);
         pItem.lastUpdate = time;
       }

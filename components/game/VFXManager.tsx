@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import React, { createContext, useContext, useRef, useMemo, useCallback, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 
-export type VFXType = 'hit' | 'death' | 'blood' | 'boss-spawn' | 'mega_explosion' | 'spark' | 'shockwave' | 'fireball_hit' | 'slash' | 'muzzle';
+export type VFXType = 'hit' | 'death' | 'blood' | 'boss-spawn' | 'mega_explosion' | 'spark' | 'shockwave' | 'fireball_hit' | 'slash' | 'muzzle' | 'critical-hit' | 'environment-mist' | 'dust-mote';
 
 
 interface Particle {
@@ -49,6 +49,7 @@ export const VFXProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       case 'boss-spawn': return 3; case 'mega_explosion': return 4;
       case 'spark': return 5; case 'shockwave': return 6;
       case 'fireball_hit': return 7; case 'slash': return 8; case 'muzzle': return 9;
+      case 'critical-hit': return 10; case 'environment-mist': return 11; case 'dust-mote': return 12;
       default: return 0;
     }
   };
@@ -119,7 +120,10 @@ export const VFXProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       type === 'mega_explosion' ? 0.8 :
         type === 'spark' ? 0.2 : 
         type === 'muzzle' ? 0.1 :
-          type === 'slash' ? 0.25 : 0.6;
+          type === 'slash' ? 0.25 :
+            type === 'critical-hit' ? 0.35 :
+              type === 'environment-mist' ? 1.5 :
+                type === 'dust-mote' ? 2.5 : 0.6;
 
     const typeId = typeToId(type);
     _tempColor.set(colorStr).convertLinearToSRGB();
@@ -186,16 +190,17 @@ export const VFXProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       const typeId = data.types[idx];
-      // 6: shockwave
-      if (typeId !== 6) {
-        if (typeId === 7) { // fireball_hit
-           data.velocities[idx * 3 + 1] += delta * 3.5;
-           data.positions[idx * 3] += data.velocities[idx * 3] * delta * 0.7;
-           data.positions[idx * 3 + 1] += data.velocities[idx * 3 + 1] * delta * 0.7;
-           data.positions[idx * 3 + 2] += data.velocities[idx * 3 + 2] * delta * 0.7;
-           data.velocities[idx * 3] *= 0.97;
-           data.velocities[idx * 3 + 1] *= 0.97;
-           data.velocities[idx * 3 + 2] *= 0.97;
+      // 6: shockwave, 11: mist, 12: dust
+      if (typeId !== 6 && typeId !== 11 && typeId !== 12) {
+        if (typeId === 7 || typeId === 10) { // fireball_hit or critical-hit
+           const gravity = typeId === 10 ? delta * 15 : delta * 3.5;
+           data.velocities[idx * 3 + 1] += typeId === 10 ? -gravity : gravity;
+           data.positions[idx * 3] += data.velocities[idx * 3] * delta;
+           data.positions[idx * 3 + 1] += data.velocities[idx * 3 + 1] * delta;
+           data.positions[idx * 3 + 2] += data.velocities[idx * 3 + 2] * delta;
+           data.velocities[idx * 3] *= 0.95;
+           data.velocities[idx * 3 + 1] *= 0.95;
+           data.velocities[idx * 3 + 2] *= 0.95;
         } else if (typeId === 2) { // blood
            data.velocities[idx * 3 + 1] -= delta * 15;
            data.positions[idx * 3] += data.velocities[idx * 3] * delta;
@@ -235,9 +240,13 @@ export const VFXProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       meshRef.current.setMatrixAt(idx, dummy.matrix);
       
       // Flicker logic
-      if (typeId === 7 && data.colors[idx * 3] > 0.4) {
-          const flicker = 0.8 + Math.sin(life * 20) * 0.2;
+      if ((typeId === 7 || typeId === 10) && data.colors[idx * 3] > 0.4) {
+          const flicker = 0.8 + Math.sin(life * (typeId === 10 ? 40 : 20)) * 0.2;
           _tempColor.setRGB(data.colors[idx * 3] * flicker, data.colors[idx * 3 + 1] * flicker, data.colors[idx * 3 + 2] * flicker);
+          meshRef.current.setColorAt(idx, _tempColor);
+      } else if (typeId === 11 || typeId === 12) { // Mist/Dust fade
+          const alpha = Math.sin(progress * Math.PI);
+          _tempColor.setRGB(data.colors[idx * 3] * alpha, data.colors[idx * 3 + 1] * alpha, data.colors[idx * 3 + 2] * alpha);
           meshRef.current.setColorAt(idx, _tempColor);
       } else {
           _tempColor.setRGB(data.colors[idx * 3], data.colors[idx * 3 + 1], data.colors[idx * 3 + 2]);

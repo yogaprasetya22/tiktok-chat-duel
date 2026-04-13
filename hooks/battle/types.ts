@@ -186,6 +186,7 @@ export interface UnitRuntimeData {
     chaseRange: number;
     dSq?: number;
     pendingCrit?: boolean;
+    lastEffectTime?: number;
 }
 
 export interface DamageQueueEntry {

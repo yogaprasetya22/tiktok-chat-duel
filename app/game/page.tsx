@@ -60,9 +60,10 @@ export default function GamePage() {
 
 
   const gameState = useStore(s => s.gameState);
-  const armyCounts = useStore(s => s.armyCounts);
   const gameMode = useStore(s => s.gameMode);
   const setGameMode = useStore(s => s.setGameMode);
+  const playerBaseHp = useStore(s => s.playerBaseHp);
+  const enemyBaseHp = useStore(s => s.enemyBaseHp);
 
   // --- Leva Deployment Controls (Only in Training) ---
   useControls(
@@ -86,8 +87,11 @@ export default function GamePage() {
   // Mode Testing: Rapid Spawn (0.2s) with Underdog Priority
   const countsRef = useRef({ player: 0, enemy: 0 });
   useEffect(() => {
-    countsRef.current = { player: armyCounts.player, enemy: armyCounts.enemy };
-  }, [armyCounts]);
+    const unsub = useStore.subscribe((state) => {
+      countsRef.current = state.armyCounts;
+    });
+    return unsub;
+  }, []);
 
   useEffect(() => {
     if (!testingMode || gameState !== "PLAYING" || gameMode === "TRAINING") return;

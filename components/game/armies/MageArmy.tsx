@@ -10,7 +10,7 @@ import { useVFX } from '../VFXManager';
 import { ActiveUnit, TowerConfig, SimulationSettings, UnitRuntimeData } from '../../../hooks/battle/types';
 import { useStore } from '../../../hooks/useStore';
 import { SpellEntry, SpellsRegistryRef } from '../effects/MageSpellEffect';
-import { ENEMY_BASE_Z, PLAYER_BASE_Z, WEATHER_CONFIG } from "../../../hooks/battle/constants";
+import { ENEMY_BASE_Z, PLAYER_BASE_Z, WEATHER_CONFIG, ARMY_POOL_SIZE, ANIM_CULL_DIST_SQ } from "../../../hooks/battle/constants";
 import { lerpAngle } from '../../../hooks/battle/battleUtils';
 import * as YUKA from 'yuka';
 import { applyPainterlyStyle } from '../effects/PainterlyMaterials';
@@ -34,7 +34,7 @@ interface MageArmyProps {
   nameTextRefs: React.RefObject<any[]>;
 }
 
-const POOL_SIZE = 120; // Ultimate Warfare Capacity
+const POOL_SIZE = ARMY_POOL_SIZE; // Controlled from constants.ts
 
 const _hudTemp = new THREE.Object3D();
 const _healthColor = new THREE.Color();
@@ -414,6 +414,7 @@ export function MageArmy({
       if (uData.isDying) targetAnim = 'Death';
       else if (uData.status === 'marching') targetAnim = 'Run';
       else if (uData.status === 'attacking') {
+        const timeSinceAtk = (simTimeRef.current || 0) - (uData.lastAttackTime || 0);
         // Dynamic search for attack animation
         const attackKeywords = ['spell', 'cast', 'shoot', 'attack', 'slash'];
         let foundAttack = '';
@@ -426,7 +427,9 @@ export function MageArmy({
           }
         }
 
-        targetAnim = foundAttack || 'Idle';
+        const atkName = foundAttack || 'Idle';
+        // KINETIC OPTIMIZATION: Only animate casting for 650ms after a hit
+        targetAnim = timeSinceAtk < 650 ? atkName : 'Idle';
       }
       if (!pItem.actions[targetAnim]) targetAnim = 'Idle';
 
@@ -539,8 +542,11 @@ export function MageArmy({
         }
       }
 
+      // SUPREME OPTIMIZATION: Animation Mixer Culling
       const sf = (uData.dSq || 0) > 3600 ? 5 : (uData.dSq || 0) > 400 ? 2 : 1;
-      if (time - pItem.lastUpdate >= 0.016 * sf) {
+      const isTooFar = (uData.dSq || 0) > ANIM_CULL_DIST_SQ; 
+
+      if (!isTooFar && time - pItem.lastUpdate >= 0.016 * sf) {
         pItem.mixer.update(delta * sf);
         pItem.lastUpdate = time;
       }

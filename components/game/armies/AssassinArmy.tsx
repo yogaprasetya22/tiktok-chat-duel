@@ -9,7 +9,7 @@ import { SkeletonUtils } from 'three-stdlib';
 import { useVFX } from '../VFXManager';
 import { ActiveUnit, TowerConfig, SimulationSettings, UnitRuntimeData } from '../../../hooks/battle/types';
 import { useStore } from '../../../hooks/useStore';
-import { PLAYER_BASE_Z, ENEMY_BASE_Z } from '../../../hooks/battle/constants';
+import { PLAYER_BASE_Z, ENEMY_BASE_Z, ARMY_POOL_SIZE, ANIM_CULL_DIST_SQ } from '../../../hooks/battle/constants';
 import { lerpAngle } from '../../../hooks/battle/battleUtils';
 import * as YUKA from 'yuka';
 import { applyPainterlyStyle } from '../effects/PainterlyMaterials';
@@ -33,7 +33,7 @@ interface AssassinArmyProps {
     assassinSpellsRef: React.RefObject<any[]>;
 }
 
-const POOL_SIZE = 120; // Ultimate Warfare Capacity
+const POOL_SIZE = ARMY_POOL_SIZE; // Controlled from constants.ts
 
 const _hudTemp = new THREE.Object3D();
 const _healthColor = new THREE.Color();
@@ -99,8 +99,8 @@ export function AssassinArmy({
 
             clone.position.set(0, -100, 0);
             clone.visible = false;
-            items.push({ 
-                group: clone, colorable, mixer, actions, 
+            items.push({
+                group: clone, colorable, mixer, actions,
                 currentAnim: '', lastUpdate: 0, rotation: 0, initialized: false,
                 anims: { attack: attackAnim, death: deathAnim, run: runAnim }
             });
@@ -428,8 +428,12 @@ export function AssassinArmy({
             let targetAnim = 'Idle';
             if (uData.isDying) targetAnim = pItem.anims.death;
             else if (uData.status === 'marching') targetAnim = pItem.anims.run;
-            else if (uData.status === 'attacking') targetAnim = pItem.anims.attack;
-            
+            else if (uData.status === 'attacking') {
+                const timeSinceAtk = (simTimeRef.current || 0) - (uData.lastAttackTime || 0);
+                // KINETIC OPTIMIZATION: Only animate attack for 650ms after a hit or blink
+                targetAnim = timeSinceAtk < 650 ? pItem.anims.attack : 'Idle';
+            }
+
             if (!pItem.actions[targetAnim]) targetAnim = 'Idle';
 
 
@@ -542,8 +546,11 @@ export function AssassinArmy({
                 }
             }
 
+            // SUPREME OPTIMIZATION: Animation Mixer Culling
             const sf = (uData.dSq || 0) > 3600 ? 5 : (uData.dSq || 0) > 400 ? 2 : 1;
-            if (time - pItem.lastUpdate >= 0.016 * sf) {
+            const isTooFar = (uData.dSq || 0) > ANIM_CULL_DIST_SQ; 
+
+            if (!isTooFar && time - pItem.lastUpdate >= 0.016 * sf) {
                 pItem.mixer.update(delta * sf);
                 pItem.lastUpdate = time;
             }

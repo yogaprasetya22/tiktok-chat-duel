@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import React, { useRef, useMemo, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
+import { useVFX } from './VFXManager';
 
 /**
  * DamageHUDBatcher v4 — ULTIMATE EDITION (Highly Optimized + Juicy FX)
@@ -111,6 +112,7 @@ function createDigitAtlas(): THREE.CanvasTexture {
 
 export function DamageHUDBatcher({ damageQueue }: { damageQueue: React.RefObject<any[]> }) {
     const meshRef = useRef<THREE.InstancedMesh>(null!);
+    const { spawnVFX } = useVFX();
     
     // Core Pools
     const slots = useMemo(() => Array.from({ length: MAX_DAMAGE_SPRITES }, (_, i) => ({
@@ -207,6 +209,14 @@ export function DamageHUDBatcher({ damageQueue }: { damageQueue: React.RefObject
                 const vx = Math.cos(angle) * force;
                 const vy = event.isCrit ? 7.5 : 5.0;
                 const vz = Math.sin(angle) * force;
+
+                // Sync: Trigger explosive VFX for Critical Hits
+                if (event.isCrit) {
+                    spawnVFX(event.position, 'critical-hit', '#ffcc00');
+                    spawnVFX(event.position, 'shockwave', '#ffffff');
+                } else if (event.value > 100) {
+                   spawnVFX(event.position, 'spark', event.color || '#ffffff');
+                }
 
                 for (let c = 0; c < chars.length; c++) {
                     const charCode = CHAR_MAP[chars[c]];
