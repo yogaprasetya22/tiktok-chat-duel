@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import React, { useRef, useMemo, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
+import { MeshoptDecoder } from 'meshoptimizer';
 import { SkeletonUtils } from 'three-stdlib';
 import { useVFX } from '../VFXManager';
 import { ActiveUnit, TowerConfig, SimulationSettings, UnitRuntimeData } from '../../../hooks/battle/types';
@@ -54,8 +55,12 @@ export function AssassinArmy({
         availableIndicesRef.current = Array.from({ length: POOL_SIZE }, (_, i) => i);
     }, []);
 
-    const n1 = useGLTF('/assets-model/Ninja_Female.glb') as any;
-    const n2 = useGLTF('/assets-model/Ninja_Male.glb') as any;
+    const n1 = useGLTF('/assets-model/Ninja_Female.glb', true, true, (loader) => {
+        loader.setMeshoptDecoder(MeshoptDecoder);
+    }) as any;
+    const n2 = useGLTF('/assets-model/Ninja_Male.glb', true, true, (loader) => {
+        loader.setMeshoptDecoder(MeshoptDecoder);
+    }) as any;
 
     const characterPool = useMemo(() => {
         const items: any[] = [];
@@ -87,9 +92,18 @@ export function AssassinArmy({
                     }
                 }
             });
+            const actionNames = Object.keys(actions);
+            const attackAnim = actionNames.find(n => n === 'Attack' || n.includes('Attack') || n.includes('Slash') || n.includes('Stab') || n.includes('Strike')) || 'Idle';
+            const deathAnim = actionNames.find(n => n === 'Death' || n.includes('Death')) || 'Idle';
+            const runAnim = actionNames.find(n => n === 'Run' || n.includes('Run') || n.includes('Walk')) || 'Idle';
+
             clone.position.set(0, -100, 0);
             clone.visible = false;
-            items.push({ group: clone, colorable, mixer, actions, currentAnim: '', lastUpdate: 0, rotation: 0, initialized: false });
+            items.push({ 
+                group: clone, colorable, mixer, actions, 
+                currentAnim: '', lastUpdate: 0, rotation: 0, initialized: false,
+                anims: { attack: attackAnim, death: deathAnim, run: runAnim }
+            });
         }
         return items;
     }, [n1, n2]);
@@ -412,10 +426,12 @@ export function AssassinArmy({
             pItem.group.scale.setScalar(baseScale * settings.unitScale);
 
             let targetAnim = 'Idle';
-            if (uData.isDying) targetAnim = 'Death';
-            else if (uData.status === 'marching') targetAnim = 'Run';
-            else if (uData.status === 'attacking') targetAnim = 'Attack';
+            if (uData.isDying) targetAnim = pItem.anims.death;
+            else if (uData.status === 'marching') targetAnim = pItem.anims.run;
+            else if (uData.status === 'attacking') targetAnim = pItem.anims.attack;
+            
             if (!pItem.actions[targetAnim]) targetAnim = 'Idle';
+
 
             if (pItem.currentAnim !== targetAnim) {
                 const prev = pItem.actions[pItem.currentAnim];
@@ -555,11 +571,16 @@ export function AssassinArmy({
         });
 
         // Painterly Shader Uniform Update
-        characterPool.forEach(item => {
+        // Optimized Shader Uniform Update: Only update uniforms for units currently "on-duty" 
+        // This eliminates idle overhead when units are not spawned.
+        poolMapRef.current.forEach((poolIdx) => {
+            const item = characterPool[poolIdx];
+            if (!item) return;
+            const timeVal = (simTimeRef.current || 0) * 0.001;
             item.colorable.forEach((mesh: THREE.Mesh) => {
                 const mat = mesh.material as THREE.Material;
                 if (mat.userData.painterlyShader) {
-                    mat.userData.painterlyShader.uniforms.time.value = (simTimeRef.current || 0) * 0.001;
+                    mat.userData.painterlyShader.uniforms.time.value = timeVal;
                 }
             });
         });
@@ -573,5 +594,9 @@ export function AssassinArmy({
     );
 }
 
-useGLTF.preload('/assets-model/Ninja_Female.glb');
-useGLTF.preload('/assets-model/Ninja_Male.glb');
+useGLTF.preload('/assets-model/Ninja_Female.glb', true, true, (loader) => {
+    loader.setMeshoptDecoder(MeshoptDecoder);
+});
+useGLTF.preload('/assets-model/Ninja_Male.glb', true, true, (loader) => {
+    loader.setMeshoptDecoder(MeshoptDecoder);
+});

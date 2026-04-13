@@ -86,13 +86,14 @@ const TerrainMaterial = new THREE.ShaderMaterial({
 });
 
 const Terrain = ({ baseDistance, potatoMode }: { baseDistance: number; potatoMode?: boolean }) => {
+  const gameState = useStore(s => s.gameState);
   useFrame(() => {
     TerrainMaterial.uniforms.baseDist.value = baseDistance;
   });
 
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.6, 0]} receiveShadow={!potatoMode}>
-      <planeGeometry args={[400, 400, potatoMode ? 1 : 50, potatoMode ? 1 : 50]} />
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.6, 0]} receiveShadow={!potatoMode && gameState !== 'SETUP'}>
+      <planeGeometry args={[400, 400, (potatoMode || gameState === 'SETUP') ? 1 : 40, (potatoMode || gameState === 'SETUP') ? 1 : 40]} />
       <primitive object={TerrainMaterial} attach="material" />
     </mesh>
   );
@@ -367,9 +368,12 @@ const Grass = ({ baseDistance }: { baseDistance: number }) => {
 export const StormEnvironment = ({ baseDistance = 24, potatoMode = false }: { baseDistance?: number, potatoMode?: boolean }) => {
   const weather = useStore(s => s.weather);
   const setWeather = useStore(s => s.setWeather);
+  const gameState = useStore(s => s.gameState);
+  const isSetup = gameState === 'SETUP';
 
   // Random Weather Cycle
   useEffect(() => {
+    if (isSetup) return; // Don't cycle weather during setup
     const cycle = () => {
       const weathers: ("CLEAR" | "RAIN" | "STORM" | "THUNDER")[] = ["CLEAR", "RAIN", "STORM", "THUNDER"];
       const next = weathers[Math.floor(Math.random() * weathers.length)];
@@ -411,7 +415,8 @@ export const StormEnvironment = ({ baseDistance = 24, potatoMode = false }: { ba
         position={[20, 100, 20]} 
         intensity={weather === 'CLEAR' ? 4.5 : 1.5} 
         color={weather === 'RAIN' ? "#d1e9ff" : "#ffffff"} 
-        castShadow={false}
+        castShadow={!isSetup}
+        shadow-mapSize={isSetup ? [512, 512] : [1024, 1024]}
       />
       
       <Terrain baseDistance={baseDistance} />

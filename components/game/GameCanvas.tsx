@@ -21,7 +21,7 @@ import dynamic from 'next/dynamic';
 
 const Perf = dynamic(() => import("r3f-perf").then((mod) => mod.Perf), { ssr: false });
 
-import { Base } from "./Base";
+import { Base, InstancedTowers } from "./Base";
 import { Chessboard } from "./Chessboard";
 import { VFXProvider, useVFX } from "./VFXManager";
 import { BattleArmy } from "./BattleArmy";
@@ -34,8 +34,8 @@ import { EffectComposer, Bloom, ToneMapping } from "@react-three/postprocessing"
 import { ActiveUnit, TowerConfig, MapObstacle, UnitRuntimeData } from "../../hooks/battle/types";
 import * as YUKA from "yuka";
 import { useStore } from "../../hooks/useStore";
-import React, { useState, useEffect, useRef } from "react";
-import { Sword, Trophy, Zap, Skull, Maximize2, Activity, RefreshCw } from "lucide-react";
+import React, { useState, useRef } from "react";
+import { Activity, RefreshCw } from "lucide-react";
 import * as THREE from 'three';
 
 // Map removed as requested. Base ground provided by OrbitControls/Sky.
@@ -85,6 +85,65 @@ const CameraDirector = () => {
     } else {
       hasTriggeredRef.current = false;
     }
+  });
+
+  return null;
+};
+
+
+/**
+ * SceneAnalyzer - Diagnostic Tool
+ * Scans the scene and logs heavy-hitting meshes and texture counts.
+ */
+const SceneAnalyzer = () => {
+  const { scene, gl } = useThree();
+  const lastLog = useRef(0);
+
+  useFrame((state) => {
+    const now = state.clock.elapsedTime;
+    if (now - lastLog.current < 5) return; // Run every 5 seconds
+    lastLog.current = now;
+
+    let totalTriangles = 0;
+    const meshes: any[] = [];
+    const textures = new Set();
+
+    scene.traverse((node: any) => {
+      if (node.isMesh || node.isInstancedMesh) {
+        const geometry = node.geometry;
+        if (geometry) {
+          const count = geometry.index ? geometry.index.count : geometry.attributes.position.count;
+          const triangles = (count / 3) * (node.isInstancedMesh ? node.count : 1);
+          totalTriangles += triangles;
+          meshes.push({
+            name: node.name || node.type,
+            triangles: Math.round(triangles),
+            isInstanced: !!node.isInstancedMesh
+          });
+        }
+
+        const scanMaterial = (mat: any) => {
+          if (!mat) return;
+          if (Array.isArray(mat)) {
+            mat.forEach(scanMaterial);
+            return;
+          }
+          Object.values(mat).forEach(val => {
+            if (val && (val as any).isTexture) textures.add((val as any).uuid);
+          });
+        };
+        scanMaterial(node.material);
+      }
+    });
+
+    meshes.sort((a, b) => b.triangles - a.triangles);
+
+    console.log("%c--- 3D SCENE HEAVY HITTER REPORT ---", "color: #ff00ff; font-weight: bold; font-size: 14px;");
+    console.log(`Total Triangles: ~${(totalTriangles / 1000000).toFixed(2)}M`);
+    console.log(`Unique Textures: ${textures.size}`);
+    console.log("Top 10 Heavy Meshes:", meshes.slice(0, 10));
+    console.log(`GPU Memory: ~${(gl.info.memory.geometries + gl.info.memory.textures)} objects in GPU`);
+    console.log("--------------------------------------");
   });
 
   return null;
@@ -277,18 +336,18 @@ export const GameCanvas = React.memo(({
         DPR: {dpr.toFixed(2)}
       </div>
       <Canvas
+        shadows={{ type: THREE.PCFShadowMap }}
         dpr={dpr}
-        shadows={false}
-        camera={{ position: [0, 45, 60], fov: 35, far: 800 }}
         gl={{
-          antialias: false,
+          antialias: true,
           powerPreference: "high-performance",
-          alpha: false,
+          logarithmicDepthBuffer: false, // Performance Fix: Logarithmic buffer is expensive
           stencil: false,
           depth: true
         }}
         className="select-none touch-none "
       >
+        <SceneAnalyzer />
         <StatsGl className="!absolute !top-24 !left-2 !right-auto !bottom-auto !z-[2000]" />
         <PerformanceMonitor onIncline={() => setDpr(Math.min(dpr + 0.1, 1.0))} onDecline={() => setDpr(Math.max(dpr - 0.1, 0.7))} />
         <AdaptiveEvents />
@@ -352,6 +411,11 @@ export const GameCanvas = React.memo(({
 
 
 
+          <InstancedTowers 
+            distance={towerConfig.baseDistance || 24} 
+            settingsRef={settingsRef} 
+          />
+
           <Base
             maxHp={towerConfig.baseHp}
             position={[0, 0, towerConfig.baseDistance || 24]}
@@ -378,14 +442,14 @@ export const GameCanvas = React.memo(({
         {/* Damage text removed for maximum performance and clarity as requested */}
 
 
-        {/* Post Processing for Whimsical Feel */}
-        {!settingsRef.current.potatoMode && (
+        {/* Post Processing: Disabled during SETUP for CPU/GPU savings */}
+        {gameState !== 'SETUP' && !settingsRef.current.potatoMode && (
           <EffectComposer enableNormalPass={false} multisampling={0}>
-            <Bloom 
-              luminanceThreshold={1.0} 
-              mipmapBlur 
-              intensity={0.5} 
-              radius={0.4} 
+            <Bloom
+              luminanceThreshold={1.0}
+              mipmapBlur
+              intensity={0.5}
+              radius={0.4}
             />
             <ToneMapping adaptive={false} />
           </EffectComposer>

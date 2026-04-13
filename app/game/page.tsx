@@ -246,7 +246,8 @@ export default function GamePage() {
                  onClick={() => {
                    const newMode = gameMode === 'BATTLE' ? 'TRAINING' : 'BATTLE';
                    setGameMode(newMode);
-                   if (newMode === 'TRAINING') resetBattle();
+                   // Always reset battle when switching modes to avoid lingering units / state bugs
+                   resetBattle();
                  }}
                  className={`flex items-center gap-2 px-4 py-2 border rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
                    gameMode === 'TRAINING' 

@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import React, { useRef, useMemo, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
+import { MeshoptDecoder } from 'meshoptimizer';
 import { SkeletonUtils } from 'three-stdlib';
 import { useVFX } from '../VFXManager';
 import { ActiveUnit, TowerConfig, SimulationSettings, UnitRuntimeData } from '../../../hooks/battle/types';
@@ -56,8 +57,12 @@ export function MageArmy({
     availableIndicesRef.current = Array.from({ length: POOL_SIZE }, (_, i) => i);
   }, []);
 
-  const mage1 = useGLTF('/assets-model/Witch.glb') as any;
-  const mage2 = useGLTF('/assets-model/Wizard.glb') as any;
+  const mage1 = useGLTF('/assets-model/Witch.glb', true, true, (loader) => {
+    loader.setMeshoptDecoder(MeshoptDecoder);
+  }) as any;
+  const mage2 = useGLTF('/assets-model/Wizard.glb', true, true, (loader) => {
+    loader.setMeshoptDecoder(MeshoptDecoder);
+  }) as any;
 
   const characterPool = useMemo(() => {
     const items: any[] = [];
@@ -81,8 +86,8 @@ export function MageArmy({
           const isColorable = name.includes('cloth') || name.includes('trim') || name.includes('jewel') || name.includes('robe') || name.includes('cloak') || name.includes('cape') || name.includes('scarf') || name.includes('primary') || name.includes('team');
           if (isColorable) {
             if (child.material) {
-                child.material = child.material.clone();
-                applyPainterlyStyle(child.material);
+              child.material = child.material.clone();
+              applyPainterlyStyle(child.material);
             }
             colorable.push(child);
           }
@@ -562,12 +567,15 @@ export function MageArmy({
       }
     });
 
-    // Painterly Shader Update
-    characterPool.forEach(item => {
+    // Optimized Shader Uniform Update: Only update uniforms for units currently "on-duty"
+    poolMapRef.current.forEach((poolIdx) => {
+      const item = characterPool[poolIdx];
+      if (!item) return;
+      const timeVal = (simTimeRef.current || 0) * 0.001;
       item.colorable.forEach((mesh: THREE.Mesh) => {
         const mat = mesh.material as THREE.Material;
         if (mat.userData.painterlyShader) {
-          mat.userData.painterlyShader.uniforms.time.value = (simTimeRef.current || 0) * 0.001;
+          mat.userData.painterlyShader.uniforms.time.value = timeVal;
         }
       });
     });
@@ -580,5 +588,9 @@ export function MageArmy({
   );
 }
 
-useGLTF.preload('/assets-model/Witch.glb');
-useGLTF.preload('/assets-model/Wizard.glb');
+useGLTF.preload('/assets-model/Witch.glb', true, true, (loader) => {
+  loader.setMeshoptDecoder(MeshoptDecoder);
+});
+useGLTF.preload('/assets-model/Wizard.glb', true, true, (loader) => {
+  loader.setMeshoptDecoder(MeshoptDecoder);
+});

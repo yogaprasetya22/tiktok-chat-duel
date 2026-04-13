@@ -71,7 +71,7 @@ export let CLASS_CONFIG: ClassConfig = {
         lifesteal: 0.0,
         spell_vamp: 0.25,
         move_speed_mult: 1.0,
-        attack_speed_mult: 0.4,
+        attack_speed_mult: 0.11,
         crit_chance: 0.05,
         crit_damage: 1.5,
         range: 15.0,
@@ -188,8 +188,8 @@ export let INITIAL_SETTINGS: SimulationSettings = {
         unitCount: 0,
         vfxCount: 0,
         bucketCount: 0,
-        bottleneck: "OPTIMAL"
-    }
+        bottleneck: "OPTIMAL",
+    },
 };
 
 // --- MAGE PROJECTILE SYNC ---
@@ -204,9 +204,9 @@ export const NAME_POOL_SIZE = 500;
 // Units beyond this distance² from camera are rendered as flat billboard impostors
 // instead of full 3D animated models (1-2 draw calls vs hundreds)
 export const LOD_IMPOSTOR_DIST_SQ = 48 * 48;
-export const LOD_IMPOSTOR_MAX = 1200;           // Max billboard instances (player+enemy combined)
-export const LOD_IMPOSTOR_SCALE = 1.8;          // Visual scale of impostor billboards
-export const LOD_IMPOSTOR_BOSS_SCALE = 5.0;     // Boss impostor scale
+export const LOD_IMPOSTOR_MAX = 1200; // Max billboard instances (player+enemy combined)
+export const LOD_IMPOSTOR_SCALE = 1.8; // Visual scale of impostor billboards
+export const LOD_IMPOSTOR_BOSS_SCALE = 5.0; // Boss impostor scale
 
 // --- WEATHER SYSTEM CONFIG ---
 export const WEATHER_CONFIG = {
@@ -216,7 +216,6 @@ export const WEATHER_CONFIG = {
         color: "#60a5fa",
         boostText: "Mage: +Atk Speed, MM: -Atk Speed",
         multipliers: {
-            mage: { attack_speed_mult: 1.3 },
             marksman: { attack_speed_mult: 0.75 },
             globalSpeedMultiplier: 0.9,
         },
@@ -236,7 +235,7 @@ export const WEATHER_CONFIG = {
         color: "#a855f7",
         boostText: "Mage: ++Damage, Fighter: +Atk",
         multipliers: {
-            mage: { atk: 1.3, attack_speed_mult: 1.2 },
+            mage: { atk: 1.3 },
             fighter: { atk: 1.2 },
             tank: { physical_defense: 1.2 },
             globalDamageMultiplier: 1.15,

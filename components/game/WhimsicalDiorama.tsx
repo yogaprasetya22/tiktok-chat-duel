@@ -69,11 +69,12 @@ const GRASS_COUNT = 2500;
 const PainterlyGrass = ({ baseDistance = 24 }) => {
     const meshRef = useRef<THREE.InstancedMesh>(null!);
     const dummy = useMemo(() => new THREE.Object3D(), []);
-
+    const gameState = useStore(s => s.gameState);
     useEffect(() => {
         let count = 0;
         const radius = baseDistance + 10;
-        while (count < GRASS_COUNT) {
+        const density = gameState === 'SETUP' ? GRASS_COUNT / 2 : GRASS_COUNT;
+        while (count < density) {
             const r = Math.sqrt(Math.random()) * radius;
             const angle = Math.random() * Math.PI * 2;
             const x = r * Math.cos(angle);
@@ -156,6 +157,8 @@ export const WhimsicalDiorama = ({ baseDistance = 24 }) => {
     const waterRef = useRef<THREE.Mesh>(null!);
     const terrainRef = useRef<THREE.Mesh>(null!);
     const weather = useStore(s => s.weather);
+    const gameState = useStore(s => s.gameState);
+    const isSetup = gameState === 'SETUP';
 
     useFrame((state) => {
         const time = state.clock.elapsedTime;
@@ -172,10 +175,10 @@ export const WhimsicalDiorama = ({ baseDistance = 24 }) => {
             <ambientLight intensity={1.0} color="#ffffff" />
             <directionalLight 
                 position={[0, 100, 0]} 
-                intensity={10.0} 
+                intensity={isSetup ? 5.0 : 10.0} 
                 color="#ffffff" 
-                castShadow 
-                shadow-mapSize={[2048, 2048]}
+                castShadow={!isSetup} 
+                shadow-mapSize={isSetup ? [512, 512] : [2048, 2048]}
             />
             <pointLight position={[0, 15, 0]} intensity={2.0} color="#ffaa00" distance={150} />
 
@@ -187,8 +190,8 @@ export const WhimsicalDiorama = ({ baseDistance = 24 }) => {
 
 
             {/* 3. TERRAIN ISLAND & MOUNTAINS */}
-            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.6, 0]} receiveShadow>
-                <planeGeometry args={[baseDistance * 10.0, baseDistance * 10.0, 128, 128]} />
+            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.6, 0]} receiveShadow={!isSetup}>
+                <planeGeometry args={[baseDistance * 10.0, baseDistance * 10.0, isSetup ? 32 : 64, isSetup ? 32 : 64]} />
                 <primitive object={PainterlyTerrainMaterial} attach="material" />
             </mesh>
             

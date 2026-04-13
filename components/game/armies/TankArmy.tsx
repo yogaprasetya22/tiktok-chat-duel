@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import React, { useRef, useMemo, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
+import { MeshoptDecoder } from 'meshoptimizer';
 import { SkeletonUtils } from 'three-stdlib';
 import { useVFX } from '../VFXManager';
 import { ActiveUnit, TowerConfig, SimulationSettings, UnitRuntimeData } from '../../../hooks/battle/types';
@@ -54,8 +55,12 @@ export function TankArmy({
     availableIndicesRef.current = Array.from({ length: POOL_SIZE }, (_, i) => i);
   }, []);
 
-  const t1 = useGLTF('/assets-model/Viking_Male.glb') as any;
-  const t2 = useGLTF('/assets-model/Viking_Female.glb') as any;
+  const t1 = useGLTF('/assets-model/Viking_Male.glb', true, true, (loader) => {
+    loader.setMeshoptDecoder(MeshoptDecoder);
+  }) as any;
+  const t2 = useGLTF('/assets-model/Viking_Female.glb', true, true, (loader) => {
+    loader.setMeshoptDecoder(MeshoptDecoder);
+  }) as any;
 
   // Shared Materials for Teams (One clone per team per model part)
   const teamMats = useMemo(() => {
@@ -107,8 +112,8 @@ export function TankArmy({
           const isColorable = name.includes('cloth') || name.includes('plume') || name.includes('trim') || name.includes('shield_pattern') || name.includes('helmet') || name.includes('robe') || name.includes('cloak') || name.includes('cape') || name.includes('primary') || name.includes('team');
           if (isColorable) {
             if (child.material) {
-                child.material = child.material.clone();
-                applyPainterlyStyle(child.material);
+              child.material = child.material.clone();
+              applyPainterlyStyle(child.material);
             }
             colorable.push(child);
           }
@@ -407,9 +412,9 @@ export function TankArmy({
 
       const tp = uData.position;
       const cp = pItem.group.position;
-      
+
       // Interpolation: Snap if jump is too large (Lag resilience)
-      const distSq = (tp[0]-cp.x)**2 + (tp[2]-cp.z)**2;
+      const distSq = (tp[0] - cp.x) ** 2 + (tp[2] - cp.z) ** 2;
 
       const lerpFactor = 1.0 - Math.exp(-45 * delta); // Snappier smoothing
       if (!pItem.initialized || distSq > 25) { // Snap if > 5m
@@ -534,12 +539,15 @@ export function TankArmy({
       }
     });
 
-    // Painterly Shader Update
-    characterPool.forEach(item => {
+    // Optimized Shader Uniform Update: Only update uniforms for units currently "on-duty"
+    poolMapRef.current.forEach((poolIdx) => {
+      const item = characterPool[poolIdx];
+      if (!item) return;
+      const timeVal = (simTimeRef.current || 0) * 0.001;
       item.colorable.forEach((mesh: THREE.Mesh) => {
         const mat = mesh.material as THREE.Material;
         if (mat.userData.painterlyShader) {
-          mat.userData.painterlyShader.uniforms.time.value = (simTimeRef.current || 0) * 0.001;
+          mat.userData.painterlyShader.uniforms.time.value = timeVal;
         }
       });
     });
@@ -552,5 +560,9 @@ export function TankArmy({
   );
 }
 
-useGLTF.preload('/assets-model/Viking_Male.glb');
-useGLTF.preload('/assets-model/Viking_Female.glb');
+useGLTF.preload('/assets-model/Viking_Male.glb', true, true, (loader) => {
+  loader.setMeshoptDecoder(MeshoptDecoder);
+});
+useGLTF.preload('/assets-model/Viking_Female.glb', true, true, (loader) => {
+  loader.setMeshoptDecoder(MeshoptDecoder);
+});

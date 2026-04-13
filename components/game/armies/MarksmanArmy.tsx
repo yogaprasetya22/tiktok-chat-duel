@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import React, { useRef, useMemo, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
+import { MeshoptDecoder } from 'meshoptimizer';
 import { SkeletonUtils } from 'three-stdlib';
 import { useVFX } from '../VFXManager';
 import { ActiveUnit, TowerConfig, SimulationSettings, UnitRuntimeData } from '../../../hooks/battle/types';
@@ -56,7 +57,9 @@ export function MarksmanArmy({
     availableIndicesRef.current = Array.from({ length: POOL_SIZE }, (_, i) => i);
   }, []);
 
-  const m1 = useGLTF('/assets-model/Cowboy_Female.glb') as any;
+  const m1 = useGLTF('/assets-model/Cowboy_Female.glb', true, true, (loader) => {
+    loader.setMeshoptDecoder(MeshoptDecoder);
+  }) as any;
 
   const characterPool = useMemo(() => {
     const items: any[] = [];
@@ -79,8 +82,8 @@ export function MarksmanArmy({
           const isColorable = name.includes('cloth') || name.includes('pattern') || name.includes('trim') || name.includes('ribbon') || name.includes('quiver') || name.includes('robe') || name.includes('cloak') || name.includes('cape') || name.includes('primary') || name.includes('team');
           if (isColorable) {
             if (child.material) {
-                child.material = child.material.clone();
-                applyPainterlyStyle(child.material);
+              child.material = child.material.clone();
+              applyPainterlyStyle(child.material);
             }
             colorable.push(child);
           }
@@ -493,12 +496,15 @@ export function MarksmanArmy({
       }
     });
 
-    // Painterly Shader Update
-    characterPool.forEach(item => {
+    // Optimized Shader Uniform Update: Only update uniforms for units currently "on-duty"
+    poolMapRef.current.forEach((poolIdx) => {
+      const item = characterPool[poolIdx];
+      if (!item) return;
+      const timeVal = (simTimeRef.current || 0) * 0.001;
       item.colorable.forEach((mesh: THREE.Mesh) => {
         const mat = mesh.material as THREE.Material;
         if (mat.userData.painterlyShader) {
-          mat.userData.painterlyShader.uniforms.time.value = (simTimeRef.current || 0) * 0.001;
+          mat.userData.painterlyShader.uniforms.time.value = timeVal;
         }
       });
     });
@@ -511,4 +517,6 @@ export function MarksmanArmy({
   );
 }
 
-useGLTF.preload('/assets-model/Cowboy_Female.glb');
+useGLTF.preload('/assets-model/Cowboy_Female.glb', true, true, (loader) => {
+  loader.setMeshoptDecoder(MeshoptDecoder);
+});

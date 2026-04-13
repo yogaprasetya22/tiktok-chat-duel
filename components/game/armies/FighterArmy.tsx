@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import React, { useRef, useMemo, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
+import { MeshoptDecoder } from 'meshoptimizer';
 import { SkeletonUtils } from 'three-stdlib';
 import { useVFX } from '../VFXManager';
 import { ActiveUnit, TowerConfig, SimulationSettings, UnitRuntimeData } from '../../../hooks/battle/types';
@@ -55,9 +56,15 @@ const FighterArmyComponent = ({
     availableIndicesRef.current = Array.from({ length: POOL_SIZE }, (_, i) => i);
   }, []);
 
-  const f1 = useGLTF('/assets-model/Knight_Golden_Female.glb') as any;
-  const f2 = useGLTF('/assets-model/Knight_Golden_Male.glb') as any;
-  const f3 = useGLTF('/assets-model/Knight_Male.glb') as any;
+  const f1 = useGLTF('/assets-model/Knight_Golden_Female.glb', true, true, (loader) => {
+    loader.setMeshoptDecoder(MeshoptDecoder);
+  }) as any;
+  const f2 = useGLTF('/assets-model/Knight_Golden_Male.glb', true, true, (loader) => {
+    loader.setMeshoptDecoder(MeshoptDecoder);
+  }) as any;
+  const f3 = useGLTF('/assets-model/Knight_Male.glb', true, true, (loader) => {
+    loader.setMeshoptDecoder(MeshoptDecoder);
+  }) as any;
 
   const characterPool = useMemo(() => {
     const items: any[] = [];
@@ -505,12 +512,15 @@ const FighterArmyComponent = ({
       }
     });
 
-    // Painterly Shader Uniform Update
-    characterPool.forEach(item => {
+    // Optimized Shader Uniform Update: Only update uniforms for units currently "on-duty"
+    poolMapRef.current.forEach((poolIdx) => {
+      const item = characterPool[poolIdx];
+      if (!item) return;
+      const timeVal = (simTimeRef.current || 0) * 0.001;
       item.colorable.forEach((mesh: THREE.Mesh) => {
         const mat = mesh.material as THREE.Material;
         if (mat.userData.painterlyShader) {
-          mat.userData.painterlyShader.uniforms.time.value = (simTimeRef.current || 0) * 0.001;
+          mat.userData.painterlyShader.uniforms.time.value = timeVal;
         }
       });
     });
@@ -527,6 +537,12 @@ const FighterArmyComponent = ({
 
 export const FighterArmy = React.memo(FighterArmyComponent);
 
-useGLTF.preload('/assets-model/Knight_Golden_Female.glb');
-useGLTF.preload('/assets-model/Knight_Golden_Male.glb');
-useGLTF.preload('/assets-model/Knight_Male.glb');
+useGLTF.preload('/assets-model/Knight_Golden_Female.glb', true, true, (loader) => {
+  loader.setMeshoptDecoder(MeshoptDecoder);
+});
+useGLTF.preload('/assets-model/Knight_Golden_Male.glb', true, true, (loader) => {
+  loader.setMeshoptDecoder(MeshoptDecoder);
+});
+useGLTF.preload('/assets-model/Knight_Male.glb', true, true, (loader) => {
+  loader.setMeshoptDecoder(MeshoptDecoder);
+});

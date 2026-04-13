@@ -1,11 +1,14 @@
 'use client';
 
 import { useGLTF } from '@react-three/drei';
+import { MeshoptDecoder } from 'meshoptimizer';
 import { useMemo } from 'react';
 import * as THREE from 'three';
 
 export function Environment() {
-  const { scene } = useGLTF('/low_poly_forest_4_optimized.glb');
+  const { scene } = useGLTF('/low_poly_forest_4_optimized.glb', true, true, (loader) => {
+    loader.setMeshoptDecoder(MeshoptDecoder);
+  });
   
   // Advanced Optimization: Automatically instance repeated meshes in the forest
   const instancedForest = useMemo(() => {
@@ -56,4 +59,6 @@ export function Environment() {
   );
 }
 
-useGLTF.preload('/low_poly_forest_4_optimized.glb');
+useGLTF.preload('/low_poly_forest_4_optimized.glb', true, true, (loader) => {
+  loader.setMeshoptDecoder(MeshoptDecoder);
+});
