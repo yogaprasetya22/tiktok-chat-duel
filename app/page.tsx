@@ -1,4 +1,4 @@
-import TikTokLiveChat from "@/components/TikTokLiveChat";
+import TikTokLiveChat from "@/src/components/TikTokLiveChat";
 
 export const metadata = {
   title: "TikTok Live Chat - Next.js",

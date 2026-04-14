@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { tiktokService } from "@/lib/server/tiktok";
+import { tiktokService } from "@/src/lib/server/tiktok";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";

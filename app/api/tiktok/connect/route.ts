@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { tiktokService } from "@/lib/server/tiktok";
+import { tiktokService } from "@/src/lib/server/tiktok";
 
 export async function POST(request: NextRequest) {
   try {

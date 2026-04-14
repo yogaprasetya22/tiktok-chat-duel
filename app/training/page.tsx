@@ -1,18 +1,17 @@
 'use client';
 
-import { useEffect, useState, useRef, useMemo } from "react";
-import { useBattleSystem } from "../../hooks/useBattleSystem";
-import { useStore } from "../../hooks/useStore";
-import { GameCanvas } from "../../components/game/GameCanvas";
-import { TrainingAnalytics } from "../../components/game/TrainingAnalytics";
-import { Brain, Target, RefreshCw, ChevronLeft, Swords, Activity, Zap } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useBattleSystem } from "@/src/hooks/battle/useBattleSystem";
+import { useStore } from "@/src/state/useStore";
+import { GameCanvas } from "@/src/components/game/GameCanvas";
+import { TrainingAnalytics } from "@/src/components/game/ui/TrainingAnalytics";
+import { Target, RefreshCw, ChevronLeft, Swords, Activity, Zap } from "lucide-react";
 import Link from "next/link";
 import { useControls, button, folder, Leva } from "leva";
 
 
 export default function TrainingPage() {
   const [mounted, setMounted] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -27,7 +26,6 @@ export default function TrainingPage() {
     spawnUnit,
     resetBattle,
     unitRegistry,
-    stats,
     updateSimulation,
     damageQueue,
     settingsRef,
@@ -45,7 +43,6 @@ export default function TrainingPage() {
 
 
 
-  const gameState = useStore(s => s.gameState);
   const liveStats = useStore(s => s.liveStats);
 
   // --- Leva Deployment Controls ---

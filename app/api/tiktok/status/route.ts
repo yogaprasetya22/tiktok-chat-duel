@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { tiktokService } from "@/lib/server/tiktok";
+import { tiktokService } from "@/src/lib/server/tiktok";
 
 export async function GET() {
   return NextResponse.json({
