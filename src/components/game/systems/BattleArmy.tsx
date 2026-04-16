@@ -37,8 +37,9 @@ interface BattleArmyProps {
 
 
 
-const MAX_UNITS = 1200; // Matched with simulation pool
-const NAME_POOL_SIZE = 500; // Safe high-performance limit
+const MAX_UNITS = 300; // Matched with optimized simulation pool
+const NAME_POOL_SIZE = 120; // Safe high-performance limit for standard battles
+
 
 const tempObject = new THREE.Object3D();
 
@@ -297,10 +298,11 @@ const BattleArmyComponent = ({
     <group>
       {/* Full-3D Animated Unit Rendering by Class — Each gets 120-200 slot offset in the HUD buffer */}
       <FighterArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} renderedIdsRef={renderedIdsRef} shadowRef={shadowRef} healthBgRef={healthBgRef} healthFillRef={healthFillRef} notchRef={notchRef} hudBaseIdx={0} namePoolMap={namePoolMap} nameTextRefs={nameTextRefs} fighterSpellsRef={fighterSpellsRef} />
-      <TankArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} renderedIdsRef={renderedIdsRef} shadowRef={shadowRef} healthBgRef={healthBgRef} healthFillRef={healthFillRef} notchRef={notchRef} hudBaseIdx={250} namePoolMap={namePoolMap} nameTextRefs={nameTextRefs} tankSpellsRef={tankSpellsRef} />
-      <MageArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} spellsRef={spellsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} renderedIdsRef={renderedIdsRef} shadowRef={shadowRef} healthBgRef={healthBgRef} healthFillRef={healthFillRef} notchRef={notchRef} hudBaseIdx={500} namePoolMap={namePoolMap} nameTextRefs={nameTextRefs} />
-      <MarksmanArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} spellsRef={spellsRef} mmSpellsRef={mmSpellsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} renderedIdsRef={renderedIdsRef} shadowRef={shadowRef} healthBgRef={healthBgRef} healthFillRef={healthFillRef} notchRef={notchRef} hudBaseIdx={750} namePoolMap={namePoolMap} nameTextRefs={nameTextRefs} />
-      <AssassinArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} renderedIdsRef={renderedIdsRef} shadowRef={shadowRef} healthBgRef={healthBgRef} healthFillRef={healthFillRef} notchRef={notchRef} hudBaseIdx={1000} namePoolMap={namePoolMap} nameTextRefs={nameTextRefs} assassinSpellsRef={assassinSpellsRef} />
+      <TankArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} renderedIdsRef={renderedIdsRef} shadowRef={shadowRef} healthBgRef={healthBgRef} healthFillRef={healthFillRef} notchRef={notchRef} hudBaseIdx={60} namePoolMap={namePoolMap} nameTextRefs={nameTextRefs} tankSpellsRef={tankSpellsRef} />
+      <MageArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} spellsRef={spellsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} renderedIdsRef={renderedIdsRef} shadowRef={shadowRef} healthBgRef={healthBgRef} healthFillRef={healthFillRef} notchRef={notchRef} hudBaseIdx={120} namePoolMap={namePoolMap} nameTextRefs={nameTextRefs} />
+      <MarksmanArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} spellsRef={spellsRef} mmSpellsRef={mmSpellsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} renderedIdsRef={renderedIdsRef} shadowRef={shadowRef} healthBgRef={healthBgRef} healthFillRef={healthFillRef} notchRef={notchRef} hudBaseIdx={180} namePoolMap={namePoolMap} nameTextRefs={nameTextRefs} />
+      <AssassinArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} renderedIdsRef={renderedIdsRef} shadowRef={shadowRef} healthBgRef={healthBgRef} healthFillRef={healthFillRef} notchRef={notchRef} hudBaseIdx={240} namePoolMap={namePoolMap} nameTextRefs={nameTextRefs} assassinSpellsRef={assassinSpellsRef} />
+
 
       {/* LOD Impostor Layer: far-away units rendered as InstancedMesh billboards (2 draw calls) */}
       <InstancedImpostorRenderer

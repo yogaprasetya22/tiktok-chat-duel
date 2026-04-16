@@ -236,6 +236,7 @@ export const UIOverlay = ({
   const setIsSettingsOpen = useStore(s => s.setIsSettingsOpen);
   const settings = useStore(s => s.settings);
   const weather = useStore(s => s.weather);
+  const combatMode = useStore(s => s.combatMode);
   const [step, setStep] = useState(1);
   const [username, setUsername] = useState("");
 
@@ -524,6 +525,25 @@ export const UIOverlay = ({
                       />
                     </div>
                   </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest flex items-center gap-1">
+                        <Zap className="w-3 h-3" /> Gift Multiplier
+                      </label>
+                      <input 
+                        type="number" 
+                        min="0.5"
+                        max="10"
+                        step="0.5"
+                        value={towerConfig.player.giftMultiplier || 1}
+                        onChange={(e) => setTowerConfig(prev => ({ ...prev, player: { ...prev.player, giftMultiplier: parseFloat(e.target.value) } }))}
+                        className="w-full bg-zinc-950 border-2 border-white/5 rounded-2xl px-5 py-4 text-sm font-bold focus:outline-none focus:border-blue-500/30"
+                        placeholder="e.g. 1"
+                      />
+                      <p className="text-[9px] text-zinc-500">Multiplier for units spawned from gifts</p>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="flex gap-4">
@@ -599,12 +619,34 @@ export const UIOverlay = ({
                       />
                     </div>
                   </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest flex items-center gap-1">
+                        <Zap className="w-3 h-3" /> Gift Multiplier
+                      </label>
+                      <input 
+                        type="number" 
+                        min="0.5"
+                        max="10"
+                        step="0.5"
+                        value={towerConfig.enemy.giftMultiplier || 1}
+                        onChange={(e) => setTowerConfig(prev => ({ ...prev, enemy: { ...prev.enemy, giftMultiplier: parseFloat(e.target.value) } }))}
+                        className="w-full bg-zinc-950 border-2 border-white/5 rounded-2xl px-5 py-4 text-sm font-bold focus:outline-none focus:border-red-500/30"
+                        placeholder="e.g. 1"
+                      />
+                      <p className="text-[9px] text-zinc-500">Multiplier for units spawned from gifts</p>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="flex gap-4">
                   <button onClick={prevStep} className="flex-1 py-5 bg-zinc-800 text-white font-black uppercase tracking-widest rounded-2xl hover:bg-zinc-700 transition-all active:scale-[0.98]">Back</button>
                   <button 
-                    onClick={onStart} 
+                    onClick={() => {
+                      onStart();
+
+                    }} 
                     disabled={loading}
                     className={`flex-[2] py-5 font-black uppercase tracking-widest rounded-2xl transition-all shadow-2xl text-lg active:scale-[0.98] flex items-center justify-center gap-3 ${loading ? 'bg-zinc-800 text-zinc-500' : 'bg-indigo-600 text-white hover:bg-indigo-500 shadow-indigo-600/30'}`}
                   >
@@ -639,6 +681,25 @@ export const UIOverlay = ({
                 
                 {/* 1. TOP CENTER: Centered HUD Region */}
                 <div className="absolute top-6 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 pointer-events-auto z-[1200]">
+                  {/* Combat Mode Toggle */}
+                  <div className="flex bg-zinc-950/90 rounded-2xl border border-white/5 p-1 mb-2 animate-in slide-in-from-top-4 duration-500 shadow-xl overflow-hidden">
+                     <button
+                        onClick={() => useStore.getState().setCombatMode('SINGLE')}
+                        className={`px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                           combatMode === 'SINGLE' ? 'bg-indigo-500 text-white shadow-lg' : 'text-zinc-500 hover:text-white hover:bg-white/5'
+                        }`}
+                     >
+                        Single Target
+                     </button>
+                     <button
+                        onClick={() => useStore.getState().setCombatMode('AOE')}
+                        className={`px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                           combatMode === 'AOE' ? 'bg-indigo-500 text-white shadow-lg' : 'text-zinc-500 hover:text-white hover:bg-white/5'
+                        }`}
+                     >
+                        AOE Mode
+                     </button>
+                  </div>
                   {/* Weather Indicator (Kill Counter hidden for now) */}
                   <div className="mt-3 flex flex-col items-center animate-in slide-in-from-top-4 duration-1000">
                     <div className="bg-zinc-950/90 px-4 py-1.5 rounded-2xl border border-white/5 flex items-center gap-3">

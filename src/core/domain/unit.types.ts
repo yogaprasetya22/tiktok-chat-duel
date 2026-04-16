@@ -60,6 +60,7 @@ export interface TeamConfig {
     commentKeyword: string;
     commentType: "contains" | "exact";
     giftKeyword: string;
+    giftMultiplier?: number; // Multiplier for gifts (e.g., 2 = 2x units per gift)
 }
 
 export interface TowerConfig {
@@ -226,6 +227,16 @@ export interface SimulationSettings {
     unitScale: number; // Visual scale multiplier
     vfxIntensity: number;
     maxUnits: number;
+
+    // Environment tweaks (optional — driven by Leva in seal-m)
+    treeCount?: number;   // default 300
+    treeScale?: number;   // default 1.0
+    fogNear?: number;     // default 60
+    fogFar?: number;      // default 450
+    fov?: number;         // camera FOV, default 50
+    mouseSensitivity?: number; // default 0.002
+    vfxQuality?: 'LOW' | 'MEDIUM' | 'HIGH';
+    treeDensity?: number;
 
     // Performance & Diagnostics
     potatoMode: boolean;

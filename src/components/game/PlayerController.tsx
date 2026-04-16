@@ -7,24 +7,7 @@ import BVHEcctrl, { useAnimationStore, characterStatus } from 'bvhecctrl';
 import * as THREE from 'three';
 import { useVFX } from './systems/VFXManager';
 import ProjectilePool, { ProjectilePoolHandle } from './systems/ProjectilePool';
-
-// =============================================================================
-//  PENJELASAN UNTUK PEMULA:
-//
-//  BVHEcctrl adalah "controller" yang mengurus:
-//    ✅ Posisi karakter (via capsule physics)
-//    ✅ Collision dengan environment (via StaticCollider di terrain)
-//    ✅ Rotasi/putar karakter ke arah jalan (via turnSpeed)
-//    ✅ Arah "maju" = ke arah mana camera menghadap
-//
-//  Kita TIDAK boleh mengubah rotation characterRef secara manual karena
-//  itu akan konflik dengan BVHEcctrl dan merusak collision.
-//
-//  Yang kita urus sendiri:
-//    ✅ Posisi & arah camera (offset dari karakter)
-//    ✅ Menembak peluru
-//    ✅ Sync animasi
-// =============================================================================
+import { useStore } from '@/src/state/useStore';
 
 const animationSet = {
   idle:    'Idle',
@@ -34,7 +17,6 @@ const animationSet = {
   shoot:   'Shoot_OneHanded',
 };
 
-// Pemetaan state ecctrl langsung ke nama animasi di GLB
 const ecctrlAnimationSet = {
   IDLE:       animationSet.idle,
   WALK:       animationSet.walk,
@@ -43,7 +25,6 @@ const ecctrlAnimationSet = {
   JUMP_IDLE:  animationSet.jump,
   JUMP_FALL:  animationSet.jump,
   JUMP_LAND:  animationSet.idle,
-  // action1 might be manual
 };
 
 export const keyboardMap = [
@@ -56,24 +37,20 @@ export const keyboardMap = [
   { name: "action1",   keys: ["KeyF", "KeyE"] },
 ];
 
-// ─── Pre-allocated objects (zero GC / frame) ─────────────────────────────────
 const _charPos    = new THREE.Vector3();
 const _camDesired = new THREE.Vector3();
 const _camPos     = new THREE.Vector3();
 const _lookAt     = new THREE.Vector3();
 const _camTarget  = new THREE.Vector3();
-const _origin     = new THREE.Vector3();
 const _camDir     = new THREE.Vector3();
-const _fwd        = new THREE.Vector3();
 
-// Zoom constants
-const ZOOM_MIN     = 1.5;   // jarak minimum (shoulder cam)
-const ZOOM_MAX     = 20.0;  // jarak maksimum (jauh)
-const ZOOM_DEFAULT = 5.0;   // jarak awal
-const ZOOM_SPEED   = 2.0;   // seberapa besar 1 scroll mengubah zoom
-const ZOOM_LERP    = 10.0;  // kecepatan smooth zoom (makin besar = makin snappy)
+const ZOOM_MIN     = 1.5;
+const ZOOM_MAX     = 20.0;
+const ZOOM_DEFAULT = 5.0;
+const ZOOM_SPEED   = 2.0;
+const ZOOM_LERP    = 10.0;
 
-export const PlayerController = ({ damageQueue }: { damageQueue?: React.RefObject<any[]> }) => {
+export const PlayerController = ({ damageQueue, settingsRef }: { damageQueue?: React.RefObject<any[]>, settingsRef: React.RefObject<any> }) => {
   const poolRef      = useRef<ProjectilePoolHandle>(null);
   const characterRef = useRef<THREE.Group>(null);
   const { camera }   = useThree();
@@ -85,14 +62,9 @@ export const PlayerController = ({ damageQueue }: { damageQueue?: React.RefObjec
   const [, getKeys]     = useKeyboardControls();
   const { spawnVFX }    = useVFX();
 
-  // ─── 1. SYNC ANIMASI (crossFade system) ──────────────────────────────────────
-  // Gunakan ref untuk track animasi aktif agar bisa crossFade (bukan reset)
-  // crossFadeTo: fade OUT animasi lama + fade IN animasi baru secara bersamaan
-  // Hasilnya: transisi halus antar animasi (contoh: Jump → Idle tanpa snap)
   const activeAction = useRef<THREE.AnimationAction | null>(null);
 
   useEffect(() => {
-    // BVHEcctrl uses uppercase status like "IDLE", "WALK", etc.
     const animName = ecctrlAnimationSet[animationStatus as keyof typeof ecctrlAnimationSet] || animationSet.idle;
     const nextAction = actions[animName];
     if (!nextAction || nextAction === activeAction.current) return;
@@ -106,63 +78,74 @@ export const PlayerController = ({ damageQueue }: { damageQueue?: React.RefObjec
     activeAction.current = nextAction;
   }, [animationStatus, actions]);
 
-  // ─── 2. MOUSE LOOK ───────────────────────────────────────────────────────────
-  //   yaw   = putar horizontal (kiri-kanan) — dikendalikan mouse X
-  //   pitch = tilt vertikal (atas-bawah) — dikendalikan mouse Y
-  const SENSITIVITY = 0.002;
+  // ─── CAMERA CONTROLS (RPG STYLE) ───────────────────────────────────────────
   const mouse = useRef({ yaw: 0, pitch: 0.3 });
+  const isRightClicking = useRef(false);
 
   useEffect(() => {
     const onMouseMove = (e: MouseEvent) => {
-      if (!document.pointerLockElement) return;
+      if (!isRightClicking.current) return;
       
-      // YAW: mouse kanan (movementX +) → yaw berkurang → kamera orbit ke kanan ✓
-      // PENTING: tanda MINUS agar tidak inverted!
-      mouse.current.yaw -= e.movementX * SENSITIVITY;
-      
-      // movementY: negatif = mouse ke ATAS, positif = mouse ke BAWAH
-      // pitch besar → kamera di atas  (mendongak)
-      // pitch kecil → kamera di bawah (menunduk)
-      // mouse ke atas (movementY -) → pitch harus BERTAMBAH → gunakan -= (minus negatif = tambah)
-      mouse.current.pitch -= e.movementY * SENSITIVITY;
+      const sensitivity = settingsRef.current.mouseSensitivity || 0.002;
+      mouse.current.yaw -= e.movementX * sensitivity;
+      mouse.current.pitch -= e.movementY * sensitivity;
       mouse.current.pitch = Math.max(-0.4, Math.min(1.1, mouse.current.pitch));
     };
 
-    const onMouseDown = () => {
-      // Klik di mana saja → aktifkan pointer lock agar mouse terkunci
-      if (!document.pointerLockElement) {
-        document.querySelector('canvas')?.requestPointerLock();
-      }
+    const preventContext = (e: MouseEvent) => {
+        if (e.button === 2) e.preventDefault();
+    };
+
+    const onMouseDown = (e: MouseEvent) => {
+      if (e.button === 2) isRightClicking.current = true;
+    };
+    
+    const onMouseUp = (e: MouseEvent) => {
+      if (e.button === 2) isRightClicking.current = false;
     };
 
     document.addEventListener('mousemove', onMouseMove);
     document.addEventListener('mousedown', onMouseDown);
+    document.addEventListener('mouseup', onMouseUp);
+    document.addEventListener('contextmenu', preventContext);
+    
     return () => {
       document.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('mousedown', onMouseDown);
+      document.removeEventListener('mouseup', onMouseUp);
+      document.removeEventListener('contextmenu', preventContext);
     };
   }, []);
 
-  // ─── Zoom (scroll wheel, style Roblox) ────────────────────────────────────
-  // Semua disimpan di ref = zero re-render, sangat efisien
-  const zoomTarget  = useRef(ZOOM_DEFAULT);  // target zoom yang ingin dicapai
-  const zoomActual  = useRef(ZOOM_DEFAULT);  // zoom aktual (di-lerp setiap frame)
+  const isLeftClicking = useRef(false);
+  useEffect(() => {
+    const onDown = (e: MouseEvent) => {
+      if (e.button === 0) isLeftClicking.current = true;
+    };
+    const onUp = (e: MouseEvent) => {
+      if (e.button === 0) isLeftClicking.current = false;
+    };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('mouseup', onUp);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('mouseup', onUp);
+    };
+  }, []);
+
+  const zoomTarget  = useRef(ZOOM_DEFAULT);
+  const zoomActual  = useRef(ZOOM_DEFAULT);
 
   useEffect(() => {
     const onWheel = (e: WheelEvent) => {
-      e.preventDefault(); // cegah halaman scroll
-      // deltaY positif = scroll ke bawah = zoom out (jarak tambah)
-      // deltaY negatif = scroll ke atas  = zoom in  (jarak kurang)
+      e.preventDefault();
       zoomTarget.current += e.deltaY * 0.01 * ZOOM_SPEED;
-      // Clamp dalam batas min-max
       zoomTarget.current = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, zoomTarget.current));
     };
-    // { passive: false } wajib agar preventDefault() bisa jalan
     window.addEventListener('wheel', onWheel, { passive: false });
     return () => window.removeEventListener('wheel', onWheel);
   }, []);
 
-  // ─── Camera frame update (Priority -1) ────────────────────────────────────
   const EYE_HEIGHT  = 1.6;
   const hasCamInit  = useRef(false);
 
@@ -172,8 +155,6 @@ export const PlayerController = ({ damageQueue }: { damageQueue?: React.RefObjec
     const yaw   = mouse.current.yaw;
     const pitch = mouse.current.pitch;
 
-    // ─── Smooth zoom (Roblox style) ─────────────────────────────────────────
-    // Lerp jarak aktual mendekati target setiap frame → gerakan zoom terasa halus
     zoomActual.current = THREE.MathUtils.lerp(
       zoomActual.current,
       zoomTarget.current,
@@ -181,7 +162,6 @@ export const PlayerController = ({ damageQueue }: { damageQueue?: React.RefObjec
     );
     const CAMERA_DIST = zoomActual.current;
 
-    // ─── Posisi kamera TPS ──────────────────────────────────────────────────
     const cosPitch = Math.cos(pitch);
     const sinPitch = Math.sin(pitch);
 
@@ -204,75 +184,114 @@ export const PlayerController = ({ damageQueue }: { damageQueue?: React.RefObjec
     _lookAt.lerp(_camTarget, Math.min(1, 18 * delta));
     camera.lookAt(_lookAt);
 
+    useStore.getState().setPlayerPosition([_charPos.x, _charPos.y, _charPos.z]);
   }, -1);
 
-  // ─── 4. GAME LOGIC (shooting, dll) — Priority 0 (default) ───────────────────
   const lastShot  = useRef(0);
-  const FIRE_RATE = 200; // ms antar tembakan
+  const FIRE_RATE = 200;
+  const combatMode = useStore(s => s.combatMode);
 
   useFrame(() => {
-    if (!document.pointerLockElement) return;
-
     const keys = getKeys();
     const now  = performance.now();
 
-    if (keys.action1 && now - lastShot.current > FIRE_RATE) {
-      // Ambil posisi karakter terbaru
+    if ((isLeftClicking.current || keys.action1) && now - lastShot.current > FIRE_RATE) {
       _charPos.copy(characterStatus.position as THREE.Vector3);
-
-      // Arah tembak = ke mana kamera menghadap (sudah benar karena camera update duluan)
       camera.getWorldDirection(_camDir);
 
-      // Spawn peluru dari sekitar dada/bahu karakter
-      _origin.copy(_charPos);
-      _origin.y += 1.35;
-      _fwd.copy(_camDir).multiplyScalar(0.7);
-      _origin.add(_fwd);
+      _camDir.y = 0;
+      _camDir.normalize();
 
-      poolRef.current?.fire(_origin, _camDir);
-      spawnVFX([_origin.x, _origin.y, _origin.z], 'muzzle', '#ffaa00');
+      const origin = new THREE.Vector3().copy(_charPos);
+      origin.y += 1.35;
+      const fwd = new THREE.Vector3().copy(_camDir).multiplyScalar(0.7);
+      origin.add(fwd);
+
+      spawnVFX([origin.x, origin.y, origin.z], 'muzzle', '#ffaa00');
+
+      const LOCK_RADIUS = 15.0;
+      const AOE_RADIUS = 5.0;
+
+      let targets: THREE.Object3D[] = [];
+      scene.children.forEach((child) => {
+         child.traverse((obj: THREE.Object3D) => {
+             if (obj.userData && obj.userData.onHit) {
+                 targets.push(obj);
+             }
+         });
+      });
+
+      let nearestTarget: THREE.Object3D | null = null;
+      let minDistance = Infinity;
+      
+      targets.forEach(t => {
+         const targetPos = new THREE.Vector3();
+         t.getWorldPosition(targetPos);
+         const dist = targetPos.distanceTo(_charPos);
+         if (dist < LOCK_RADIUS && dist < minDistance) {
+            minDistance = dist;
+            nearestTarget = t;
+         }
+      });
+
+      if (nearestTarget) {
+         const nPos = new THREE.Vector3();
+         const target = nearestTarget as THREE.Object3D;
+         target.getWorldPosition(nPos);
+
+         if (combatMode === 'SINGLE') {
+            if (target.userData.onHit) target.userData.onHit();
+            if (damageQueue?.current) {
+               damageQueue.current.push({
+                   value: 100 + Math.random() * 400,
+                   position: [nPos.x, nPos.y + 1, nPos.z],
+                   isCrit: Math.random() > 0.8,
+                   isMagic: false,
+                   color: '#ffaa00'
+               });
+            }
+            spawnVFX([nPos.x, nPos.y + 1, nPos.z], 'spark', '#ff0000');
+         } else if (combatMode === 'AOE') {
+            targets.forEach(t => {
+               const tPos = new THREE.Vector3();
+               t.getWorldPosition(tPos);
+               if (tPos.distanceTo(nPos) <= AOE_RADIUS) {
+                  if (t.userData.onHit) t.userData.onHit();
+                  if (damageQueue?.current) {
+                     damageQueue.current.push({
+                         value: 100 + Math.random() * 400,
+                         position: [tPos.x, tPos.y + 1, tPos.z],
+                         isCrit: Math.random() > 0.8,
+                         isMagic: false,
+                         color: '#ffaa00'
+                     });
+                  }
+                  spawnVFX([tPos.x, tPos.y + 1, tPos.z], 'spark', '#ff0000');
+               }
+            });
+         }
+      }
+      poolRef.current?.fire(origin, _camDir);
       lastShot.current = now;
     }
-  }); // priority default (0) — jalan setelah camera update (-1)
+  });
 
   return (
     <>
       <ProjectilePool ref={poolRef} damageQueue={damageQueue} />
 
-      {/*
-        BVHEcctrl — controller karakter
-        
-        Props collision:
-          floatHeight    = tinggi karakter melayang di atas tanah
-          maxSlope       = kemiringan tanah maksimum yang bisa didaki
-        
-        Props movement:
-          maxWalkSpeed   = kecepatan jalan
-          maxRunSpeed    = kecepatan lari (Shift)
-          turnSpeed      = kecepatan karakter berbalik arah
-          acceleration   = seberapa cepat karakter mencapai kecepatan max
-          deceleration   = seberapa cepat karakter berhenti
-
-        Props lompat:
-          jumpVel        = kekuatan lompatan ke atas
-          gravity        = gravitasi yang menarik karakter ke bawah
-          fallGravityFactor = gravitasi ekstra saat jatuh (agar terasa berat)
-          
-        CATATAN: BVHEcctrl otomatis baca arah kamera untuk menentukan "maju"
-        dan otomatis putar karakter ke arah jalan via turnSpeed.
-        Kita TIDAK perlu (dan JANGAN) set rotation manual di characterRef.
-      *)*/}
       <BVHEcctrl
         // debug={true}
         delay={0}
-        position={[0, 5, 0]}   // spawn di atas tanah agar tidak jatuh menembus
-        floatHeight={0.3}
+        position={[0, 15, 0]} 
+        floatHeight={0.1}
         maxWalkSpeed={3}
+        onPointerCancel={true}
         maxRunSpeed={5}
         turnSpeed={20}
         jumpVel={5}
       >
-        <group ref={characterRef} dispose={null}>
+        <group ref={characterRef} dispose={null} position={[0, -0.65, 0]}>
           <primitive object={scene} />
         </group>
       </BVHEcctrl>

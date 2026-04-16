@@ -8,7 +8,7 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import * as YUKA from "yuka";
 import { useStore } from "@/src/state/useStore";
-
+import { getTerrainElevation } from "@/src/core/utils/terrainHeight";
 import type {
     ActiveUnit,
     TowerConfig,
@@ -275,6 +275,7 @@ export const useBattleSystem = () => {
             commentKeyword: "indo",
             commentType: "contains",
             giftKeyword: "rose",
+            giftMultiplier: 1,
         },
         enemy: {
             name: "Pihak B",
@@ -283,10 +284,12 @@ export const useBattleSystem = () => {
             commentKeyword: "malay",
             commentType: "contains",
             giftKeyword: "coffee",
+            giftMultiplier: 1,
         },
         baseHp: 1000,
-        baseDistance: 24,
-        maxUnits: 200,
+        baseDistance: 20,
+        maxUnits: 60,
+
         unitConfig: {
             hpMultiplier: 1.0,
             speedMultiplier: 1.0,
@@ -471,6 +474,7 @@ export const useBattleSystem = () => {
             simulationTimeRef.current += simDelta * 1000;
             const simNow = simulationTimeRef.current;
             const settings = settingsRef.current;
+            const playerPos = useStore.getState().playerPosition;
             const weather = useStore.getState().weather;
             const weatherCfg = (WEATHER_CONFIG as any)[weather] || {};
             const weatherMults = weatherCfg.multipliers || {};
@@ -604,7 +608,7 @@ export const useBattleSystem = () => {
                                 }
 
                                 const score = weight / (dSq + 0.1);
-                                if (score > bestScore) {
+                                 if (score > bestScore) {
                                     bestScore = score;
                                     bestTargetIdx = neighborIdx;
                                 }
@@ -612,7 +616,24 @@ export const useBattleSystem = () => {
                         }
                     }
 
-                    if (bestTargetIdx !== -1) {
+                    // --- TARGET PLAYER (Enemy Units Only) ---
+                    if (u.type === "enemy") {
+                        const dxP = uData.position[0] - playerPos[0];
+                        const dzP = uData.position[2] - playerPos[2];
+                        const dSqP = dxP * dxP + dzP * dzP;
+                        if (dSqP < perceptionRadiusSq) {
+                            const scoreP = 4.0 / (dSqP + 0.1); // Player has high priority
+                            if (scoreP > bestScore) {
+                                bestScore = scoreP;
+                                bestTargetIdx = -2; // Marker for player target
+                            }
+                        }
+                    }
+
+                    if (bestTargetIdx === -2) {
+                        u.targetId = "player-character";
+                        uData.status = "chasing";
+                    } else if (bestTargetIdx !== -1) {
                         u.targetId = unitPoolRef.current[bestTargetIdx].id;
                         uData.status = "chasing";
                     } else {
@@ -627,16 +648,17 @@ export const useBattleSystem = () => {
                 const targetBaseZ = u.type === "player" ? -dist : dist;
                 const isBaseTarget =
                     u.targetId === "player-base" || u.targetId === "enemy-base";
+                const isPlayerTarget = u.targetId === "player-character";
 
                 // SPECIAL: Mages/Marksmen move closer to Towers (Range Mult 0.82)
                 const isRanged =
                     u.unitClass === "mage" || u.unitClass === "marksman";
-                const rangeMult = isBaseTarget && isRanged ? 0.82 : 1.0;
+                const rangeMult = (isBaseTarget || isPlayerTarget) && isRanged ? 0.82 : 1.0;
                 const effectiveRange = u.range * rangeMult;
                 const rangeSq = effectiveRange * effectiveRange;
 
                 let currentTarget: ActiveUnit | undefined =
-                    u.targetId && !isBaseTarget
+                    u.targetId && !isBaseTarget && !isPlayerTarget
                         ? unitIndexRef.current.get(u.targetId)
                         : undefined;
                 if (
@@ -652,7 +674,33 @@ export const useBattleSystem = () => {
                 const distToBaseSq = dxB * dxB + dzB * dzB;
                 const baseInRange = distToBaseSq < rangeSq; // Use adjusted range
 
-                if (currentTarget) {
+                if (isPlayerTarget) {
+                    const dxP = uData.position[0] - playerPos[0];
+                    const dzP = uData.position[2] - playerPos[2];
+                    const dyP = uData.position[1] - playerPos[1];
+                    const distToPlayerSq = dxP * dxP + dzP * dzP + dyP * dyP;
+
+                    if (distToPlayerSq < rangeSq) {
+                        uData.status = "attacking";
+                        v.maxSpeed = 0;
+                        if (simNow - (uData.lastAttackTime || 0) > u.attackCooldown) {
+                            // DEAL DAMAGE TO PLAYER (Simulated via HUD for now)
+                            accumulateDamage(
+                                "player-character",
+                                u.attack,
+                                playerPos,
+                                "#FF0000",
+                            );
+                            uData.lastAttackTime = simNow;
+                        }
+                    } else {
+                        uData.status = "chasing";
+                        v.maxSpeed = u.speed;
+                        v.steering.behaviors.forEach((b: any) => {
+                             if (b.target) b.target.set(playerPos[0], 0, playerPos[2]);
+                        });
+                    }
+                } else if (currentTarget) {
                     const tIdx = parseInt(currentTarget.id.split("-")[1]);
                     const tData = unitDataPoolRef.current[tIdx];
                     const dxT = uData.position[0] - tData.position[0];
@@ -801,7 +849,22 @@ export const useBattleSystem = () => {
                         simNow - (uData.lastAttackTime || 0) >
                         u.attackCooldown
                     ) {
-                        const dmg = u.attack;
+                        // Apply all damage modifiers (same as unit-to-unit)
+                        let dmg = u.attack;
+
+                        // Weather damage modifiers
+                        const classDmgMult =
+                            weatherMults[u.unitClass]?.atk || 1.0;
+                        const globalDmgMult =
+                            weatherMults.globalDamageMultiplier || 1.0;
+                        dmg *= classDmgMult * globalDmgMult;
+
+                        // Apply crit damage if pending
+                        if (uData.pendingCrit) {
+                            dmg *= 2.5;
+                            uData.pendingCrit = false;
+                        }
+
                         if (u.type === "player") {
                             enemyBaseHpRef.current -= dmg;
                             if (enemyBaseHpRef.current <= 0) {
@@ -855,7 +918,7 @@ export const useBattleSystem = () => {
                 // --- 2. PHYSICS DAMPING (Anti-Bleeding) ---
                 v.velocity.multiplyScalar(0.98);
 
-                // --- 3. POSITION GUARD (Anti-Lightning Speed Limiter) ---
+                // --- 3. POSITION GUARD & O(1) GROUND SNAPPING ---
                 const oldX = uData.position[0];
                 const oldZ = uData.position[2];
                 const newX = v.position.x;
@@ -870,16 +933,26 @@ export const useBattleSystem = () => {
                 const maxStepDist = v.maxSpeed * simDelta * 1.1;
                 const maxStepDistSq = maxStepDist * maxStepDist;
 
+                let finalX = newX;
+                let finalZ = newZ;
+
                 if (moveDistSq > maxStepDistSq && v.maxSpeed > 0) {
                     const ratio = maxStepDist / Math.sqrt(moveDistSq);
-                    uData.position[0] = oldX + dx * ratio;
-                    uData.position[2] = oldZ + dz * ratio;
-                    // Sync back to physics engine so it doesn't "rubber band"
-                    v.position.set(uData.position[0], -0.4, uData.position[2]);
-                } else {
-                    uData.position[0] = newX;
-                    uData.position[2] = newZ;
+                    finalX = oldX + dx * ratio;
+                    finalZ = oldZ + dz * ratio;
                 }
+
+                // Apply O(1) mathematical terrain elevation lookup
+                // In battle context, weather is "STORM", "DIORAMA", "CLEAR" etc
+                // If weather is not "DIORAMA", we default to "STORM" (open world)
+                const elevation = getTerrainElevation(finalX, finalZ, weather, towerConfig.baseDistance);
+                
+                uData.position[0] = finalX;
+                uData.position[1] = elevation; // Snap Y to deterministic terrain height
+                uData.position[2] = finalZ;
+                
+                // Sync back to physics engine so it doesn't "rubber band" and keeps logic grounded
+                v.position.set(finalX, elevation, finalZ);
             }
 
             if (

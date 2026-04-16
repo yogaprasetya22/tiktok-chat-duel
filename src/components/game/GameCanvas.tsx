@@ -27,7 +27,7 @@ import { EffectComposer, Bloom, ToneMapping } from "@react-three/postprocessing"
 import { TowerConfig, MapObstacle, UnitRuntimeData } from "@/src/core/domain/unit.types";
 import * as YUKA from "yuka";
 import { useStore } from "@/src/state/useStore";
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { Activity, RefreshCw } from "lucide-react";
 import * as THREE from 'three';
 import { PlayerController, keyboardMap } from "./PlayerController";
@@ -236,7 +236,7 @@ export const GameCanvas = React.memo(({
     }
   }, { collapsed: false });
 
-  useControls("World Tuning", {
+  const { fov, fogDensity, exposure } = useControls("World Tuning", {
     timeScale: {
       value: settingsRef.current.timeScale, min: 0.1, max: 3.0, step: 0.1, label: "Time Scale",
       onChange: (v) => { settingsRef.current.timeScale = v; }
@@ -254,8 +254,26 @@ export const GameCanvas = React.memo(({
       options: ["DIORAMA", "STORM"],
       label: "Map Environment",
       onChange: (v) => setEnvironment(v)
+    },
+    fov: { value: 50, min: 30, max: 90, step: 1, label: "Field of View (FOV)" },
+    fogDensity: { value: 0.002, min: 0, max: 0.05, step: 0.0001, label: "Fog Density" },
+    fogNear: { value: 60, min: 10, max: 300, step: 5, label: "Fog Near" },
+    fogFar: { value: 450, min: 100, max: 1000, step: 10, label: "Fog Far" },
+    exposure: { value: 1.5, min: 0.1, max: 2.0, step: 0.1, label: "Sky Exposure" },
+
+
+    sensitivity: { 
+      value: settingsRef.current.mouseSensitivity || 0.002, min: 0.0005, max: 0.01, step: 0.0001, label: "Mouse Sensitivity",
+      onChange: (v) => { settingsRef.current.mouseSensitivity = v; }
+    },
+    vfxQuality: {
+      value: settingsRef.current.vfxQuality || 'HIGH', options: ['LOW', 'MEDIUM', 'HIGH'], label: 'VFX Quality',
+      onChange: (v) => { settingsRef.current.vfxQuality = v; }
     }
-  }, { collapsed: true });
+
+  }, { collapsed: true }) as any;
+
+
 
   const [{ perfPosition, minimal, deepAnalyze, showPerf }, setDiag] = useControls("Diagnostics", () => ({
     engineTime: { value: 0, label: "Engine Tick (ms)", editable: false },
@@ -288,6 +306,29 @@ export const GameCanvas = React.memo(({
         }
       }
     });
+    return null;
+  };
+
+  const VisualTuningBridge = ({ fov, fogDensity, exposure }: { fov: number, fogDensity: number, exposure: number }) => {
+    const { camera, scene, gl } = useThree();
+
+    useEffect(() => {
+      if (camera && (camera as THREE.PerspectiveCamera).isPerspectiveCamera) {
+        (camera as THREE.PerspectiveCamera).fov = (fov as number);
+        (camera as THREE.PerspectiveCamera).updateProjectionMatrix();
+      }
+    }, [camera, fov]);
+
+    useEffect(() => {
+      if (scene.fog) {
+        (scene.fog as any).density = fogDensity;
+      }
+    }, [scene, fogDensity]);
+
+    useEffect(() => {
+      gl.toneMappingExposure = exposure;
+    }, [gl, exposure]);
+
     return null;
   };
 
@@ -339,13 +380,18 @@ export const GameCanvas = React.memo(({
           powerPreference: "high-performance",
           logarithmicDepthBuffer: false,
           stencil: false,
-          depth: true
+          depth: true,
+          alpha: false,
+          failIfMajorPerformanceCaveat: false,
+          precision: "mediump",
         }}
+
         className="select-none touch-none "
       >
         <SceneAnalyzer />
         <StatsGl className="!absolute !top-24 !left-2 !right-auto !bottom-auto !z-[2000]" />
-        <PerformanceMonitor onIncline={() => setDpr(Math.min(dpr + 0.1, 1.0))} onDecline={() => setDpr(Math.max(dpr - 0.1, 0.7))} />
+        <PerformanceMonitor onIncline={() => setDpr(Math.min(dpr + 0.05, 0.9))} onDecline={() => setDpr(Math.max(dpr - 0.05, 0.6))} />
+
         <AdaptiveEvents />
         <AdaptiveDpr pixelated={true} />
 
@@ -377,6 +423,7 @@ export const GameCanvas = React.memo(({
           {environment === 'DIORAMA' ? (
             <WhimsicalDiorama
               baseDistance={towerConfig.baseDistance || 24}
+              settingsRef={settingsRef}
             />
           ) : (
             <StormEnvironment
@@ -387,6 +434,7 @@ export const GameCanvas = React.memo(({
 
 
           <DiagnosticsBridge />
+          <VisualTuningBridge fov={fov} fogDensity={fogDensity} exposure={exposure} />
 
           <VFXProvider>
             <CameraDirector />
@@ -429,7 +477,7 @@ export const GameCanvas = React.memo(({
               customColor={towerConfig.enemy.color}
             />
 
-            <PlayerController damageQueue={damageQueue} />
+            <PlayerController damageQueue={damageQueue} settingsRef={settingsRef} />
             
             {/* COMBAT TEST TARGETS */}
             <group position={[5, 1, 0]}>

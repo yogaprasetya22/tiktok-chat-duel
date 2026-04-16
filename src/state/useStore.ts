@@ -3,57 +3,65 @@ import { TowerConfig, KillEvent, SimulationSettings } from '@/src/core/domain/un
 import { INITIAL_SETTINGS } from '@/src/core/logic/combat/constants';
 
 interface BattleState {
-  // Game Status
-  gameState: "SETUP" | "PLAYING" | "WON" | "LOST";
-  setGameState: (state: "SETUP" | "PLAYING" | "WON" | "LOST") => void;
-  
-  isSettingsOpen: boolean;
-  setIsSettingsOpen: (isOpen: boolean) => void;
-  
-  // Base Stats (High Frequency)
-  playerBaseHp: number;
-  enemyBaseHp: number;
-  setBaseHp: (player: number, enemy: number) => void;
-  
-  liveStats: { 
-    damageDealt: Record<string, number>;
-    playerDamage: Record<string, number>;
-    enemyDamage: Record<string, number>;
-    playerKills: Record<string, number>;
-    enemyKills: Record<string, number>;
-  };
-  killEvents: KillEvent[];
-  setLiveStats: (stats: { 
-    damageDealt: Record<string, number>;
-    playerDamage: Record<string, number>;
-    enemyDamage: Record<string, number>;
-    playerKills: Record<string, number>;
-    enemyKills: Record<string, number>;
-  }) => void;
-  addKillEvent: (event: KillEvent) => void;
-  
-  // Army Counts
-  armyCounts: { player: number; enemy: number };
-  setArmyCounts: (player: number, enemy: number) => void;
-  
-  // Dynamic Simulation Settings
-  settings: SimulationSettings;
-  updateSettings: (partial: Partial<SimulationSettings>) => void;
+    // Game Status
+    gameState: "SETUP" | "PLAYING" | "WON" | "LOST";
+    setGameState: (state: "SETUP" | "PLAYING" | "WON" | "LOST") => void;
 
-  // Training Mode
-  gameMode: "BATTLE" | "TRAINING";
-  setGameMode: (mode: "BATTLE" | "TRAINING") => void;
+    isSettingsOpen: boolean;
+    setIsSettingsOpen: (isOpen: boolean) => void;
 
-  // Weather System
-  weather: "CLEAR" | "RAIN" | "STORM" | "THUNDER";
-  setWeather: (weather: "CLEAR" | "RAIN" | "STORM" | "THUNDER") => void;
+    // Base Stats (High Frequency)
+    playerBaseHp: number;
+    enemyBaseHp: number;
+    setBaseHp: (player: number, enemy: number) => void;
 
-  // Environment Systems
-  environment: "DIORAMA" | "STORM";
-  setEnvironment: (env: "DIORAMA" | "STORM") => void;
+    liveStats: {
+        damageDealt: Record<string, number>;
+        playerDamage: Record<string, number>;
+        enemyDamage: Record<string, number>;
+        playerKills: Record<string, number>;
+        enemyKills: Record<string, number>;
+    };
+    killEvents: KillEvent[];
+    setLiveStats: (stats: {
+        damageDealt: Record<string, number>;
+        playerDamage: Record<string, number>;
+        enemyDamage: Record<string, number>;
+        playerKills: Record<string, number>;
+        enemyKills: Record<string, number>;
+    }) => void;
+    addKillEvent: (event: KillEvent) => void;
 
-  // Reset
-  resetStore: (config: TowerConfig) => void;
+    // Army Counts
+    armyCounts: { player: number; enemy: number };
+    setArmyCounts: (player: number, enemy: number) => void;
+
+    // Dynamic Simulation Settings
+    settings: SimulationSettings;
+    updateSettings: (partial: Partial<SimulationSettings>) => void;
+
+    // Training Mode
+    gameMode: "BATTLE" | "TRAINING";
+    setGameMode: (mode: "BATTLE" | "TRAINING") => void;
+
+    // Combat Mode (Single vs AoE)
+    combatMode: "SINGLE" | "AOE";
+    setCombatMode: (mode: "SINGLE" | "AOE") => void;
+
+    // Weather System
+    weather: "CLEAR" | "RAIN" | "STORM" | "THUNDER";
+    setWeather: (weather: "CLEAR" | "RAIN" | "STORM" | "THUNDER") => void;
+
+    // Environment Systems
+    environment: "STORM" | "DIORAMA";
+    setEnvironment: (env: "DIORAMA" | "STORM") => void;
+
+    // Player Position Tracking
+    playerPosition: [number, number, number];
+    setPlayerPosition: (pos: [number, number, number]) => void;
+
+    // Reset
+    resetStore: (config: TowerConfig) => void;
 }
 
 export const useStore = create<BattleState>((set) => ({
@@ -91,13 +99,20 @@ export const useStore = create<BattleState>((set) => ({
   gameMode: "BATTLE",
   setGameMode: (gameMode) => set({ gameMode }),
 
+  combatMode: "SINGLE",
+  setCombatMode: (combatMode) => set({ combatMode }),
+
   weather: "CLEAR",
   setWeather: (weather) => set({ weather }),
 
   environment: "DIORAMA",
   setEnvironment: (environment) => set({ environment }),
 
+  playerPosition: [0, 0, 0],
+  setPlayerPosition: (playerPosition) => set({ playerPosition }),
+
   resetStore: (config) => set({
+
     gameState: "PLAYING",
     weather: "CLEAR",
     playerBaseHp: config.baseHp,

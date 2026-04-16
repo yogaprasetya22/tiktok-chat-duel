@@ -161,10 +161,14 @@ export default function GamePage() {
           // MEGA BOSS SPAWN: High value gifts
           const isMegaGift = giftName.includes("lion") || giftName.includes("universe") || (msg.diamondCount || 0) >= 100;
 
+          // Apply gift multiplier config
+          const giftMultiplier = config.giftMultiplier || 1;
+
           if (isMegaGift) {
-            spawnUnit(5, msg.username, side, true);
+            spawnUnit(5 * giftMultiplier, msg.username, side, true);
           } else if (giftName.includes(giftKey)) {
-            spawnUnit(Math.min(5, Math.ceil((msg.diamondCount || 0) / 5) || 3), msg.username, side);
+            const baseCount = Math.min(5, Math.ceil((msg.diamondCount || 0) / 5) || 3);
+            spawnUnit(Math.ceil(baseCount * giftMultiplier), msg.username, side);
           }
         }
       };
