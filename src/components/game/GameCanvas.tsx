@@ -8,6 +8,7 @@ import {
   AdaptiveEvents,
   AdaptiveDpr,
   Sphere,
+  KeyboardControls,
 } from "@react-three/drei";
 import { useControls, Leva, folder } from "leva";
 import dynamic from 'next/dynamic';
@@ -29,6 +30,8 @@ import { useStore } from "@/src/state/useStore";
 import React, { useState, useRef } from "react";
 import { Activity, RefreshCw } from "lucide-react";
 import * as THREE from 'three';
+import { PlayerController, keyboardMap } from "./PlayerController";
+import { DummyTarget } from "./systems/DummyTarget";
 
 // Map removed as requested. Base ground provided by OrbitControls/Sky.
 
@@ -327,13 +330,14 @@ export const GameCanvas = React.memo(({
       <div className="absolute top-4 left-4 z-10 bg-black/50 p-2 rounded text-[10px] text-white backdrop-blur-md border border-white/10 pointer-events-none">
         DPR: {dpr.toFixed(2)}
       </div>
+      <KeyboardControls map={keyboardMap}>
       <Canvas
         shadows={{ type: THREE.PCFShadowMap }}
         dpr={dpr}
         gl={{
           antialias: true,
           powerPreference: "high-performance",
-          logarithmicDepthBuffer: false, // Performance Fix: Logarithmic buffer is expensive
+          logarithmicDepthBuffer: false,
           stencil: false,
           depth: true
         }}
@@ -355,81 +359,99 @@ export const GameCanvas = React.memo(({
           />
         )}
 
-        <MapControls
-          enableDamping={true}
-          dampingFactor={0.05}
-          screenSpacePanning={false}
-          minDistance={10}
-          maxDistance={350}
-          maxPolarAngle={Math.PI / 2.5}
-          minPolarAngle={0}
-          makeDefault
-        />
-
-
-
-        {environment === 'DIORAMA' ? (
-          <WhimsicalDiorama
-            baseDistance={towerConfig.baseDistance || 24}
-          />
-        ) : (
-          <StormEnvironment
-            baseDistance={towerConfig.baseDistance || 24}
-            potatoMode={settingsRef.current.potatoMode}
+        {!isFullscreen && (
+          <MapControls
+            enableDamping={true}
+            dampingFactor={0.05}
+            screenSpacePanning={false}
+            minDistance={10}
+            maxDistance={350}
+            maxPolarAngle={Math.PI / 2.5}
+            minPolarAngle={0}
+            makeDefault
           />
         )}
 
 
-        <DiagnosticsBridge />
 
-        <VFXProvider>
-          <CameraDirector />
-          <DamageHUDBatcher damageQueue={damageQueue} />
-
-          <BattleArmy
-            unitRegistry={unitRegistry}
-            towerConfig={towerConfig}
-            updateSimulation={updateSimulation}
-            settingsRef={settingsRef}
-            simTimeRef={simTimeRef}
-            vehicles={vehicles}
-            unitIndex={unitIndex}
-            spellsRef={spellsRef}
-            mmSpellsRef={mmSpellsRef}
-            fighterSpellsRef={fighterSpellsRef}
-            tankSpellsRef={tankSpellsRef}
-            assassinSpellsRef={assassinSpellsRef}
-          />
+          {environment === 'DIORAMA' ? (
+            <WhimsicalDiorama
+              baseDistance={towerConfig.baseDistance || 24}
+            />
+          ) : (
+            <StormEnvironment
+              baseDistance={towerConfig.baseDistance || 24}
+              potatoMode={settingsRef.current.potatoMode}
+            />
+          )}
 
 
+          <DiagnosticsBridge />
 
-          <InstancedTowers 
-            distance={towerConfig.baseDistance || 24} 
-            settingsRef={settingsRef} 
-          />
+          <VFXProvider>
+            <CameraDirector />
+            <DamageHUDBatcher damageQueue={damageQueue} />
 
-          <Base
-            maxHp={towerConfig.baseHp}
-            position={[0, 0, towerConfig.baseDistance || 24]}
-            type="player"
-            name={towerConfig.player.name}
-            customColor={towerConfig.player.color}
-          />
-          <Base
-            maxHp={towerConfig.baseHp}
-            position={[0, 0, -(towerConfig.baseDistance || 24)]}
-            type="enemy"
-            name={towerConfig.enemy.name}
-            customColor={towerConfig.enemy.color}
-          />
+            <BattleArmy
+              unitRegistry={unitRegistry}
+              towerConfig={towerConfig}
+              updateSimulation={updateSimulation}
+              settingsRef={settingsRef}
+              simTimeRef={simTimeRef}
+              vehicles={vehicles}
+              unitIndex={unitIndex}
+              spellsRef={spellsRef}
+              mmSpellsRef={mmSpellsRef}
+              fighterSpellsRef={fighterSpellsRef}
+              tankSpellsRef={tankSpellsRef}
+              assassinSpellsRef={assassinSpellsRef}
+            />
 
-          {/* DEBUG OBSTACLES */}
-          {debug && mapObstacles.map((obs: MapObstacle, i: number) => (
-            <Sphere key={`debug-obs-${i}`} args={[obs.r, 16, 16]} position={[obs.x, -0.4, obs.z]}>
-              <meshBasicMaterial color="yellow" wireframe transparent opacity={0.3} />
-            </Sphere>
-          ))}
-        </VFXProvider>
+
+
+            <InstancedTowers 
+              distance={towerConfig.baseDistance || 24} 
+              settingsRef={settingsRef} 
+            />
+
+            <Base
+              maxHp={towerConfig.baseHp}
+              position={[0, 0, towerConfig.baseDistance || 24]}
+              type="player"
+              name={towerConfig.player.name}
+              customColor={towerConfig.player.color}
+            />
+            <Base
+              maxHp={towerConfig.baseHp}
+              position={[0, 0, -(towerConfig.baseDistance || 24)]}
+              type="enemy"
+              name={towerConfig.enemy.name}
+              customColor={towerConfig.enemy.color}
+            />
+
+            <PlayerController damageQueue={damageQueue} />
+            
+            {/* COMBAT TEST TARGETS */}
+            <group position={[5, 1, 0]}>
+              <DummyTarget position={[0, 0, 0]} name="Target Alpha" />
+            </group>
+            <group position={[-5, 1, -5]}>
+              <DummyTarget position={[0, 0, 0]} name="Target Beta" />
+            </group>
+            <group position={[-2, 1, 8]}>
+              <DummyTarget position={[0, 0, 0]} name="Target Gamma" />
+            </group>
+            <group position={[10, 1, -10]}>
+              <DummyTarget position={[0, 0, 0]} name="Target Delta" />
+            </group>
+
+            {/* DEBUG OBSTACLES */}
+            {debug && mapObstacles.map((obs: MapObstacle, i: number) => (
+              <Sphere key={`debug-obs-${i}`} args={[obs.r, 16, 16]} position={[obs.x, -0.4, obs.z]}>
+                <meshBasicMaterial color="yellow" wireframe transparent opacity={0.3} />
+              </Sphere>
+            ))}
+          </VFXProvider>
 
         {/* Damage text removed for maximum performance and clarity as requested */}
 
@@ -447,6 +469,7 @@ export const GameCanvas = React.memo(({
           </EffectComposer>
         )}
       </Canvas>
+      </KeyboardControls>
     </div>
   );
 });
