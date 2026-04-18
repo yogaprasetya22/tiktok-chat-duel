@@ -40,16 +40,26 @@ const BulletShader = {
         varying vec3 vColor;
         uniform float time;
 
+        float hash(vec2 p) {
+            return fract(sin(dot(p, vec2(12.98, 78.23))) * 43758.5453);
+        }
+
         void main() {
-            float dist = length(vUv - 0.5);
-            // Energy streak look: bright center, faded edges
-            float opacity = smoothstep(0.5, 0.2, dist);
+            vec2 uv = vUv - 0.5;
+            float dist = length(uv * vec2(2.0, 1.0)); // Oval core
             
-            // Pulse effect
-            float pulse = 1.0 + 0.5 * sin(time * 50.0);
-            vec3 finalColor = vColor * pulse * 2.0;
+            // Kinetic Sparks / Heat distortion
+            float sparks = step(0.97, hash(vUv * 10.0 + time * 10.0));
             
-            gl_FragColor = vec4(finalColor, opacity);
+            float core = smoothstep(0.4, 0.1, dist);
+            float glow = smoothstep(0.5, 0.2, dist);
+            
+            vec3 color = vColor * (2.0 + sparks * 3.0);
+            color = mix(color, vec3(1.0), core * 0.9); // White hot center
+            
+            float alpha = (glow + sparks) * smoothstep(0.0, 0.1, vUv.x);
+            
+            gl_FragColor = vec4(color * 2.5, alpha);
             if (gl_FragColor.a < 0.1) discard;
         }
     `
@@ -68,9 +78,9 @@ export function MMSpellEffect({ spellsRef, unitRegistry, simTimeRef, bulletSpeed
   const meshRef = useRef<THREE.InstancedMesh>(null!);
   const _color = useMemo(() => new THREE.Color(), []);
 
-  // Long thin capsule for bullets (streaks)
+  // Long thin capsule for bullets (streaks) - Enlarged for visibility
   const bulletGeo = useMemo(() => {
-    const geo = new THREE.CapsuleGeometry(0.02, 0.4, 2, 8);
+    const geo = new THREE.CapsuleGeometry(0.12, 0.6, 4, 8);
     geo.rotateX(Math.PI / 2);
     return geo;
   }, []);
@@ -128,25 +138,31 @@ export function MMSpellEffect({ spellsRef, unitRegistry, simTimeRef, bulletSpeed
             _dir.copy(_to).sub(_from).normalize();
         }
 
-        _tempObj.position.copy(_pos);
-        if (s.progress < 1.0 || _dir.lengthSq() > 0) {
-            _tempObj.lookAt(s.toX, s.toY, s.toZ);
-        }
+        // LAYERED TRACERS: 2 instances per bullet (Core and Glow Trail)
+        for (let j = 0; j < 2; j++) {
+            if (instanceIdx >= MAX_BULLETS) break;
+            
+            _tempObj.position.copy(_pos);
+            if (s.progress < 1.0 || _dir.lengthSq() > 0) {
+                _tempObj.lookAt(s.toX, s.toY, s.toZ);
+            }
 
-        // Bullets are small and thin
-        _tempObj.scale.set(1, 1, 1.5); // Stretch along Z for streak effect
-        _tempObj.updateMatrix();
-        
-        mesh.setMatrixAt(instanceIdx, _tempObj.matrix);
-        _color.set(s.color || '#ffffff');
-        mesh.setColorAt(instanceIdx, _color);
-        
-        instanceIdx++;
+            const scale = 1.2 + j * 0.4;
+            const stretch = 2.0 + (1.0 - s.progress) * 1.5; // Streak longer at start
+            
+            _tempObj.scale.set(scale, scale, stretch);
+            _tempObj.updateMatrix();
+            
+            mesh.setMatrixAt(instanceIdx, _tempObj.matrix);
+            _color.set(s.color || '#ffffff').multiplyScalar(j === 0 ? 1.5 : 0.6);
+            mesh.setColorAt(instanceIdx, _color);
+            
+            instanceIdx++;
+        }
 
         if (s.progress >= 0.99) {
             if (spawnVFX) {
                 const pos: [number, number, number] = [s.toX, s.toY, s.toZ];
-                // Splatter effect: team-colored sparks
                 spawnVFX(pos, 'spark', s.color);
                 spawnVFX(pos, 'hit', '#ffffff');
             }

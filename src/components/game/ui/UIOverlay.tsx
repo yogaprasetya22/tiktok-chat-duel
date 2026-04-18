@@ -54,6 +54,7 @@ const MemoizedKillFeed = React.memo(({ killEvents, towerConfig }: { killEvents: 
 const MemoizedLeaderboard = React.memo(({ stats, team, color, name }: { stats: any, team: 'player' | 'enemy', color: string, name: string }) => {
   const isPlayer = team === 'player';
   const kills = isPlayer ? stats.playerKills : stats.enemyKills;
+  const profileImages = stats.profileImages || {};
   
   return (
     <div className={`absolute top-24 md:top-28 ${isPlayer ? 'left-2 md:left-6' : 'right-2 md:right-6'} w-36 md:w-56 pointer-events-auto z-[1100] select-none touch-none`}>
@@ -84,35 +85,49 @@ const MemoizedLeaderboard = React.memo(({ stats, team, color, name }: { stats: a
             <div key={username} className={`flex items-center justify-between group animate-in ${isPlayer ? 'slide-in-from-left-4' : 'slide-in-from-right-4'} fade-in`} style={{ animationDelay: `${i * 100}ms` }}>
               {isPlayer ? (
                 <>
-                  <div className="flex items-center gap-1.5 md:gap-3">
-                    <div className={`w-5 h-5 md:w-7 md:h-7 rounded-md md:rounded-lg flex items-center justify-center font-black italic text-[9px] md:text-xs text-white/40 border border-white/5 ${
-                      i === 0 ? 'animate-pulse shadow-lg' : 'bg-white/5'
-                    }`}
-                    style={{ backgroundColor: i === 0 ? `${color}44` : undefined, borderColor: i === 0 ? color : undefined, color: i === 0 ? '#fff' : undefined }}>
-                      {i + 1}
+                  <div className="flex items-center gap-1.5 md:gap-3 min-w-0 flex-1">
+                    <div className="relative flex-shrink-0">
+                      <div className={`w-5 h-5 md:w-7 md:h-7 rounded-md md:rounded-lg flex items-center justify-center font-black italic text-[9px] md:text-xs text-white/40 border border-white/5 ${
+                        i === 0 ? 'animate-pulse shadow-lg' : 'bg-white/5'
+                      }`}
+                      style={{ backgroundColor: i === 0 ? `${color}44` : undefined, borderColor: i === 0 ? color : undefined, color: i === 0 ? '#fff' : undefined }}>
+                        {i + 1}
+                      </div>
+                      {profileImages[username] && (
+                        <div className="absolute -top-1 -right-1 w-3 h-3 md:w-4 md:h-4 rounded-full border-2 border-black overflow-hidden bg-zinc-800">
+                          <img src={profileImages[username]} alt="" className="w-full h-full object-cover" />
+                        </div>
+                      )}
                     </div>
                     <div className="flex flex-col min-w-0">
-                        <span className="text-[10px] md:text-xs font-black text-white/70 group-hover:text-white truncate max-w-[60px] md:max-w-[100px] tracking-tight transition-colors">{username}</span>
+                        <span className="text-[10px] md:text-xs font-black text-white/70 group-hover:text-white truncate tracking-tight transition-colors uppercase">{username}</span>
                     </div>
                   </div>
-                  <div className="flex items-baseline gap-0.5">
+                  <div className="flex items-baseline gap-0.5 pl-2">
                       <span className="text-[10px] md:text-xs font-black italic tracking-tighter" style={{ color: i === 0 ? color : '#ffffffaa' }}>{(value as number)}</span>
                   </div>
                 </>
               ) : (
                 <>
-                  <div className="flex items-baseline gap-0.5">
+                  <div className="flex items-baseline gap-0.5 pr-2">
                       <span className="text-[10px] md:text-xs font-black italic tracking-tighter" style={{ color: i === 0 ? color : '#ffffffaa' }}>{(value as number)}</span>
                   </div>
                   <div className="flex items-center gap-1.5 md:gap-3 flex-1 justify-end min-w-0">
                       <div className="flex flex-col items-end min-w-0">
-                        <span className="text-[10px] md:text-xs font-black text-white/70 group-hover:text-white truncate max-w-[60px] md:max-w-[100px] text-right tracking-tight transition-colors">{username}</span>
+                        <span className="text-[10px] md:text-xs font-black text-white/70 group-hover:text-white truncate text-right tracking-tight transition-colors uppercase">{username}</span>
                       </div>
-                    <div className={`w-5 h-5 md:w-7 md:h-7 rounded-md md:rounded-lg flex items-center justify-center font-black italic text-[9px] md:text-xs text-white/40 border border-white/5 flex-shrink-0 ${
-                      i === 0 ? 'animate-pulse shadow-lg' : 'bg-white/5'
-                    }`}
-                    style={{ backgroundColor: i === 0 ? `${color}44` : undefined, borderColor: i === 0 ? color : undefined, color: i === 0 ? '#fff' : undefined }}>
-                      {i + 1}
+                    <div className="relative flex-shrink-0">
+                      <div className={`w-5 h-5 md:w-7 md:h-7 rounded-md md:rounded-lg flex items-center justify-center font-black italic text-[9px] md:text-xs text-white/40 border border-white/5 ${
+                        i === 0 ? 'animate-pulse shadow-lg' : 'bg-white/5'
+                      }`}
+                      style={{ backgroundColor: i === 0 ? `${color}44` : undefined, borderColor: i === 0 ? color : undefined, color: i === 0 ? '#fff' : undefined }}>
+                        {i + 1}
+                      </div>
+                      {profileImages[username] && (
+                        <div className="absolute -top-1 -left-1 w-3 h-3 md:w-4 md:h-4 rounded-full border-2 border-black overflow-hidden bg-zinc-800">
+                          <img src={profileImages[username]} alt="" className="w-full h-full object-cover" />
+                        </div>
+                      )}
                     </div>
                   </div>
                 </>
@@ -422,9 +437,9 @@ export const UIOverlay = ({
                       <input 
                         type="number" 
                         value={towerConfig.maxUnits}
-                        onChange={(e) => setTowerConfig(prev => ({ ...prev, maxUnits: parseInt(e.target.value) || 25 }))}
+                        onChange={(e) => setTowerConfig(prev => ({ ...prev, maxUnits: parseInt(e.target.value) || 20 }))}
                         className="w-full bg-zinc-950 border-2 border-white/5 rounded-2xl px-5 py-4 text-sm font-bold focus:outline-none focus:border-indigo-500/30"
-                        placeholder="Default: 25"
+                        placeholder="Default: 20"
                       />
                     </div>
                   </div>

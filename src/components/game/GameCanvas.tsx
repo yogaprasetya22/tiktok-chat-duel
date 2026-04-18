@@ -254,7 +254,7 @@ export const GameCanvas = React.memo(({
     }
   }, { collapsed: true });
 
-  const [{ perfPosition, minimal, deepAnalyze, showPerf }, setDiag] = useControls("Diagnostics", () => ({
+  const [{ perfPosition, minimal, deepAnalyze, showPerf, gpuProfileMode }, setDiag] = useControls("Diagnostics", () => ({
     engineTime: { value: 0, label: "Engine Tick (ms)", editable: false },
     units: { value: 0, label: "Active Units", editable: false },
     vfx: { value: 0, label: "Active Particles", editable: false },
@@ -262,6 +262,7 @@ export const GameCanvas = React.memo(({
     suspect: { value: "OPTIMAL", label: "Lag Suspect", editable: false },
     "Performance Tool": folder({
       showPerf: { value: true, label: "Show R3F-Perf" },
+      gpuProfileMode: { value: false, label: "GPU Profiling Mode" },
       perfPosition: {
         value: "top-right",
         options: ["top-right", "top-left", "bottom-right", "bottom-left"],
@@ -271,6 +272,8 @@ export const GameCanvas = React.memo(({
       deepAnalyze: { value: false, label: "Deep Memory Profile" }
     })
   }), { collapsed: true });
+
+  const effectiveDpr = gpuProfileMode ? Math.max(dpr, 1.6) : dpr;
 
   // Fix: Move useFrame inside a child component that sits inside <Canvas>
   const DiagnosticsBridge = () => {
@@ -325,11 +328,11 @@ export const GameCanvas = React.memo(({
       </div>
 
       <div className="absolute top-4 left-4 z-10 bg-black/50 p-2 rounded text-[10px] text-white backdrop-blur-md border border-white/10 pointer-events-none">
-        DPR: {dpr.toFixed(2)}
+        DPR: {effectiveDpr.toFixed(2)}{gpuProfileMode ? ' • GPU-PROFILE' : ''}
       </div>
       <Canvas
         shadows={{ type: THREE.PCFShadowMap }}
-        dpr={dpr}
+        dpr={effectiveDpr}
         gl={{
           antialias: true,
           powerPreference: "high-performance",
@@ -341,9 +344,11 @@ export const GameCanvas = React.memo(({
       >
         <SceneAnalyzer />
         <StatsGl className="!absolute !top-24 !left-2 !right-auto !bottom-auto !z-[2000]" />
-        <PerformanceMonitor onIncline={() => setDpr(Math.min(dpr + 0.1, 1.0))} onDecline={() => setDpr(Math.max(dpr - 0.1, 0.7))} />
+        {!gpuProfileMode && (
+          <PerformanceMonitor onIncline={() => setDpr(Math.min(dpr + 0.1, 1.0))} onDecline={() => setDpr(Math.max(dpr - 0.1, 0.7))} />
+        )}
         <AdaptiveEvents />
-        <AdaptiveDpr pixelated={true} />
+        {!gpuProfileMode && <AdaptiveDpr pixelated={true} />}
 
         {showPerf && (
           <Perf
@@ -368,21 +373,21 @@ export const GameCanvas = React.memo(({
 
 
 
-        {environment === 'DIORAMA' ? (
-          <WhimsicalDiorama
-            baseDistance={towerConfig.baseDistance || 24}
-          />
-        ) : (
-          <StormEnvironment
-            baseDistance={towerConfig.baseDistance || 24}
-            potatoMode={settingsRef.current.potatoMode}
-          />
-        )}
-
-
-        <DiagnosticsBridge />
-
         <VFXProvider>
+          {environment === 'DIORAMA' ? (
+            <WhimsicalDiorama
+              baseDistance={towerConfig.baseDistance || 24}
+            />
+          ) : (
+            <StormEnvironment
+              baseDistance={towerConfig.baseDistance || 24}
+              potatoMode={settingsRef.current.potatoMode}
+            />
+          )}
+
+
+          <DiagnosticsBridge />
+
           <CameraDirector />
           <DamageHUDBatcher damageQueue={damageQueue} />
 
@@ -436,12 +441,12 @@ export const GameCanvas = React.memo(({
 
         {/* Post Processing: Disabled during SETUP for CPU/GPU savings */}
         {gameState !== 'SETUP' && !settingsRef.current.potatoMode && (
-          <EffectComposer enableNormalPass={false} multisampling={0}>
+          <EffectComposer enableNormalPass={false} multisampling={gpuProfileMode ? 4 : 0}>
             <Bloom
-              luminanceThreshold={1.0}
+              luminanceThreshold={gpuProfileMode ? 0.7 : 1.0}
               mipmapBlur
-              intensity={0.5}
-              radius={0.4}
+              intensity={gpuProfileMode ? 1.1 : 0.5}
+              radius={gpuProfileMode ? 0.7 : 0.4}
             />
             <ToneMapping adaptive={false} />
           </EffectComposer>

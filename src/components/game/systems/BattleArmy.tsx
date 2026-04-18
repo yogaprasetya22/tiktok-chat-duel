@@ -18,6 +18,7 @@ import { MMSpellEffect } from './effects/MMSpellEffect';
 import { FighterSpellEffect } from './effects/FighterSpellEffect';
 import { TankSpellEffect } from './effects/TankSpellEffect';
 import { AssassinSpellEffect } from './effects/AssassinSpellEffect';
+// 
 
 interface BattleArmyProps {
   unitRegistry: React.RefObject<UnitRuntimeData[]>;
@@ -37,8 +38,8 @@ interface BattleArmyProps {
 
 
 
-const MAX_UNITS = 1200; // Matched with simulation pool
-const NAME_POOL_SIZE = 500; // Safe high-performance limit
+import { WORLD_UNIT_POOL_SIZE as MAX_UNITS } from '@/src/core/domain/unit.types';
+const NAME_POOL_SIZE = 60; // Further reduction to 60 for extreme performance
 
 const tempObject = new THREE.Object3D();
 
@@ -126,20 +127,23 @@ const BattleArmyComponent = ({
     }
 
     tempObject.position.set(0, -1000, 0);
-    tempObject.scale.set(0, 0, 0);
+    tempObject.scale.set(0.001, 0.001, 0.001); 
     tempObject.updateMatrix();
     if (shadowRef.current) {
-      for (let i = 0; i < MAX_UNITS; i++) {
+      for (let i = 0; i < 1500; i++) {
         shadowRef.current.setMatrixAt(i, tempObject.matrix);
         healthBgRef.current?.setMatrixAt(i, tempObject.matrix);
         healthFillRef.current?.setMatrixAt(i, tempObject.matrix);
         notchRef.current?.setMatrixAt(i, tempObject.matrix);
       }
       shadowRef.current.instanceMatrix.needsUpdate = true;
+      if (healthBgRef.current) healthBgRef.current.instanceMatrix.needsUpdate = true;
+      if (healthFillRef.current) healthFillRef.current.instanceMatrix.needsUpdate = true;
+      if (notchRef.current) notchRef.current.instanceMatrix.needsUpdate = true;
     }
   }, []);
 
-  const healthGeo = useMemo(() => new THREE.PlaneGeometry(0.8, 0.12), []);
+  const healthGeo = useMemo(() => new THREE.PlaneGeometry(1.2, 0.18), []);
   const shadowGeo = useMemo(() => new THREE.CircleGeometry(0.6, 12), []);
   const healthBgMat = useMemo(() => new THREE.MeshBasicMaterial({ color: '#000000', transparent: true, opacity: 0.85, depthWrite: false }), []);
   const healthFillMat = useMemo(() => new THREE.MeshBasicMaterial({ vertexColors: false, depthWrite: false }), []);
@@ -158,37 +162,15 @@ const BattleArmyComponent = ({
   const lastNameCullTime = useRef(0);
   const cachedActiveUnits = useRef<any[]>([]);
   const frameCountRef = useRef(0);
-
-  const simAccumulator = useRef(0);
-  const SIM_STEP = 1 / 30; // 30Hz Logic
   useFrame((state, delta) => {
-    // 1. HARD CLAMPING (ANTI-FAST-FORWARD & AUTO SLOW-MO)
-    // Rule: If frame time > 100ms, we force the physics to process only 33ms or 66ms.
-    // This makes the game run in "Bullet Time" (slow-motion) during lag spikes
-    // instead of exploding with speed bursts once the lag ends.
-    let simulationDelta = delta;
-    if (delta > 0.1) simulationDelta = SIM_STEP; // Force Slow-Mo if lagging > 10fps
-
-    const clampedDelta = Math.min(SIM_STEP * 2, simulationDelta);
-    simAccumulator.current += clampedDelta;
-
-    let steps = 0;
-    while (simAccumulator.current >= SIM_STEP && steps < 2) {
-      updateSimulation(SIM_STEP);
-      simAccumulator.current -= SIM_STEP;
-      steps++;
-    }
-
-    // Safety: discard any extra accumulated time to prevent "Future Catch-up"
-    if (simAccumulator.current > SIM_STEP) simAccumulator.current = 0;
-
-    // DIAGNOSTIC LOCK: Prove to user the clock is stable
-    if (frameCountRef.current % 180 === 0) {
-      console.log(`[Jam Internal] Locked: ${SIM_STEP.toFixed(4)}s | Buffer: ${simAccumulator.current.toFixed(4)}s`);
-    }
+    // Optimized Simulation Step: Pass raw delta to system which handles sub-stepping internally
+    updateSimulation(delta);
 
     const rawMap = unitRegistry.current;
     if (!rawMap) return;
+
+    // battleGrid is already updated by useBattleSystem simulation loop. 
+    // Removing duplicate call here to save CPU cycles.
 
     const time = state.clock.elapsedTime;
     const camPos = state.camera.position;
@@ -214,12 +196,12 @@ const BattleArmyComponent = ({
     }
 
     const activeUnits = cachedActiveUnits.current;
-    // Ultimate Visibility: Names stay visible even when zoomed out far (200m)
-    const HUD_DETAIL_DIST_SQ = 200 * 200;
+    // Ultimate Visibility: Names stay visible even when zoomed out moderately (45m)
+    const HUD_DETAIL_DIST_SQ = 45 * 45; 
     const isPotato = !!settingsRef.current.potatoMode;
     if (isPotato) {
       if (frameCountRef.current % 15 === 0) {
-        for (let i = 0; i < MAX_UNITS; i++) {
+        for (let i = 0; i < 1500; i++) {
           shadowRef.current?.setMatrixAt(i, _hideMatrix);
           healthBgRef.current?.setMatrixAt(i, _hideMatrix);
           healthFillRef.current?.setMatrixAt(i, _hideMatrix);
@@ -233,8 +215,9 @@ const BattleArmyComponent = ({
     }
 
     // 2. Name Labels Lifecycle (Positioning is now delegated to Armies)
-    if (time - lastNameCullTime.current > 0.1) {
-      lastNameCullTime.current = time;
+      // Throttled: 15fps for name lifecycle
+      if (frameCountRef.current % 4 === 0) {
+        lastNameCullTime.current = time;
 
       // Cleanup names for units that are dead, too far, or if in potato mode
       for (const [uid, slot] of namePoolMap.current.entries()) {
@@ -271,8 +254,10 @@ const BattleArmyComponent = ({
             const col = getLevelColor(u.level || 1);
             if (nameSlotColor.current[slot] !== col) { mesh.color = col; nameSlotColor.current[slot] = col; }
 
-            mesh.fontSize = u.isBoss ? 0.95 : 0.45;
-            mesh.outlineWidth = 0.08;
+            // LARGER NAMES for maximum visibility
+            mesh.fontSize = u.isBoss ? 1.4 : 0.75; 
+            mesh.outlineWidth = 0.12;
+            mesh.outlineColor = "#000000";
             mesh.visible = true;
           }
         }
@@ -322,14 +307,14 @@ const BattleArmyComponent = ({
       <TankSpellEffect tankSpellsRef={tankSpellsRef} simTimeRef={simTimeRef} />
       <AssassinSpellEffect assassinSpellsRef={assassinSpellsRef} simTimeRef={simTimeRef} />
 
-      {/* Centralized HUD Layer */}
-      <instancedMesh ref={shadowRef} args={[null as any, null as any, MAX_UNITS]} geometry={shadowGeo} material={shadowMat} />
-      <instancedMesh ref={healthBgRef} args={[null as any, null as any, MAX_UNITS]} geometry={healthGeo} material={healthBgMat} renderOrder={4} />
-      <instancedMesh ref={healthFillRef} args={[null as any, null as any, MAX_UNITS]} geometry={healthGeo} material={healthFillMat} renderOrder={5} />
-      <instancedMesh ref={notchRef} args={[null as any, null as any, MAX_UNITS]} geometry={healthGeo} material={notchMat} renderOrder={6} />
+      {/* Centralized HUD Layer (Extended pool to support class offsets) */}
+      <instancedMesh ref={shadowRef} args={[null as any, null as any, 1500]} geometry={shadowGeo} material={shadowMat} />
+      <instancedMesh ref={healthBgRef} args={[null as any, null as any, 1500]} geometry={healthGeo} material={healthBgMat} renderOrder={4} />
+      <instancedMesh ref={healthFillRef} args={[null as any, null as any, 1500]} geometry={healthGeo} material={healthFillMat} renderOrder={5} />
+      <instancedMesh ref={notchRef} args={[null as any, null as any, 1500]} geometry={healthGeo} material={notchMat} renderOrder={6} />
 
       <group ref={nameGroupRef}>
-        {Array.from({ length: NAME_POOL_SIZE }, (_, i) => (
+        {useMemo(() => Array.from({ length: NAME_POOL_SIZE }, (_, i) => (
           <Text
             key={"name-" + i}
             ref={(el) => { nameTextRefs.current[i] = el; }}
@@ -345,7 +330,7 @@ const BattleArmyComponent = ({
           >
             {''}
           </Text>
-        ))}
+        )), [])}
       </group>
     </group>
   );

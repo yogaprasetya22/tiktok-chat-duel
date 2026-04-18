@@ -221,8 +221,8 @@ export function InstancedImpostorRenderer({
     }
 
     // Hide remaining instances from previous frame to avoid "Ghosting"
-    const MAX_CLEANUP = 150; // Performance safe cleanup window
-    for (let i = idx; i < Math.min(idx + MAX_CLEANUP, LOD_IMPOSTOR_MAX); i++) {
+    // IMPROVEMENT: Hide ALL remaining slots in one frame to ensure no "leaking" units
+    for (let i = idx; i < LOD_IMPOSTOR_MAX; i++) {
       mesh.setMatrixAt(i, _hidePos);
     }
     lastCountRef.current = idx;
@@ -231,8 +231,8 @@ export function InstancedImpostorRenderer({
     mesh.instanceMatrix.needsUpdate = true;
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
 
-    // Update instance count for frustum culling optimization
-    mesh.count = idx;
+    // Update instance count for frustrate culling optimization
+    mesh.count = LOD_IMPOSTOR_MAX; // Always set to max but hide via matrix
     
     // Clear for next frame so armies can repopulate
     renderedIdsRef.current.clear();

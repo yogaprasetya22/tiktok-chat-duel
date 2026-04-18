@@ -43,6 +43,17 @@ export const getUnitStats = (
 export const pickRandom = <T>(arr: T[]): T =>
     arr[Math.floor(Math.random() * arr.length)];
 
+/** Returns a random element from an array based on weights */
+export const pickWeightedRandom = <T>(items: T[], weights: number[]): T => {
+    const totalWeight = weights.reduce((acc, w) => acc + w, 0);
+    let random = Math.random() * totalWeight;
+    for (let i = 0; i < items.length; i++) {
+        if (random < weights[i]) return items[i];
+        random -= weights[i];
+    }
+    return items[items.length - 1];
+};
+
 
 
 

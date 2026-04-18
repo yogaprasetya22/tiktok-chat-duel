@@ -4,6 +4,7 @@
 // All interfaces and types for the battle simulation system.
 // This module has NO side effects and NO React dependencies.
 // ============================================================
+export const WORLD_UNIT_POOL_SIZE = 250;
 
 export interface UnitStats {
     hp: number;
@@ -100,6 +101,7 @@ export interface ActiveUnit extends UnitStats {
     pendingCrit?: boolean;
     isCriticalReady?: boolean;
     untargetableUntil?: number;
+    profileImage?: string;
 }
 
 export interface MapObstacle {
@@ -114,6 +116,7 @@ export interface KillEvent {
     victim: string;
     victimType: "unit" | "boss" | "base";
     timestamp: number;
+    profileImage?: string;
 }
 
 export interface BattleStats {
@@ -125,6 +128,7 @@ export interface BattleStats {
     unitsSpawned: Record<string, number>;
     playerHits: Record<string, number>;
     enemyHits: Record<string, number>;
+    profileImages: Record<string, string>;
     
     // Detailed Analytics
     classStats: Record<string, {
@@ -180,6 +184,7 @@ export interface UnitRuntimeData {
     dSq?: number;
     pendingCrit?: boolean;
     lastEffectTime?: number;
+    profileImage?: string;
 }
 
 

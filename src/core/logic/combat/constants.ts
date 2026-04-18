@@ -20,11 +20,11 @@ export let CLASS_CONFIG: ClassConfig = {
         magic_pen: 0,
         lifesteal: 0.25,
         spell_vamp: 0.1,
-        move_speed_mult: 1.05,
+        move_speed_mult: 1.15, // Buffed from 1.05
         attack_speed_mult: 1.1,
         crit_chance: 0.15,
         crit_damage: 2.0,
-        range: 3.2,
+        range: 3.5, // Buffed from 3.2
         tenacity: 0.2,
         cooldown_reduction: 0.1,
         ai_behavior: {
@@ -45,7 +45,7 @@ export let CLASS_CONFIG: ClassConfig = {
         magic_pen: 0,
         lifesteal: 0.0,
         spell_vamp: 0.0,
-        move_speed_mult: 0.95,
+        move_speed_mult: 1.05, // Buffed from 0.95
         attack_speed_mult: 0.8,
         crit_chance: 0.05,
         crit_damage: 1.5,
@@ -61,20 +61,20 @@ export let CLASS_CONFIG: ClassConfig = {
         },
     },
     mage: {
-        hp: 3.5,
+        hp: 3.2, // Nerfed from 3.5
         hp_regen: 0.08,
         atk: 3.5,
-        physical_defense: 25,
-        magic_defense: 35,
+        physical_defense: 12, // Nerfed from 25
+        magic_defense: 25, // Nerfed from 35
         physical_pen: 0,
         magic_pen: 35,
         lifesteal: 0.0,
         spell_vamp: 0.25,
-        move_speed_mult: 1.0,
+        move_speed_mult: 0.95, // Nerfed from 1.0
         attack_speed_mult: 0.11,
         crit_chance: 0.05,
         crit_damage: 1.5,
-        range: 15.0,
+        range: 9.5, // Nerfed from 15.0
         tenacity: 0.0,
         cooldown_reduction: 0.1,
         ai_behavior: {
@@ -86,20 +86,20 @@ export let CLASS_CONFIG: ClassConfig = {
         },
     },
     marksman: {
-        hp: 2.8,
+        hp: 2.5, // Nerfed from 2.8
         hp_regen: 0.05,
         atk: 2.2,
-        physical_defense: 20,
-        magic_defense: 20,
+        physical_defense: 10, // Nerfed from 20
+        magic_defense: 10, // Nerfed from 20
         physical_pen: 20,
         magic_pen: 0,
         lifesteal: 0.2,
         spell_vamp: 0.0,
-        move_speed_mult: 1.05,
+        move_speed_mult: 1.0, // Nerfed from 1.05
         attack_speed_mult: 1.6,
         crit_chance: 0.35,
         crit_damage: 2.5,
-        range: 8.5,
+        range: 7.2, // Nerfed from 8.5
         tenacity: 0.0,
         cooldown_reduction: 0.1,
         ai_behavior: {
@@ -113,18 +113,18 @@ export let CLASS_CONFIG: ClassConfig = {
     assassin: {
         hp: 3.8,
         hp_regen: 0.12,
-        atk: 4.2,
+        atk: 4.5, // Buffed from 4.2
         physical_defense: 30,
         magic_defense: 30,
         physical_pen: 35,
         magic_pen: 0,
         lifesteal: 2.15,
         spell_vamp: 1.2,
-        move_speed_mult: 1.25,
+        move_speed_mult: 1.3, // Buffed from 1.25
         attack_speed_mult: 1.25,
         crit_chance: 0.3,
         crit_damage: 2.5,
-        range: 2.0,
+        range: 2.2, // Buffed from 2.0
         tenacity: 0.1,
         cooldown_reduction: 0.2,
         ai_behavior: {
@@ -179,7 +179,7 @@ export let INITIAL_SETTINGS: SimulationSettings = {
     timeScale: 1.0,
     unitScale: 0.5,
     vfxIntensity: 1.0,
-    maxUnits: 200,
+    maxUnits: 20,
 
     // Performance & Diagnostics
     potatoMode: false,
@@ -204,8 +204,8 @@ export const LOD_IMPOSTOR_SCALE = 1.8;
 export const LOD_IMPOSTOR_BOSS_SCALE = 5.0; 
 
 // --- CENTRALIZED PERFORMANCE CONFIG ---
-export const ARMY_POOL_SIZE = 25; // Number of high-detail 3D models per class
-export const ANIM_CULL_DIST_SQ = 70 * 70; // Distance where bone animations stop (50m)
+export const ARMY_POOL_SIZE = 20; // Number of high-detail 3D models per class (Reduced from 25)
+export const ANIM_CULL_DIST_SQ = 60 * 60; // Distance where bone animations stop (60m)
 
 // --- WEATHER SYSTEM CONFIG ---
 export const WEATHER_CONFIG = {

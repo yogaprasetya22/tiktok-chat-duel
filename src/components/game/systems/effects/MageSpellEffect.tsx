@@ -49,17 +49,16 @@ const LightningShader = {
             vUv = uv;
             vColor = instanceColor;
             
-            // Zigzag logic: displace vertices based on Y (long axis)
-            float displacement = sin(position.y * 12.0 + time * 50.0) * 0.25;
-            displacement += sin(position.y * 28.0 - time * 40.0) * 0.15;
-            displacement += sin(position.y * 45.0 + time * 70.0) * 0.08;
+            // Jittered Lightning Arc logic
+            float displacement = sin(position.y * 15.0 + time * 60.0) * 0.35;
+            displacement += sin(position.y * 35.0 - time * 45.0) * 0.15;
+            displacement += fract(sin(position.y * 123.4 + time) * 43758.5) * 0.1; // Chaotic jitter
             
-            // Only displace if not at the ends (staff/target)
             float endMask = smoothstep(0.0, 0.1, vUv.y) * smoothstep(1.0, 0.9, vUv.y);
             
             vec3 pos = position;
             pos.x += displacement * endMask;
-            pos.z += displacement * endMask * 0.5;
+            pos.z += displacement * endMask;
 
             vec4 worldPosition = instanceMatrix * vec4(pos, 1.0);
             gl_Position = projectionMatrix * modelViewMatrix * worldPosition;
@@ -74,16 +73,20 @@ const LightningShader = {
         uniform float time;
 
         void main() {
-            // Bright core, outer glow
-            float dist = abs(vUv.x - 0.5) * 2.0;
+            vec2 uv = vUv - 0.5;
+            float dist = abs(uv.x) * 2.5;
+            
+            // Multiple threads look
+            float threads = step(0.9, sin(vUv.y * 50.0 + time * 20.0));
+            
             float core = smoothstep(0.15, 0.0, dist);
-            float glow = smoothstep(0.6, 0.0, dist);
+            float glow = smoothstep(0.7, 0.0, dist);
             
-            vec3 cyan = vec3(0.0, 1.0, 1.0);
-            vec3 finalColor = mix(cyan * 0.5, vec3(1.0), core);
-            finalColor += cyan * glow * vGlow;
+            vec3 baseColor = vColor;
+            vec3 finalColor = mix(baseColor * 0.4, vec3(1.0), core + threads * 0.3);
+            finalColor += baseColor * glow * vGlow;
             
-            gl_FragColor = vec4(finalColor * 2.5, glow);
+            gl_FragColor = vec4(finalColor * 3.5, glow);
             if (gl_FragColor.a < 0.1) discard;
         }
     `
@@ -114,20 +117,22 @@ const ExplosionShader = {
             vec2 uv = vUv - 0.5;
             float dist = length(uv);
             
-            // Plasma crackle pattern
+            // Arcane plasma pattern
             float angle = atan(uv.y, uv.x);
-            float crackle = sin(angle * 10.0 + time * 20.0) * 0.1;
-            crackle += sin(angle * 5.0 - time * 35.0) * 0.15;
+            float crackle = sin(angle * 8.0 + time * 15.0) * 0.15;
             
             float ring = smoothstep(0.48 + crackle, 0.4, dist);
-            float hole = smoothstep(0.35 + crackle, 0.45, dist);
+            float hole = smoothstep(0.3 + crackle, 0.45, dist);
             float core = smoothstep(0.15, 0.0, dist);
             
-            vec3 cyan = vec3(0.0, 1.0, 1.0);
-            vec3 color = mix(cyan * 0.5, vec3(1.0), core);
-            color += cyan * ring * hole * 3.0;
+            // Magical shards / sparkles
+            float shards = step(0.99, fract(sin(dot(uv, vec2(12.9, 78.2))) * 43758.5));
             
-            float alpha = (ring * hole + core) * (1.0 - dist * 2.0);
+            vec3 baseColor = vColor;
+            vec3 color = mix(baseColor * 0.5, vec3(1.0), core + shards);
+            color += baseColor * ring * hole * 4.0;
+            
+            float alpha = (ring * hole + core + shards) * (1.0 - dist * 2.2);
             gl_FragColor = vec4(color * 4.0, alpha);
             if (gl_FragColor.a < 0.05) discard;
         }
@@ -156,6 +161,7 @@ interface Props {
 const _tempObj = new THREE.Object3D();
 const _from    = new THREE.Vector3();
 const _to      = new THREE.Vector3();
+const _white   = new THREE.Color('#ffffff');
 
 export function MageSpellEffect({ spellsRef, unitRegistry, simTimeRef }: Props) {
   const { spawnVFX } = useVFX();
@@ -233,8 +239,8 @@ export function MageSpellEffect({ spellsRef, unitRegistry, simTimeRef }: Props) 
         _tempObj.updateMatrix();
         
         pMesh.setMatrixAt(pIdx, _tempObj.matrix);
-        // Cyan with fade-out
-        _color.set('#00ffff').multiplyScalar(fadeOut);
+        // Team-colored with fade-out
+        _color.set(s.color || '#00ffff').multiplyScalar(fadeOut);
         pMesh.setColorAt(pIdx, _color);
         pIdx++;
 
@@ -243,19 +249,21 @@ export function MageSpellEffect({ spellsRef, unitRegistry, simTimeRef }: Props) 
             const exp = explosionsRef.current.find(e => !e.active);
             if (exp) {
                 exp.x = s.toX; exp.y = s.toY; exp.z = s.toZ;
-                exp.startTime = simNow; exp.color = '#00ffff'; exp.active = true;
+                exp.startTime = simNow; exp.color = s.color || '#00ffff'; exp.active = true;
             }
             if (spawnVFX) {
                 // Sharp impact
-                spawnVFX([s.toX, s.toY, s.toZ], 'spark', '#00ffff');
+                spawnVFX([s.toX, s.toY, s.toZ], 'spark', s.color || '#00ffff');
                 spawnVFX([s.toX, s.toY, s.toZ], 'muzzle', '#ffffff');
             }
             s.active = false;
         }
     }
-    pMesh.count = pIdx;
-    pMesh.instanceMatrix.needsUpdate = true;
-    if (pMesh.instanceColor) pMesh.instanceColor.needsUpdate = true;
+        if (pMesh.count !== pIdx) pMesh.count = pIdx;
+        if (pIdx > 0) {
+            pMesh.instanceMatrix.needsUpdate = true;
+            if (pMesh.instanceColor) pMesh.instanceColor.needsUpdate = true;
+        }
 
     // Handle Explosions Visual (Shrunken Expanding Sphere)
     let eIdx = 0;
@@ -273,13 +281,15 @@ export function MageSpellEffect({ spellsRef, unitRegistry, simTimeRef }: Props) 
         _tempObj.scale.setScalar(scale);
         _tempObj.updateMatrix();
         eMesh.setMatrixAt(eIdx, _tempObj.matrix);
-        _color.set(e.color).lerp(new THREE.Color('#ffffff'), 1.0 - eAlpha);
+                _color.set(e.color).lerp(_white, 1.0 - eAlpha);
         eMesh.setColorAt(eIdx, _color);
         eIdx++;
     }
-    eMesh.count = eIdx;
-    eMesh.instanceMatrix.needsUpdate = true;
-    if (eMesh.instanceColor) eMesh.instanceColor.needsUpdate = true;
+        if (eMesh.count !== eIdx) eMesh.count = eIdx;
+        if (eIdx > 0) {
+            eMesh.instanceMatrix.needsUpdate = true;
+            if (eMesh.instanceColor) eMesh.instanceColor.needsUpdate = true;
+        }
   });
 
   return (

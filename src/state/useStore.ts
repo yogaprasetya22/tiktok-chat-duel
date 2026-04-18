@@ -21,6 +21,7 @@ interface BattleState {
     enemyDamage: Record<string, number>;
     playerKills: Record<string, number>;
     enemyKills: Record<string, number>;
+    profileImages: Record<string, string>;
   };
   killEvents: KillEvent[];
   setLiveStats: (stats: { 
@@ -29,6 +30,7 @@ interface BattleState {
     enemyDamage: Record<string, number>;
     playerKills: Record<string, number>;
     enemyKills: Record<string, number>;
+    profileImages: Record<string, string>;
   }) => void;
   addKillEvent: (event: KillEvent) => void;
   
@@ -72,7 +74,8 @@ export const useStore = create<BattleState>((set) => ({
     playerDamage: {},
     enemyDamage: {},
     playerKills: {},
-    enemyKills: {}
+    enemyKills: {},
+    profileImages: {}
   },
   killEvents: [],
   setLiveStats: (liveStats) => set({ liveStats }),
@@ -107,7 +110,8 @@ export const useStore = create<BattleState>((set) => ({
       playerDamage: {},
       enemyDamage: {},
       playerKills: {},
-      enemyKills: {}
+      enemyKills: {},
+      profileImages: {}
     },
     killEvents: [],
     armyCounts: { player: 0, enemy: 0 }

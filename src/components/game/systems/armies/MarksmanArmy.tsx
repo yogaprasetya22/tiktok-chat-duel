@@ -12,6 +12,7 @@ import { useStore } from "@/src/state/useStore";
 import { SpellsRegistryRef } from '../effects/MageSpellEffect';
 import { PLAYER_BASE_Z, ENEMY_BASE_Z, ARMY_POOL_SIZE, ANIM_CULL_DIST_SQ } from "@/src/core/logic/combat/constants";
 import { lerpAngle } from "@/src/core/logic/combat/battleUtils";
+import { battleGrid } from "@/src/core/logic/combat/spatialGrid";
 import * as YUKA from 'yuka';
 import { applyPainterlyStyle } from '../effects/PainterlyMaterials';
 
@@ -52,14 +53,45 @@ export function MarksmanArmy({
   const lastVFXRef = useRef<Map<string, number>>(new Map());
   const frameCountRef = useRef(0);
   const { spawnVFX } = useVFX();
+  const lastSortTimeRef = useRef(0);
 
   useEffect(() => {
     availableIndicesRef.current = Array.from({ length: POOL_SIZE }, (_, i) => i);
-  }, []);
+    poolMapRef.current.clear();
+  }, [POOL_SIZE]);
 
   const m1 = useGLTF('/assets-model/Cowboy_Female.glb', true, true, (loader) => {
     loader.setMeshoptDecoder(MeshoptDecoder);
   }) as any;
+
+  // Shared Materials for Teams (Optimized)
+  const teamMats = useMemo(() => {
+    const mats: Record<string, THREE.Material[]> = { player: [], enemy: [] };
+    const assets = [m1];
+
+    assets.forEach((asset, assetIdx) => {
+      if (!asset.scene) return;
+      asset.scene.traverse((child: any) => {
+        if (child.isMesh && child.material) {
+          const name = child.name.toLowerCase();
+          const isColorable = name.includes('cloth') || name.includes('pattern') || name.includes('trim') || name.includes('ribbon') || name.includes('quiver') || name.includes('robe') || name.includes('cloak') || name.includes('cape') || name.includes('primary') || name.includes('team');
+          
+          if (isColorable) {
+            const mP = child.material.clone();
+            const mE = child.material.clone();
+            applyPainterlyStyle(mP);
+            applyPainterlyStyle(mE);
+            mP.color.set(towerConfig.player.color);
+            mE.color.set(towerConfig.enemy.color);
+            child[`_matIdx_${assetIdx}`] = mats.player.length;
+            mats.player.push(mP);
+            mats.enemy.push(mE);
+          }
+        }
+      });
+    });
+    return mats;
+  }, [m1, towerConfig.player.color, towerConfig.enemy.color]);
 
   const characterPool = useMemo(() => {
     const items: any[] = [];
@@ -73,18 +105,17 @@ export function MarksmanArmy({
         m1.animations.forEach((clip: THREE.AnimationClip) => { actions[clip.name] = mixer.clipAction(clip); });
       }
       const colorable: THREE.Mesh[] = [];
+      clone.matrixAutoUpdate = false;
       clone.traverse((child: any) => {
         if (child.isMesh) {
+          child.matrixAutoUpdate = false;
           child.castShadow = false;
           child.receiveShadow = false;
           child.frustumCulled = true;
+          child._assetIdx = 0; // Only one asset for MM
           const name = child.name.toLowerCase();
           const isColorable = name.includes('cloth') || name.includes('pattern') || name.includes('trim') || name.includes('ribbon') || name.includes('quiver') || name.includes('robe') || name.includes('cloak') || name.includes('cape') || name.includes('primary') || name.includes('team');
           if (isColorable) {
-            if (child.material) {
-              child.material = child.material.clone();
-              applyPainterlyStyle(child.material);
-            }
             colorable.push(child);
           }
         }
@@ -95,6 +126,13 @@ export function MarksmanArmy({
     }
     return items;
   }, [m1]);
+
+  useEffect(() => {
+    return () => {
+      // Cleanup shared materials
+      Object.values(teamMats).forEach(teamArr => teamArr.forEach(m => m.dispose()));
+    };
+  }, [teamMats]);
 
   useEffect(() => {
     return () => {
@@ -157,8 +195,11 @@ export function MarksmanArmy({
         let bestTargetId = undefined;
         const STICKY_MULT = 0.75; // 25% advantage for current target
 
-        for (let j = 0; j < rawMap.length; j++) {
-          const potential = rawMap[j];
+        const searchRadius = mode === 'TRAINING' ? 1000 : (Math.sqrt(uData.perceptionRadiusSq || 6400) + 2);
+        const nearby = battleGrid.queryRadius(uData.position[0], uData.position[2], searchRadius);
+
+        for (let j = 0; j < nearby.length; j++) {
+          const potential = nearby[j];
           if (!potential.isActive || potential.hp <= 0 || potential.isDying) continue;
           if (potential.id === id) continue;
           if (potential.type === uData.type) continue;
@@ -167,11 +208,6 @@ export function MarksmanArmy({
           const dx = uData.position[0] - potential.position[0];
           const dz = uData.position[2] - potential.position[2];
           const dSq = dx * dx + dz * dz;
-
-          const perceptionSq = uData.perceptionRadiusSq || 6400;
-          const chaseRangeSq = mode === 'TRAINING' ? 1000000 : 6400;
-
-          if (dSq > perceptionSq || dSq > chaseRangeSq) continue;
 
           // Targeting Score: 1/distSq. If it's the current target, boost score.
           let score = 1.0 / (dSq + 0.1);
@@ -186,7 +222,8 @@ export function MarksmanArmy({
         // --- SCORE TOWER (ONLY if no units found) ---
         if (bestTargetId === undefined) {
           const targetBaseZ = uData.type === 'player' ? ENEMY_BASE_Z : PLAYER_BASE_Z;
-          const distToBaseSq = uData.position[0] * uData.position[0] + Math.pow(uData.position[2] - targetBaseZ, 2);
+          const dz = uData.position[2] - targetBaseZ;
+          const distToBaseSq = uData.position[0] * uData.position[0] + dz * dz;
           bestScore = 6.0 / (distToBaseSq + 0.1);
           bestTargetId = uData.type === 'player' ? 'enemy-base' : 'player-base';
         }
@@ -207,7 +244,8 @@ export function MarksmanArmy({
           uData.status = distSq <= rangeSq ? 'attacking' : 'marching';
         } else if (uData.targetId === 'player-base' || uData.targetId === 'enemy-base') {
           const baseZ = uData.type === 'player' ? ENEMY_BASE_Z : PLAYER_BASE_Z;
-          const distSq = uData.position[0] * uData.position[0] + Math.pow(uData.position[2] - baseZ, 2);
+          const dz = uData.position[2] - baseZ;
+          const distSq = uData.position[0] * uData.position[0] + dz * dz;
 
           // MM range reduction for Tower (0.82)
           const range = (uData.range || 8.5) * 0.82;
@@ -216,7 +254,8 @@ export function MarksmanArmy({
         } else { uData.targetId = undefined; }
       } else {
         const baseZ = uData.type === 'player' ? ENEMY_BASE_Z : PLAYER_BASE_Z;
-        const distToBaseSq = Math.pow(uData.position[2] - baseZ, 2);
+        const dz = uData.position[2] - baseZ;
+        const distToBaseSq = dz * dz;
         uData.status = distToBaseSq < 225 ? 'attacking' : 'marching';
       }
 
@@ -310,11 +349,15 @@ export function MarksmanArmy({
       }
     }
 
-    // --- 2. ACTOR LOOP ---
-    myUnits.sort((a, b) => {
-      if (a.isBoss !== b.isBoss) return -1;
-      return (a.dSq || 0) - (b.dSq || 0);
-    });
+    // --- 1. SPATIAL FILTERING & THROTTLED SORTING ---
+    if (state.clock.elapsedTime - (lastSortTimeRef.current || 0) > 0.16) {
+        myUnits.sort((a, b) => {
+            if (a.isBoss !== b.isBoss) return a.isBoss ? -1 : 1;
+            return (a.dSq || 0) - (b.dSq || 0);
+        });
+        lastSortTimeRef.current = state.clock.elapsedTime;
+    }
+
     const visibleUnits = myUnits.slice(0, POOL_SIZE);
 
     visibleUnits.forEach((uData) => {
@@ -327,9 +370,10 @@ export function MarksmanArmy({
           const pIdx = availableIndicesRef.current.shift()!;
           poolMapRef.current.set(id, pIdx);
           const pItem = characterPool[pIdx];
-          const teamColor = uData.type === 'player' ? towerConfig.player.color : towerConfig.enemy.color;
-          pItem.colorable.forEach((mesh: THREE.Mesh) => {
-            (mesh.material as THREE.MeshStandardMaterial).color.set(teamColor);
+          const teamMaterials = uData.type === 'player' ? teamMats.player : teamMats.enemy;
+          pItem.colorable.forEach((mesh: any) => {
+            const matIdx = mesh[`_matIdx_${mesh._assetIdx}`];
+            if (matIdx !== undefined) mesh.material = teamMaterials[matIdx];
           });
         } else return;
       }
@@ -337,7 +381,7 @@ export function MarksmanArmy({
       const poolIdx = poolMapRef.current.get(id);
       if (poolIdx === undefined) return;
       const pItem = characterPool[poolIdx];
-      if (!pItem) {
+      if (!pItem || !pItem.colorable) {
         poolMapRef.current.delete(id);
         return;
       }
@@ -400,7 +444,7 @@ export function MarksmanArmy({
 
         if (showDetail) {
           const pct = Math.max(0, uData.hp / (uData.maxHp || 100));
-          const by = uData.isBoss ? 7.0 : 3.2;
+          const by = uData.isBoss ? 8.2 : 3.8;
           const bs = uData.isBoss ? 2.5 : 1.0;
 
           // 1. Shadow
@@ -446,7 +490,7 @@ export function MarksmanArmy({
             const nameMesh = nameTextRefs.current[nameSlot];
             if (nameMesh) {
               const hover = Math.sin(state.clock.elapsedTime * 3 + id.length) * 0.1;
-              nameMesh.position.set(cp.x, (uData.isBoss ? 7.2 : 3.4) + (uData.isBoss ? 1.8 : 0.7) + hover, cp.z);
+              nameMesh.position.set(cp.x, (uData.isBoss ? 8.4 : 4.0) + (uData.isBoss ? 2.2 : 0.9) + hover, cp.z);
               nameMesh.quaternion.copy(state.camera.quaternion);
             }
           }
@@ -498,18 +542,16 @@ export function MarksmanArmy({
       }
     });
 
-    // Optimized Shader Uniform Update: Only update uniforms for units currently "on-duty"
-    poolMapRef.current.forEach((poolIdx) => {
-      const item = characterPool[poolIdx];
-      if (!item) return;
-      const timeVal = (simTimeRef.current || 0) * 0.001;
-      item.colorable.forEach((mesh: THREE.Mesh) => {
-        const mat = mesh.material as THREE.Material;
-        if (mat.userData.painterlyShader) {
-          mat.userData.painterlyShader.uniforms.time.value = timeVal;
-        }
+    // SUPREME OPTIMIZATION: Update shader uniforms only once per shared material per team
+    const timeVal = (simTimeRef.current || 0) * 0.001;
+    if (frameCountRef.current % 2 === 0) { 
+      teamMats.player.forEach((mat: any) => {
+        if (mat.userData.painterlyShader) mat.userData.painterlyShader.uniforms.time.value = timeVal;
       });
-    });
+      teamMats.enemy.forEach((mat: any) => {
+        if (mat.userData.painterlyShader) mat.userData.painterlyShader.uniforms.time.value = timeVal;
+      });
+    }
   });
 
   return (

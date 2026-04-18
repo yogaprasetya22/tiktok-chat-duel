@@ -15,7 +15,7 @@ import { useVFX } from './VFXManager';
  * - Draw Call Optimization: Uses mesh.count to only draw what's necessary.
  */
 
-const MAX_DAMAGE_SPRITES = 360; 
+const MAX_DAMAGE_SPRITES = 120; // Aggressively reduced from 360 to 120 for 60fps stability
 const DURATION = 0.95;          
 const SPRITE_SIZE = 0.65;        
 const CRIT_SCALE_MULT = 1.6;   

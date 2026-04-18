@@ -153,7 +153,7 @@ export default function GamePage() {
             : comment.includes(commentKey);
 
           if (matches) {
-            spawnUnit(1, msg.username, side);
+            spawnUnit(1, msg.username, side, false, undefined, msg.profileImage);
           }
         } else if (msg.type === "gift") {
           const giftName = msg.giftName?.toLowerCase() || "";
@@ -162,9 +162,9 @@ export default function GamePage() {
           const isMegaGift = giftName.includes("lion") || giftName.includes("universe") || (msg.diamondCount || 0) >= 100;
 
           if (isMegaGift) {
-            spawnUnit(5, msg.username, side, true);
+            spawnUnit(5, msg.username, side, true, undefined, msg.profileImage);
           } else if (giftName.includes(giftKey)) {
-            spawnUnit(Math.min(5, Math.ceil((msg.diamondCount || 0) / 5) || 3), msg.username, side);
+            spawnUnit(Math.min(5, Math.ceil((msg.diamondCount || 0) / 5) || 3), msg.username, side, false, undefined, msg.profileImage);
           }
         }
       };

@@ -11,6 +11,7 @@ import { ActiveUnit, TowerConfig, SimulationSettings, UnitRuntimeData } from "@/
 import { useStore } from "@/src/state/useStore";
 import { PLAYER_BASE_Z, ENEMY_BASE_Z, ARMY_POOL_SIZE, ANIM_CULL_DIST_SQ } from "@/src/core/logic/combat/constants";
 import { lerpAngle } from "@/src/core/logic/combat/battleUtils";
+import { battleGrid } from "@/src/core/logic/combat/spatialGrid";
 import * as YUKA from 'yuka';
 import { applyPainterlyStyle } from '../effects/PainterlyMaterials';
 
@@ -50,10 +51,12 @@ export function AssassinArmy({
     const lastVFXRef = useRef<Map<string, number>>(new Map());
     const frameCountRef = useRef(0);
     const { spawnVFX } = useVFX();
+    const lastSortTimeRef = useRef(0);
 
     useEffect(() => {
         availableIndicesRef.current = Array.from({ length: POOL_SIZE }, (_, i) => i);
-    }, []);
+        poolMapRef.current.clear();
+    }, [POOL_SIZE]);
 
     const n1 = useGLTF('/assets-model/Ninja_Female.glb', true, true, (loader) => {
         loader.setMeshoptDecoder(MeshoptDecoder);
@@ -62,13 +65,43 @@ export function AssassinArmy({
         loader.setMeshoptDecoder(MeshoptDecoder);
     }) as any;
 
+    // Shared Materials for Teams (Optimized)
+    const teamMats = useMemo(() => {
+        const mats: Record<string, THREE.Material[]> = { player: [], enemy: [] };
+        const assets = [n1, n2];
+
+        assets.forEach((asset, assetIdx) => {
+            if (!asset.scene) return;
+            asset.scene.traverse((child: any) => {
+                if (child.isMesh && child.material) {
+                    const name = child.name.toLowerCase();
+                    const isColorable = name.includes('cloth') || name.includes('mask') || name.includes('hood') || name.includes('wrap') || name.includes('ribbon') || name.includes('robe') || name.includes('cloak') || name.includes('cape') || name.includes('primary') || name.includes('team');
+                    
+                    if (isColorable) {
+                        const mP = child.material.clone();
+                        const mE = child.material.clone();
+                        applyPainterlyStyle(mP);
+                        applyPainterlyStyle(mE);
+                        mP.color.set(towerConfig.player.color);
+                        mE.color.set(towerConfig.enemy.color);
+                        child[`_matIdx_${assetIdx}`] = mats.player.length;
+                        mats.player.push(mP);
+                        mats.enemy.push(mE);
+                    }
+                }
+            });
+        });
+        return mats;
+    }, [n1, n2, towerConfig.player.color, towerConfig.enemy.color]);
+
     const characterPool = useMemo(() => {
         const items: any[] = [];
         if (!n1.scene || !n2.scene) return [];
         const assets = [n1, n2];
 
         for (let i = 0; i < POOL_SIZE; i++) {
-            const selected = assets[Math.floor(Math.random() * assets.length)];
+            const assetIdx = Math.floor(Math.random() * assets.length);
+            const selected = assets[assetIdx];
             const clone = SkeletonUtils.clone(selected.scene);
             const mixer = new THREE.AnimationMixer(clone);
             const actions: Record<string, THREE.AnimationAction> = {};
@@ -76,18 +109,17 @@ export function AssassinArmy({
                 selected.animations.forEach((clip: THREE.AnimationClip) => { actions[clip.name] = mixer.clipAction(clip); });
             }
             const colorable: THREE.Mesh[] = [];
+            clone.matrixAutoUpdate = false;
             clone.traverse((child: any) => {
                 if (child.isMesh) {
+                    child.matrixAutoUpdate = false;
                     child.castShadow = false;
                     child.receiveShadow = false;
                     child.frustumCulled = true;
+                    child._assetIdx = assetIdx;
                     const name = child.name.toLowerCase();
                     const isColorable = name.includes('cloth') || name.includes('mask') || name.includes('hood') || name.includes('wrap') || name.includes('ribbon') || name.includes('robe') || name.includes('cloak') || name.includes('cape') || name.includes('primary') || name.includes('team');
                     if (isColorable) {
-                        if (child.material) {
-                            child.material = child.material.clone();
-                            applyPainterlyStyle(child.material);
-                        }
                         colorable.push(child);
                     }
                 }
@@ -107,6 +139,12 @@ export function AssassinArmy({
         }
         return items;
     }, [n1, n2]);
+
+    useEffect(() => {
+        return () => {
+            Object.values(teamMats).forEach(teamArr => teamArr.forEach(m => m.dispose()));
+        };
+    }, [teamMats]);
 
     useEffect(() => {
         return () => {
@@ -173,8 +211,11 @@ export function AssassinArmy({
                 bestScore = -Infinity;
                 bestTargetId = undefined;
 
-                for (let j = 0; j < rawMap.length; j++) {
-                    const potential = rawMap[j];
+                const searchRadius = mode === 'TRAINING' ? 1000 : 122; // sqrt(14400) + 2
+                const nearby = battleGrid.queryRadius(uData.position[0], uData.position[2], searchRadius);
+
+                for (let j = 0; j < nearby.length; j++) {
+                    const potential = nearby[j];
                     if (!potential.isActive || potential.hp <= 0 || potential.isDying) continue;
                     if (potential.id === id) continue;
                     if (potential.type === uData.type) continue;
@@ -184,10 +225,6 @@ export function AssassinArmy({
                     const dx = uData.position[0] - potential.position[0];
                     const dz = uData.position[2] - potential.position[2];
                     const dSq = dx * dx + dz * dz;
-
-                    // Perception
-                    const perceptionThresholdSq = mode === 'TRAINING' ? 1000000 : (uData.perceptionRadiusSq || 14400);
-                    if (dSq > perceptionThresholdSq) continue;
 
                     // Targeting Score: 1/distSq. 
                     let score = 1.0 / (dSq + 0.1);
@@ -340,14 +377,16 @@ export function AssassinArmy({
                     if (target && target.isActive && target.id === uData.targetId) {
                         const seekB = (vehicle.steering.behaviors as any).find((b: any) => b.target !== undefined);
                         if (seekB) {
-                            const distToTargetSq = Math.pow(uData.position[0] - target.position[0], 2) + Math.pow(uData.position[2] - target.position[2], 2);
+                            const dx = uData.position[0] - target.position[0];
+                            const dz = uData.position[2] - target.position[2];
+                            const distToTargetSq = dx * dx + dz * dz;
 
                             // Intelligence: If far, run directly. If close, orbit slightly.
                             if (distToTargetSq > 36) { // 6m+ away
                                 seekB.target.set(target.position[0], 0, target.position[2]);
                                 vehicle.maxForce = 8.0; // High force for sharp dash
                             } else {
-                                const totalVal = id.split('-').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0);
+                                const totalVal = uData.id.split('-').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0);
                                 const angle = (totalVal % 360) * (Math.PI / 180);
                                 const orbitRadius = uData.encirclementRadius || 1.1;
                                 seekB.target.set(target.position[0] + Math.cos(angle) * orbitRadius, 0, target.position[2] + Math.sin(angle) * orbitRadius);
@@ -362,7 +401,7 @@ export function AssassinArmy({
                     if (seekB) {
                         const baseZ = uData.type === 'player' ? ENEMY_BASE_Z : PLAYER_BASE_Z;
                         const amp = uData.laneSwaggerAmp || 0.8;
-                        const swagger = Math.sin((id.length * 10) + (uData.jitterOffset || 0)) * amp;
+                        const swagger = Math.sin((uData.id.length * 10) + (uData.jitterOffset || 0)) * amp;
                         seekB.target.set((uData.laneOffset || 0) + swagger, 0, baseZ);
                         vehicle.maxForce = 1.0;
                     }
@@ -386,11 +425,15 @@ export function AssassinArmy({
             }
         }
 
-        // --- 2. ACTOR LOOP ---
-        myUnits.sort((a, b) => {
-            if (a.isBoss !== b.isBoss) return -1;
-            return (a.dSq || 0) - (b.dSq || 0);
-        });
+        // --- 1. SPATIAL FILTERING & THROTTLED SORTING ---
+        if (state.clock.elapsedTime - (lastSortTimeRef.current || 0) > 0.16) {
+            myUnits.sort((a, b) => {
+                if (a.isBoss !== b.isBoss) return a.isBoss ? -1 : 1;
+                return (a.dSq || 0) - (b.dSq || 0);
+            });
+            lastSortTimeRef.current = state.clock.elapsedTime;
+        }
+
         const visibleUnits = myUnits.slice(0, POOL_SIZE);
 
         visibleUnits.forEach((uData) => {
@@ -403,9 +446,10 @@ export function AssassinArmy({
                     const pIdx = availableIndicesRef.current.shift()!;
                     poolMapRef.current.set(id, pIdx);
                     const pItem = characterPool[pIdx];
-                    const teamColor = uData.type === 'player' ? towerConfig.player.color : towerConfig.enemy.color;
-                    pItem.colorable.forEach((mesh: THREE.Mesh) => {
-                        (mesh.material as THREE.MeshStandardMaterial).color.set(teamColor);
+                    const teamMaterials = uData.type === 'player' ? teamMats.player : teamMats.enemy;
+                    pItem.colorable.forEach((mesh: any) => {
+                        const matIdx = mesh[`_matIdx_${mesh._assetIdx}`];
+                        if (matIdx !== undefined) mesh.material = teamMaterials[matIdx];
                     });
                 } else return;
             }
@@ -413,7 +457,7 @@ export function AssassinArmy({
             const poolIdx = poolMapRef.current.get(id);
             if (poolIdx === undefined) return;
             const pItem = characterPool[poolIdx];
-            if (!pItem) {
+            if (!pItem || !pItem.colorable) {
                 poolMapRef.current.delete(id);
                 return;
             }
@@ -451,15 +495,17 @@ export function AssassinArmy({
             const tp = uData.position;
             const cp = pItem.group.position;
             const lerpFactor = 1.0 - Math.exp(-25 * delta);
-            if (!pItem.initialized) {
+            const distSq = (tp[0] - cp.x) ** 2 + (tp[2] - cp.z) ** 2;
+
+            if (!pItem.initialized || distSq > 16) { // Snap for true teleport effect
                 cp.set(tp[0], tp[1], tp[2]);
                 pItem.rotation = uData.rotation[1];
                 pItem.group.rotation.y = pItem.rotation;
                 pItem.initialized = true;
             } else {
-                cp.x = THREE.MathUtils.lerp(cp.x, tp[0], lerpFactor);
-                cp.y = THREE.MathUtils.lerp(cp.y, tp[1], lerpFactor);
-                cp.z = THREE.MathUtils.lerp(cp.z, tp[2], lerpFactor);
+                cp.x += (tp[0] - cp.x) * lerpFactor;
+                cp.y += (tp[1] - cp.y) * lerpFactor;
+                cp.z += (tp[2] - cp.z) * lerpFactor;
 
                 let diff = uData.rotation[1] - pItem.rotation;
                 while (diff < -Math.PI) diff += Math.PI * 2;
@@ -478,7 +524,7 @@ export function AssassinArmy({
 
                 if (showDetail) {
                     const pct = Math.max(0, uData.hp / (uData.maxHp || 100));
-                    const by = uData.isBoss ? 7.0 : 3.2;
+                    const by = uData.isBoss ? 8.2 : 3.8;
                     const bs = uData.isBoss ? 2.5 : 1.0;
 
                     // 1. Shadow
@@ -524,7 +570,7 @@ export function AssassinArmy({
                         const nameMesh = nameTextRefs.current[nameSlot];
                         if (nameMesh) {
                             const hover = Math.sin(state.clock.elapsedTime * 3 + id.length) * 0.1;
-                            nameMesh.position.set(cp.x, (uData.isBoss ? 7.2 : 3.4) + (uData.isBoss ? 1.8 : 0.7) + hover, cp.z);
+                            nameMesh.position.set(cp.x, (uData.isBoss ? 8.4 : 4.0) + (uData.isBoss ? 2.2 : 0.9) + hover, cp.z);
                             nameMesh.quaternion.copy(state.camera.quaternion);
                         }
                     }
@@ -576,20 +622,16 @@ export function AssassinArmy({
             }
         });
 
-        // Painterly Shader Uniform Update
-        // Optimized Shader Uniform Update: Only update uniforms for units currently "on-duty" 
-        // This eliminates idle overhead when units are not spawned.
-        poolMapRef.current.forEach((poolIdx) => {
-            const item = characterPool[poolIdx];
-            if (!item) return;
-            const timeVal = (simTimeRef.current || 0) * 0.001;
-            item.colorable.forEach((mesh: THREE.Mesh) => {
-                const mat = mesh.material as THREE.Material;
-                if (mat.userData.painterlyShader) {
-                    mat.userData.painterlyShader.uniforms.time.value = timeVal;
-                }
+        // SUPREME OPTIMIZATION: Update shader uniforms only once per shared material per team
+        const timeVal = (simTimeRef.current || 0) * 0.001;
+        if (frameCountRef.current % 2 === 0) { 
+            teamMats.player.forEach((mat: any) => {
+                if (mat.userData.painterlyShader) mat.userData.painterlyShader.uniforms.time.value = timeVal;
             });
-        });
+            teamMats.enemy.forEach((mat: any) => {
+                if (mat.userData.painterlyShader) mat.userData.painterlyShader.uniforms.time.value = timeVal;
+            });
+        }
     });
 
 

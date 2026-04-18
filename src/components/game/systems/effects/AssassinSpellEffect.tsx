@@ -24,16 +24,32 @@ const CritShader = {
     fragmentShader: `
         varying vec2 vUv;
         varying vec3 vColor;
+        
+        float hash(vec2 p) {
+            return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
+        }
+
         void main() {
             vec2 uv = vUv - 0.5;
+            float dist = length(uv);
             
-            // Cross/Star shape
-            float beamH = smoothstep(0.05, 0.0, abs(uv.y)) * smoothstep(0.5, 0.2, abs(uv.x));
-            float beamV = smoothstep(0.05, 0.0, abs(uv.x)) * smoothstep(0.5, 0.2, abs(uv.y));
-            float core = smoothstep(0.1, 0.0, length(uv));
+            // Kinetic streaks
+            float angle = atan(uv.y, uv.x);
+            float streaks = step(0.98, sin(angle * 12.0 + hash(vUv) * 0.5));
+            streaks *= smoothstep(0.5, 0.2, dist);
             
-            float alpha = max(max(beamH, beamV), core);
-            gl_FragColor = vec4(vColor * 5.0, alpha);
+            // Sharp cross flash
+            float beamH = smoothstep(0.04, 0.0, abs(uv.y)) * smoothstep(0.5, 0.1, abs(uv.x));
+            float beamV = smoothstep(0.04, 0.0, abs(uv.x)) * smoothstep(0.5, 0.1, abs(uv.y));
+            float core = smoothstep(0.12, 0.0, dist);
+            
+            float alpha = max(max(beamH, beamV), core + streaks);
+            
+            // Intense bloom
+            vec3 finalColor = vColor * 4.0;
+            finalColor = mix(finalColor, vec3(1.0), core * 0.8);
+            
+            gl_FragColor = vec4(finalColor, alpha);
             if (gl_FragColor.a < 0.1) discard;
         }
     `
@@ -56,7 +72,7 @@ export function AssassinSpellEffect({ assassinSpellsRef, simTimeRef }: { assassi
             if (!s.active) continue;
 
             const age = simTime - s.startTime;
-            const duration = 0.3; // 300ms duration (very fast)
+            const duration = 300; 
             const alpha = 1.0 - (age / duration);
 
             if (alpha <= 0) {
@@ -64,15 +80,26 @@ export function AssassinSpellEffect({ assassinSpellsRef, simTimeRef }: { assassi
                 continue;
             }
 
-            _tempObj.position.set(s.x, s.y, s.z);
-            _tempObj.quaternion.copy(state.camera.quaternion); // Face camera
-            _tempObj.scale.setScalar(1.2 + (1.0 - alpha) * 2.0);
-            _tempObj.updateMatrix();
-            mesh.setMatrixAt(activeCount, _tempObj.matrix);
+            const scaleBase = 1.2 + (1.0 - alpha) * 2.5;
             
-            _color.set(s.color);
-            mesh.setColorAt(activeCount, _color);
-            activeCount++;
+            // LAYERED FLASH: 2 instances per hit
+            for (let j = 0; j < 2; j++) {
+                if (activeCount >= MAX_FLASHES) break;
+                
+                _tempObj.position.set(s.x, s.y, s.z);
+                _tempObj.quaternion.copy(state.camera.quaternion); 
+                
+                // Rotate second layer
+                if (j === 1) _tempObj.rotateZ(Math.PI / 4);
+                
+                _tempObj.scale.setScalar(scaleBase * (j === 0 ? 1.0 : 0.7));
+                _tempObj.updateMatrix();
+                mesh.setMatrixAt(activeCount, _tempObj.matrix);
+                
+                _color.set(s.color).multiplyScalar(j === 0 ? 1.0 : 1.5);
+                mesh.setColorAt(activeCount, _color);
+                activeCount++;
+            }
         }
 
         mesh.count = activeCount;

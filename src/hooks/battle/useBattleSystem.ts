@@ -28,10 +28,10 @@ import {
     WEATHER_CONFIG,
 } from "@/src/core/logic/combat/constants";
 
-import { getUnitStats, pickRandom } from "@/src/core/logic/combat/battleUtils";
+import { getUnitStats, pickRandom, pickWeightedRandom } from "@/src/core/logic/combat/battleUtils";
 
-// --- GLOBAL SCRATCH VARIABLES (Zero-Allocation Loop) ---
-const WORLD_UNIT_POOL_SIZE = 250;
+import { WORLD_UNIT_POOL_SIZE } from "@/src/core/domain/unit.types";
+import { battleGrid } from "@/src/core/logic/combat/spatialGrid";
 
 export const useBattleSystem = () => {
     const [mapObstacles, setMapObstacles] = useState<MapObstacle[]>([]);
@@ -56,6 +56,7 @@ export const useBattleSystem = () => {
         unitsSpawned: {},
         playerHits: {},
         enemyHits: {},
+        profileImages: {},
         classStats: {
             fighter: {
                 damageDealt: 0,
@@ -164,7 +165,7 @@ export const useBattleSystem = () => {
     );
 
     const simulationTimeRef = useRef<number>(0);
-    const bucketsMapRef = useRef<Map<number, number[]>>(new Map());
+    const physicsAccumulatorRef = useRef(0);
     const lastStateUpdate = useRef<number>(0);
 
     // --- ZERO-ALLOCATION OBJECT POOL ---
@@ -194,6 +195,7 @@ export const useBattleSystem = () => {
             } as UnitRuntimeData);
             const v = new YUKA.Vehicle();
             v.maxSpeed = 3.2;
+            v.maxForce = 10; // Cap steering force to prevent "snapping"
             v.mass = 1;
             v.updateOrientation = false;
             vehs.push(v);
@@ -286,7 +288,7 @@ export const useBattleSystem = () => {
         },
         baseHp: 1000,
         baseDistance: 24,
-        maxUnits: 200,
+        maxUnits: 20,
         unitConfig: {
             hpMultiplier: 1.0,
             speedMultiplier: 1.0,
@@ -303,6 +305,7 @@ export const useBattleSystem = () => {
             killer: string,
             victim: string,
             victimType: KillEvent["victimType"],
+            profileImage?: string,
         ) => {
             useStore.getState().addKillEvent({
                 id: Math.random().toString(36).substring(7),
@@ -310,10 +313,22 @@ export const useBattleSystem = () => {
                 victim,
                 victimType,
                 timestamp: Date.now(),
+                profileImage,
             });
         },
         [],
     );
+
+    const updateStats = useCallback((userName: string, type: "player" | "enemy", dmg: number, isKill: boolean = false) => {
+        const stats = statsRef.current;
+        if (type === "player") {
+            stats.playerDamage[userName] = (stats.playerDamage[userName] || 0) + dmg;
+            if (isKill) stats.playerKills[userName] = (stats.playerKills[userName] || 0) + 1;
+        } else {
+            stats.enemyDamage[userName] = (stats.enemyDamage[userName] || 0) + dmg;
+            if (isKill) stats.enemyKills[userName] = (stats.enemyKills[userName] || 0) + 1;
+        }
+    }, []);
 
     const resetBattle = useCallback(() => {
         gameStateRef.current = "PLAYING";
@@ -341,17 +356,21 @@ export const useBattleSystem = () => {
             type: "player" | "enemy" = "player",
             isBoss: boolean = false,
             forcedClass?: any,
+            profileImage?: string,
         ) => {
             // --- 1. CAPACITY CHECK (Sync with UI Settings) ---
-            const maxUnits =
+            const maxUnitsPerSide =
                 towerConfigRef.current.maxUnits ||
                 settingsRef.current.maxUnits ||
-                200;
-            let currentActiveCount = 0;
+                20;
+                
+            let sideActiveCount = 0;
             for (let i = 0; i < WORLD_UNIT_POOL_SIZE; i++) {
-                if (unitPoolRef.current[i].isActive) currentActiveCount++;
+                if (unitPoolRef.current[i].isActive && unitPoolRef.current[i].type === type) {
+                    sideActiveCount++;
+                }
             }
-            if (currentActiveCount >= maxUnits) return;
+            if (sideActiveCount >= maxUnitsPerSide) return;
 
             let poolIdx = -1;
             for (let i = 0; i < WORLD_UNIT_POOL_SIZE; i++) {
@@ -365,7 +384,10 @@ export const useBattleSystem = () => {
             const name = userName.trim().substring(0, 16);
             const unitClass =
                 forcedClass ||
-                pickRandom(["fighter", "tank", "mage", "marksman", "assassin"]);
+                pickWeightedRandom(
+                    ["fighter", "tank", "assassin", "marksman", "mage"],
+                    [30, 30, 20, 10, 10],
+                );
             const stats = getUnitStats(
                 level,
                 towerConfigRef.current.unitConfig,
@@ -389,7 +411,7 @@ export const useBattleSystem = () => {
             u.attack = stats.attack * c.atk;
             u.range = c.range;
             u.speed =
-                stats.speed * c.move_speed_mult * (0.8 + Math.random() * 0.4);
+                stats.speed * c.move_speed_mult * (0.9 + Math.random() * 0.2);
             u.isDying = false;
             u.isBoss = isBoss;
             u.hpRegen = c.hp_regen;
@@ -407,6 +429,7 @@ export const useBattleSystem = () => {
                 spawnZ + (Math.random() - 0.5) * 4,
             );
             v.maxSpeed = u.speed;
+            v.maxForce = (unitClass === "assassin") ? 20 : 10; // Reduced from 100/30 to prevent zipping
             v.velocity.set(0, 0, 0);
             v.steering.behaviors.length = 0;
 
@@ -417,10 +440,8 @@ export const useBattleSystem = () => {
                 ),
             );
 
-            // Intelligence: Add separation to prevent clumping (making units feel smarter/individual)
-            const separation = new YUKA.SeparationBehavior();
-            separation.weight = 1.5; // Increased weight for better spacing
-            v.steering.add(separation);
+            // OPTIMIZATION: We no longer add SeparationBehavior here because it's O(N^2).
+            // We will handle separation in the main loop using our Spatial Grid.
 
             entityManager.add(v);
 
@@ -438,6 +459,11 @@ export const useBattleSystem = () => {
             uData.isDying = false;
             uData.range = u.range;
             uData.speed = u.speed;
+            uData.profileImage = profileImage;
+
+            if (profileImage) {
+                statsRef.current.profileImages[name] = profileImage;
+            }
 
             unitIndexRef.current.set(u.id, u);
         },
@@ -446,16 +472,6 @@ export const useBattleSystem = () => {
 
     const freezeTimeRef = useRef(0);
 
-    // Grid config (4x4m cells)
-    const GRID_SIZE = 4;
-    const GRID_PACK = 10000;
-    const getGridKey = (x: number, z: number) => {
-        return (
-            Math.floor(x / GRID_SIZE) +
-            1000 +
-            (Math.floor(z / GRID_SIZE) + 1000) * GRID_PACK
-        );
-    };
 
     const updateSimulation = useCallback(
         (delta: number) => {
@@ -482,28 +498,27 @@ export const useBattleSystem = () => {
             }
             if (activeCount === 0 && gameStateRef.current !== "PLAYING") return;
 
-            // --- 2D GRID BUCKET UPDATE (Zero-Allocation) ---
-            bucketsMapRef.current.clear();
+            // --- 2D GRID BUCKET UPDATE (Zero-Allocation Global Grid) ---
+            // PERFORMANCE: This grid is shared between AI and Rendering.
+            // We update it once at the start of the simulation tick.
+            battleGrid.update(unitDataPoolRef.current);
 
-            if (activeCount > 0) {
-                for (let i = 0; i < WORLD_UNIT_POOL_SIZE; i++) {
-                    const u = unitPoolRef.current[i];
-                    if (!u.isActive || u.isDying) continue;
-                    const uData = unitDataPoolRef.current[i];
-                    const bucketKey = getGridKey(
-                        uData.position[0],
-                        uData.position[2],
-                    );
-                    let b = bucketsMapRef.current.get(bucketKey);
-                    if (!b) {
-                        b = [];
-                        bucketsMapRef.current.set(bucketKey, b);
-                    }
-                    b.push(i);
-                }
+            // --- 2. ENTITY SIMULATION (Fixed Accumulator with Spiral Protection) ---
+            const PHYSICS_STEP = 0.016; 
+            physicsAccumulatorRef.current += simDelta;
+
+            // Spiral of Death Protection: If we fall behind by more than 0.2s, drop time
+            if (physicsAccumulatorRef.current > 0.2) {
+                physicsAccumulatorRef.current = 0.2; 
             }
-
-            entityManager.update(simDelta);
+            
+            let steps = 0;
+            const MAX_STEPS_PER_FRAME = 3; 
+            while (physicsAccumulatorRef.current >= PHYSICS_STEP && steps < MAX_STEPS_PER_FRAME) {
+                entityManager.update(PHYSICS_STEP);
+                physicsAccumulatorRef.current -= PHYSICS_STEP;
+                steps++;
+            }
             flushDamageBuffer(now);
 
             // --- MAIN SIMULATION LOOP ---
@@ -543,18 +558,18 @@ export const useBattleSystem = () => {
                     continue;
                 }
 
-                // --- AI THINKING (Throttled per unit sim-time) ---
-                const thinkThrottle = u.unitClass === "fighter" ? 100 : 150;
-                if (
-                    !u.lastThinkTime ||
-                    simNow - u.lastThinkTime > thinkThrottle
-                ) {
+                // --- AI THINKING (Throttled & Time-Sliced) ---
+                const thinkThrottle = u.unitClass === "fighter" ? 90 : 140; 
+                const phaseOffset = i % 8; 
+                const frameCheck = (Math.floor(simNow / 16) + phaseOffset) % 8 === 0;
+
+                if (frameCheck && (!u.lastThinkTime || simNow - u.lastThinkTime > thinkThrottle)) {
                     u.lastThinkTime = simNow;
                     const isFighter = u.unitClass === "fighter";
-                    const perceptionRadiusSq = isFighter ? 1024 : 144;
-                    // Rule 3: Target Prioritization Scoring
+                    const isAssassin = u.unitClass === "assassin";
+                    
                     let bestScore = -1;
-                    let bestTargetIdx = -1;
+                    let bestTargetId: string | undefined = undefined;
 
                     // --- SCORE TOWER ---
                     const dist = towerConfig.baseDistance ?? 24;
@@ -563,62 +578,65 @@ export const useBattleSystem = () => {
                     const dzB = uData.position[2] - targetBaseZ;
                     const distToBaseSq = dxB * dxB + dzB * dzB;
 
-                    // Tower is the "Ultimate" target (highest weight)
-                    const towerWeight = 6.0;
+                    const towerWeight = 0.01; // EXTREMELY low weight: units will ONLY attack towers if no enemies are visible in perception
                     bestScore = towerWeight / (distToBaseSq + 0.1);
-                    const targetedBaseId =
-                        u.type === "player" ? "enemy-base" : "player-base";
+                    const targetedBaseId = u.type === "player" ? "enemy-base" : "player-base";
 
-                    const currentX = Math.floor(uData.position[0] / GRID_SIZE);
-                    const currentZ = Math.floor(uData.position[2] / GRID_SIZE);
+                    // Optimized Global Targeting via battleGrid
+                    const neighbors = battleGrid.queryRadius(uData.position[0], uData.position[2], (isFighter || isAssassin) ? 32 : 12);
+                    for (let j = 0; j < neighbors.length; j++) {
+                        const potential = neighbors[j];
+                        if (potential.id === u.id) continue;
+                        if (potential.type === u.type) continue;
+                        if (potential.hp <= 0 || potential.isDying) continue;
 
-                    for (let xOff = -1; xOff <= 1; xOff++) {
-                        for (let zOff = -1; zOff <= 1; zOff++) {
-                            const key =
-                                currentX +
-                                xOff +
-                                1000 +
-                                (currentZ + zOff + 1000) * GRID_PACK;
-                            const neighbors = bucketsMapRef.current.get(key);
-                            if (!neighbors) continue;
-                            for (const neighborIdx of neighbors) {
-                                if (neighborIdx === i) continue;
-                                const potential =
-                                    unitPoolRef.current[neighborIdx];
-                                if (potential.type === u.type) continue;
+                        const dx = uData.position[0] - potential.position[0];
+                        const dz = uData.position[2] - potential.position[2];
+                        const dSq = dx * dx + dz * dz;
 
-                                const pData =
-                                    unitDataPoolRef.current[neighborIdx];
-                                const dx =
-                                    uData.position[0] - pData.position[0];
-                                const dz =
-                                    uData.position[2] - pData.position[2];
-                                const dSq = dx * dx + dz * dz;
-                                if (dSq > perceptionRadiusSq) continue;
+                        let weight = 1.0;
+                        if (isFighter) weight = 3.0;
+                        else if (potential.isBoss) weight = 2.0;
 
-                                let weight = 1.0;
-                                if (isFighter) {
-                                    weight = 3.0;
-                                } else if (potential.isBoss) {
-                                    weight = 2.0;
-                                }
-
-                                const score = weight / (dSq + 0.1);
-                                if (score > bestScore) {
-                                    bestScore = score;
-                                    bestTargetIdx = neighborIdx;
-                                }
-                            }
+                        const score = weight / (dSq + 0.1);
+                        if (score > bestScore) {
+                            bestScore = score;
+                            bestTargetId = potential.id;
                         }
                     }
 
-                    if (bestTargetIdx !== -1) {
-                        u.targetId = unitPoolRef.current[bestTargetIdx].id;
+                    if (bestTargetId !== undefined) {
+                        u.targetId = bestTargetId;
                         uData.status = "chasing";
                     } else {
-                        // ONLY target the base if NO units were found in perception range
                         u.targetId = targetedBaseId;
                         uData.status = "marching";
+                    }
+                }
+
+                // --- OPTIMIZED MOVEMENT & SEPARATION (Manual Grid-Based) ---
+                // CPU OFFLOAD: Steering only every 2 simulation steps.
+                // FIXED: Use frame-based logic to avoid units being "stuck"
+                const simFrame = Math.floor(simNow * 60); 
+                const moveCheck = (simFrame + i) % 2 === 0;
+
+                if (moveCheck && !u.isDying) {
+                    // Simple Separation Logic using battleGrid
+                    const sepWeight = 0.5;
+                    const neighbors = battleGrid.queryRadius(uData.position[0], uData.position[2], 1.2);
+                    for (let j = 0; j < neighbors.length; j++) {
+                        const potential = neighbors[j];
+                        if (potential.id === u.id) continue;
+                        
+                        const dx = uData.position[0] - potential.position[0];
+                        const dz = uData.position[2] - potential.position[2];
+                        const dSq = dx * dx + dz * dz;
+
+                        if (dSq < 1.0 && dSq > 0.001) {
+                            const d = Math.sqrt(dSq);
+                            v.velocity.x += (dx / d) * sepWeight;
+                            v.velocity.z += (dz / d) * sepWeight;
+                        }
                     }
                 }
 
@@ -683,13 +701,6 @@ export const useBattleSystem = () => {
                             if (u.unitClass === "mage") {
                                 // --- MAGE AOE LOGIC ---
                                 let hits = 0;
-                                const AOE_RADIUS_SQ = 12.25; // 3.5m radius
-                                const tGridX = Math.floor(
-                                    tData.position[0] / GRID_SIZE,
-                                );
-                                const tGridZ = Math.floor(
-                                    tData.position[2] / GRID_SIZE,
-                                );
 
                                 // Main target logic inside AOE
                                 currentTarget.hp -= dmg;
@@ -698,7 +709,10 @@ export const useBattleSystem = () => {
                                     currentTarget.isActive = false;
                                     tData.isActive = false;
                                     tData.position[1] = -100;
+                                    addKillEvent(u.userName, currentTarget.userName, "unit", u.profileImage);
+                                    updateStats(u.userName, u.type, 0, true);
                                 }
+                                updateStats(u.userName, u.type, dmg);
                                 accumulateDamage(
                                     currentTarget.id,
                                     dmg,
@@ -707,56 +721,35 @@ export const useBattleSystem = () => {
                                 );
                                 hits++;
 
-                                // Adjacent 2D search for AOE
-                                for (let xOff = -1; xOff <= 1; xOff++) {
-                                    for (let zOff = -1; zOff <= 1; zOff++) {
-                                        if (hits >= 4) break;
-                                        const key =
-                                            tGridX +
-                                            xOff +
-                                            1000 +
-                                            (tGridZ + zOff + 1000) * GRID_PACK;
-                                        const neighbors =
-                                            bucketsMapRef.current.get(key);
-                                        if (!neighbors) continue;
-                                        for (const nIdx of neighbors) {
-                                            if (hits >= 4) break;
-                                            const p = unitPoolRef.current[nIdx];
-                                            if (
-                                                p.id === currentTarget.id ||
-                                                p.type === u.type ||
-                                                p.isDying ||
-                                                !p.isActive
-                                            )
-                                                continue;
+                                // AOE Damage Logic using battleGrid
+                                const searchRadius = u.unitClass === "mage" ? 3.5 : 2.5;
+                                const neighbors = battleGrid.queryRadius(tData.position[0], tData.position[2], searchRadius);
+                                for (let j = 0; j < neighbors.length; j++) {
+                                    if (hits >= 4) break;
+                                    const p = neighbors[j];
+                                    if (p.id === currentTarget.id || p.type === u.type || p.isDying || !p.isActive) continue;
 
-                                            const pD =
-                                                unitDataPoolRef.current[nIdx];
-                                            const dx =
-                                                tData.position[0] -
-                                                pD.position[0];
-                                            const dz =
-                                                tData.position[2] -
-                                                pD.position[2];
-                                            if (
-                                                dx * dx + dz * dz <
-                                                AOE_RADIUS_SQ
-                                            ) {
-                                                p.hp -= dmg;
-                                                pD.hp = p.hp;
+                                    const dx = tData.position[0] - p.position[0];
+                                    const dz = tData.position[2] - p.position[2];
+                                    const dSq = dx * dx + dz * dz;
+
+                                    if (dSq < searchRadius * searchRadius) {
+                                        p.hp -= dmg;
+                                        // Find index in pool to update data
+                                        const pIdx = parseInt(p.id.split('-')[1]);
+                                        if (pIdx >= 0) {
+                                            const pData = unitDataPoolRef.current[pIdx];
+                                            if (pData) {
+                                                pData.hp = p.hp;
                                                 if (p.hp <= 0) {
                                                     p.isActive = false;
-                                                    pD.isActive = false;
-                                                    pD.position[1] = -100;
+                                                    pData.isActive = false;
+                                                    pData.position[1] = -100;
+                                                    addKillEvent(u.userName, p.userName, "unit", u.profileImage);
+                                                    updateStats(u.userName, u.type, 0, true);
                                                 }
-                                                accumulateDamage(
-                                                    p.id,
-                                                    dmg,
-                                                    pD.position,
-                                                    u.type === "player"
-                                                        ? "#0066FF"
-                                                        : "#FF0033",
-                                                );
+                                                updateStats(u.userName, u.type, dmg);
+                                                accumulateDamage(p.id, dmg, pData.position, u.type === "player" ? "#0066FF" : "#FF0033");
                                                 hits++;
                                             }
                                         }
@@ -770,7 +763,10 @@ export const useBattleSystem = () => {
                                     currentTarget.isActive = false;
                                     tData.isActive = false;
                                     tData.position[1] = -100;
+                                    addKillEvent(u.userName, currentTarget.userName, "unit", u.profileImage);
+                                    updateStats(u.userName, u.type, 0, true);
                                 }
+                                updateStats(u.userName, u.type, dmg);
                                 accumulateDamage(
                                     currentTarget.id,
                                     dmg,
@@ -785,14 +781,10 @@ export const useBattleSystem = () => {
                         const classWeatherMult =
                             weatherMults[u.unitClass]?.move_speed_mult || 1.0;
                         v.maxSpeed = u.speed * classWeatherMult;
-                        v.steering.behaviors.forEach((b: any) => {
-                            if (b.target)
-                                b.target.set(
-                                    tData.position[0],
-                                    0,
-                                    tData.position[2],
-                                );
-                        });
+                        const seek = v.steering.behaviors[0] as any;
+                        if (seek?.target) {
+                            seek.target.set(tData.position[0], 0, tData.position[2]);
+                        }
                     }
                 } else if (baseInRange) {
                     uData.status = "attacking";
@@ -802,16 +794,19 @@ export const useBattleSystem = () => {
                         u.attackCooldown
                     ) {
                         const dmg = u.attack;
+                        updateStats(u.userName, u.type, dmg);
                         if (u.type === "player") {
                             enemyBaseHpRef.current -= dmg;
                             if (enemyBaseHpRef.current <= 0) {
-                                addKillEvent(u.userName, "ENEMY BASE", "base");
+                                addKillEvent(u.userName, "ENEMY BASE", "base", u.profileImage);
+                                updateStats(u.userName, u.type, 0, true);
                                 freezeTimeRef.current = 100; // Hit-stop
                             }
                         } else {
                             playerBaseHpRef.current -= dmg;
                             if (playerBaseHpRef.current <= 0) {
-                                addKillEvent(u.userName, "PLAYER BASE", "base");
+                                addKillEvent(u.userName, "PLAYER BASE", "base", u.profileImage);
+                                updateStats(u.userName, u.type, 0, true);
                                 freezeTimeRef.current = 100; // Hit-stop
                             }
                         }
@@ -847,34 +842,37 @@ export const useBattleSystem = () => {
                         globalWeatherMult;
 
                     v.maxSpeed = baseSpeed;
-                    v.steering.behaviors.forEach((b: any) => {
-                        if (b.target) b.target.set(0, 0, targetBaseZ);
-                    });
+                    const seek = v.steering.behaviors[0] as any;
+                    if (seek?.target) seek.target.set(0, 0, targetBaseZ);
                 }
 
-                // --- 2. PHYSICS DAMPING (Anti-Bleeding) ---
-                v.velocity.multiplyScalar(0.98);
 
-                // --- 3. POSITION GUARD (Anti-Lightning Speed Limiter) ---
+                // --- 2. PHYSICS DAMPING (Balanced for responsiveness) ---
+                // Gentler damping: velocity drops to ~10% over 1 second if no force is applied
+                v.velocity.multiplyScalar(Math.pow(0.1, simDelta));
+                
+                if (uData.status === "attacking" || u.isDying) {
+                    v.velocity.set(0, 0, 0); 
+                }
+
+                // --- 3. POSITION GUARD (Dynamic Tolerance) ---
                 const oldX = uData.position[0];
                 const oldZ = uData.position[2];
                 const newX = v.position.x;
                 const newZ = v.position.z;
 
-                // Calculate movement displacement this step
                 const dx = newX - oldX;
                 const dz = newZ - oldZ;
                 const moveDistSq = dx * dx + dz * dz;
 
-                // Electronic speed limit: units can only move speed * delta (+ 10% safety margin)
-                const maxStepDist = v.maxSpeed * simDelta * 1.1;
+                const maxStepDist = (v.maxSpeed * simDelta * 1.2) + 0.02;
                 const maxStepDistSq = maxStepDist * maxStepDist;
 
-                if (moveDistSq > maxStepDistSq && v.maxSpeed > 0) {
+                if (moveDistSq > maxStepDistSq) {
+                    // Only compute sqrt if we actually need to rescale (rare)
                     const ratio = maxStepDist / Math.sqrt(moveDistSq);
                     uData.position[0] = oldX + dx * ratio;
                     uData.position[2] = oldZ + dz * ratio;
-                    // Sync back to physics engine so it doesn't "rubber band"
                     v.position.set(uData.position[0], -0.4, uData.position[2]);
                 } else {
                     uData.position[0] = newX;
@@ -914,6 +912,7 @@ export const useBattleSystem = () => {
                 useStore
                     .getState()
                     .setBaseHp(playerBaseHpRef.current, enemyBaseHpRef.current);
+                useStore.getState().setLiveStats({ ...statsRef.current });
             }
         },
         [entityManager, flushDamageBuffer, accumulateDamage, addKillEvent],

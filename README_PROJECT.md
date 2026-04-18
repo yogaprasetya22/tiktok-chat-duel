@@ -81,14 +81,13 @@ tiktok-next/
 ### **1. Prerequisites**
 - Node.js 18+ (or use system Node)
 - Bun 1.0+
-- TikTool API Key
+- A TikTok LIVE channel (No API Key required!)
 
 ### **2. Environment Setup**
 
 `.env.local`:
 ```env
 NEXT_PUBLIC_API_URL=http://localhost:3000
-VITE_TIKTOK_API_KEY=your_api_key_here
 ```
 
 ### **3. Install Dependencies**
@@ -230,9 +229,9 @@ bun run build
 ```
 
 ### **API Connection Error**
-- Check `.env.local` has `VITE_TIKTOK_API_KEY`
 - Verify TikTok username is correct
 - Check if user is currently live
+- Ensure stable internet connection
 
 ---
 

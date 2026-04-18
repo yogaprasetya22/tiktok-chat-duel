@@ -418,27 +418,44 @@ export const StormEnvironment = ({ baseDistance = 24, potatoMode = false }: { ba
       );
   }
 
+  const sunPositions : any = weather === 'CLEAR' ? [0, 100, 0] : [0, -10, 0]
+  const sunVec = new THREE.Vector3(...sunPositions).normalize()
+
+
   return (
     <group>
-      <Sky 
+      {/* <Sky 
         sunPosition={weather === 'CLEAR' ? [0, 100, 0] : [0, -10, 0]} 
         turbidity={weather === 'CLEAR' ? 1.0 : 10} 
         rayleigh={weather === 'CLEAR' ? 0.5 : 2} 
         mieCoefficient={0.005} 
         mieDirectionalG={0.8} 
+      /> */}
+      <Sky
+        sunPosition={sunPositions}
+        turbidity={weather === 'CLEAR' ? 1.0 : 10}
+        rayleigh={weather === 'CLEAR' ? 0.5 : 2}
+        mieCoefficient={0.005}
+        mieDirectionalG={0.8}
       />
-      <hemisphereLight 
-        intensity={weather === 'CLEAR' ? 1.2 : 0.8} 
-        color={weather === 'THUNDER' ? "#cfe2ff" : "#ffffff"} 
-        groundColor="#444444" 
+      <hemisphereLight
+        intensity={weather === 'CLEAR' ? 1.2 : 0.8}
+        color={weather === 'THUNDER' ? "#cfe2ff" : "#fff4e0"}
+        groundColor={weather === 'CLEAR' ? "#7a5c3a" : "#444444"}
       />
       <ambientLight intensity={weather === 'CLEAR' ? 0.6 : 0.5} />
-      <directionalLight 
-        position={[20, 100, 20]} 
-        intensity={weather === 'CLEAR' ? 4.5 : 1.5} 
-        color={weather === 'RAIN' ? "#d1e9ff" : "#ffffff"} 
+      <directionalLight
+        position={sunVec.multiplyScalar(150).toArray()}
+        intensity={weather === 'CLEAR' ? 5.0 : 1.5}
+        color={
+          weather === 'CLEAR' ? "#fff4e0" :  // kuning hangat saat cerah
+            weather === 'RAIN' ? "#d1e9ff" :  // biru dingin saat hujan
+              "#cfe2ff"                            // biru pucat saat petir
+        }
         castShadow={!isSetup}
         shadow-mapSize={isSetup ? [512, 512] : [1024, 1024]}
+        shadow-camera-far={500}
+        shadow-camera-near={0.5}
       />
       
       <Terrain baseDistance={baseDistance} />

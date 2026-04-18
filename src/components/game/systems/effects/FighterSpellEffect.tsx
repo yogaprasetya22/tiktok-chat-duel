@@ -24,25 +24,32 @@ const SlashShader = {
     fragmentShader: `
         varying vec2 vUv;
         varying vec3 vColor;
+        
+        float hash(vec2 p) {
+            return fract(sin(dot(p, vec2(12.1, 31.7))) * 43758.5453);
+        }
+
         void main() {
-            // Arc slash shape
-            float dist = length(vUv - vec2(0.5, 0.0));
-            float mask = smoothstep(0.5, 0.48, dist) * smoothstep(0.35, 0.38, dist);
+            vec2 uv = vUv - vec2(0.5, 0.0);
+            float dist = length(uv);
             
-            // Bloom / Glow layer
-            float glow = smoothstep(0.5, 0.3, dist) * smoothstep(0.2, 0.4, dist);
+            // Primary intense arc
+            float arc = smoothstep(0.5, 0.45, dist) * smoothstep(0.3, 0.38, dist);
             
-            // Fade along the arc length (u-coordinate)
-            float fade = smoothstep(0.0, 0.2, vUv.x) * smoothstep(1.0, 0.4, vUv.x);
+            // "Busy" noise / heat distortion look
+            float noise = hash(vUv * 20.0);
+            float streaks = smoothstep(0.4, 0.5, hash(vUv * vec2(1.0, 50.0)));
             
-            float alpha = (mask + glow * 0.4) * fade;
+            // Edge glow
+            float glow = smoothstep(0.5, 0.2, dist) * smoothstep(0.1, 0.4, dist);
             
-            vec3 finalColor = vColor * 2.0;
-            // White core for intensity
-            finalColor = mix(finalColor, vec3(1.0), mask * 0.5);
+            float alpha = (arc * 1.5 + glow * 0.6 + streaks * 0.3) * smoothstep(0.0, 0.2, vUv.x) * smoothstep(1.0, 0.7, vUv.x);
             
-            gl_FragColor = vec4(finalColor * 2.0, alpha);
-            if (gl_FragColor.a < 0.01) discard;
+            vec3 color = vColor * (2.0 + noise);
+            color = mix(color, vec3(1.0, 1.0, 1.0), arc * 0.8); // White hot core
+            
+            gl_FragColor = vec4(color * 3.0, alpha);
+            if (gl_FragColor.a < 0.05) discard;
         }
     `
 };
@@ -64,7 +71,7 @@ export function FighterSpellEffect({ fighterSpellsRef, simTimeRef }: { fighterSp
             if (!s.active) continue;
 
             const age = simTime - s.startTime;
-            const duration = 0.4; // 400ms duration
+            const duration = 400; 
             const alpha = 1.0 - (age / duration);
 
             if (alpha <= 0) {
@@ -72,15 +79,28 @@ export function FighterSpellEffect({ fighterSpellsRef, simTimeRef }: { fighterSp
                 continue;
             }
 
-            _tempObj.position.set(s.x, s.y, s.z);
-            _tempObj.rotation.set(0, s.rotation, 0);
-            _tempObj.scale.setScalar(1.5 + (1.0 - alpha) * 0.5);
-            _tempObj.updateMatrix();
-            mesh.setMatrixAt(activeCount, _tempObj.matrix);
+            const scale = 1.1 + (1.0 - alpha) * 1.6;
             
-            _color.set(s.color);
-            mesh.setColorAt(activeCount, _color);
-            activeCount++;
+            // VOLUMETRIC TRIPLE-SLASH: Layer 3 instances per slash with different tilts
+            for (let j = 0; j < 3; j++) {
+                if (activeCount >= MAX_SLASHES) break;
+                
+                _tempObj.position.set(s.x, s.y, s.z);
+                // Interleaved rotations to create a "thick" 3D volume
+                _tempObj.rotation.set(
+                    (j - 1) * 0.4, // Tilt X
+                    s.rotation + (j - 1) * 0.1, // Offset Y
+                    (j - 1) * 0.2 // Tilt Z
+                );
+                
+                _tempObj.scale.set(scale, scale * 0.6, scale);
+                _tempObj.updateMatrix();
+                mesh.setMatrixAt(activeCount, _tempObj.matrix);
+                
+                _color.set(s.color).multiplyScalar(1.0 - j * 0.2); // inner layers darker
+                mesh.setColorAt(activeCount, _color);
+                activeCount++;
+            }
         }
 
         mesh.count = activeCount;
@@ -88,7 +108,7 @@ export function FighterSpellEffect({ fighterSpellsRef, simTimeRef }: { fighterSp
         if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     });
 
-    const geometry = useMemo(() => new THREE.PlaneGeometry(2, 1), []);
+    const geometry = useMemo(() => new THREE.PlaneGeometry(3, 1.5), []);
     const material = useMemo(() => new THREE.ShaderMaterial({
         ...SlashShader,
         transparent: true,
