@@ -39,6 +39,7 @@ export default function TrainingPage() {
     assassinSpellsRef,
     downloadPerfLogs,
     clearVFXCache,
+    compBuffers,
   } = useBattleSystem();
 
 
@@ -171,6 +172,7 @@ export default function TrainingPage() {
             assassinSpellsRef={assassinSpellsRef}
             downloadPerfLogs={downloadPerfLogs}
             clearVFXCache={clearVFXCache}
+            compBuffers={compBuffers}
           />
         </div>
 

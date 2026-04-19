@@ -51,6 +51,7 @@ export default function GamePage() {
     assassinSpellsRef,
     downloadPerfLogs,
     clearVFXCache,
+    compBuffers,
   } = useBattleSystem();
 
 
@@ -318,6 +319,7 @@ export default function GamePage() {
                     assassinSpellsRef={assassinSpellsRef}
                     downloadPerfLogs={downloadPerfLogs}
                     clearVFXCache={clearVFXCache}
+                    compBuffers={compBuffers}
                   />
 
 

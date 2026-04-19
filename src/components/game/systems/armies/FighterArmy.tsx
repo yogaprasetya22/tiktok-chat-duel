@@ -33,6 +33,7 @@ interface FighterArmyProps {
   namePoolMap: React.MutableRefObject<Map<string, number>>;
   nameTextRefs: React.RefObject<any[]>;
   fighterSpellsRef: React.RefObject<any[]>;
+  compBuffers: any;
 }
 
 const POOL_SIZE = ARMY_POOL_SIZE; // Controlled from constants.ts
@@ -41,10 +42,10 @@ const _hudTemp = new THREE.Object3D();
 const _healthColor = new THREE.Color();
 const _whiteColor = new THREE.Color('#ffffff');
 
-const FighterArmyComponent = ({
+export const FighterArmy = React.memo(({
   unitsMap, towerConfig, settingsRef, simTimeRef, vehicles, unitIndex,
   renderedIdsRef, shadowRef, healthBgRef, healthFillRef, notchRef, hudBaseIdx,
-  namePoolMap, nameTextRefs, fighterSpellsRef
+  namePoolMap, nameTextRefs, fighterSpellsRef, compBuffers
 }: FighterArmyProps) => {
   const poolMapRef = useRef<Map<string, number>>(new Map());
   const availableIndicesRef = useRef<number[]>([]);
@@ -167,7 +168,10 @@ const FighterArmyComponent = ({
   useFrame((state, delta) => {
     frameCountRef.current++;
     const rawMap = unitsMap.current;
-    if (!rawMap || characterPool.length === 0) return;
+    const buffers = compBuffers;
+    if (!rawMap || characterPool.length === 0 || !buffers) return;
+
+    const { px, py, pz, vHealth, vMaxHealth, eidMap } = buffers;
 
     const time = state.clock.elapsedTime;
     const _activeSet = activeSetRef.current;
@@ -380,10 +384,12 @@ const FighterArmyComponent = ({
           poolMapRef.current.set(id, pIdx);
           const pItem = characterPool[pIdx];
           const teamMaterials = uData.type === 'player' ? teamMats.player : teamMats.enemy;
-          pItem.colorable.forEach((mesh: any) => {
-            const matIdx = mesh[`_matIdx_${mesh._assetIdx}`];
-            if (matIdx !== undefined) mesh.material = teamMaterials[matIdx];
-          });
+          if (pItem && pItem.colorable) {
+            pItem.colorable.forEach((mesh: any) => {
+              const matIdx = mesh[`_matIdx_${mesh._assetIdx}`];
+              if (matIdx !== undefined) mesh.material = teamMaterials[matIdx];
+            });
+          }
         } else return;
       }
 
@@ -394,18 +400,29 @@ const FighterArmyComponent = ({
         poolMapRef.current.delete(id);
         return;
       }
+
+      // HIGH PERFORMANCE: Direct Buffer Access
+      const poolIdx_ = parseInt(id.split('-')[1]);
+      const eid = eidMap[poolIdx_];
+      if (eid === -1) return;
+
+      const tx = px[eid];
+      const ty = py[eid];
+      const tz = pz[eid];
+      const th = vHealth[eid];
+      const tmh = vMaxHealth[eid];
+
       pItem.group.visible = true;
 
       const baseScale = uData.isBoss ? 4.5 : (1.4 + (uData.level || 1) * 0.1);
       pItem.group.scale.setScalar(baseScale * settings.unitScale);
 
       let targetAnim = 'Idle';
-      if (uData.isDying) targetAnim = 'Death';
+      if (uData.isDying || th <= 0) targetAnim = 'Death';
       else if (uData.status === 'marching') targetAnim = 'Run';
       else if (uData.status === 'attacking') {
         const timeSinceAtk = (simTimeRef.current || 0) - (uData.lastAttackTime || 0);
         const atkName = pItem.actions['SwordSlash'] ? 'SwordSlash' : (pItem.actions['Attack'] ? 'Attack' : 'Idle');
-        // KINETIC OPTIMIZATION: Only animate attack for 600ms after a hit
         targetAnim = timeSinceAtk < 650 ? atkName : 'Idle';
       }
       if (!pItem.actions[targetAnim]) targetAnim = 'Idle';
@@ -422,25 +439,22 @@ const FighterArmyComponent = ({
         }
       }
 
-      const tp = uData.position;
       const cp = pItem.group.position;
 
-      // Smooth Interpolation with Lag Resilience
-      const lerpFactor = 1.0 - Math.exp(-25 * delta); // Adjusted for high-speed smoothness
-      const distSq = (tp[0] - cp.x) ** 2 + (tp[2] - cp.z) ** 2;
+      // Smooth Interpolation with Buffer Positions
+      const lerpFactor = 1.0 - Math.exp(-25 * delta); 
+      const distSq = (tx - cp.x) ** 2 + (tz - cp.z) ** 2;
 
-      if (!pItem.initialized || distSq > 100) { // Increased snap threshold to 10m to prevent jitter-snaps
-        cp.set(tp[0], tp[1], tp[2]);
+      if (!pItem.initialized || distSq > 100) { 
+        cp.set(tx, ty, tz);
         pItem.rotation = uData.rotation[1];
         pItem.group.rotation.y = pItem.rotation;
         pItem.initialized = true;
       } else {
-        // High-fidelity position smoothing
-        cp.x += (tp[0] - cp.x) * lerpFactor;
-        cp.y += (tp[1] - cp.y) * lerpFactor;
-        cp.z += (tp[2] - cp.z) * lerpFactor;
+        cp.x += (tx - cp.x) * lerpFactor;
+        cp.y += (ty - cp.y) * lerpFactor;
+        cp.z += (tz - cp.z) * lerpFactor;
 
-        // Optimized Rotation Smoothing
         let diff = uData.rotation[1] - pItem.rotation;
         while (diff < -Math.PI) diff += Math.PI * 2;
         while (diff > Math.PI) diff -= Math.PI * 2;
@@ -448,8 +462,7 @@ const FighterArmyComponent = ({
         pItem.group.rotation.y = pItem.rotation;
       }
 
-      // --- HUD SYNC (Frame-Perfect) ---
-      // We manually update world matrix to ensure sibling elements (HUD) match the character exactly
+      // HUD Sync using Buffer data
       pItem.group.updateMatrix();
 
       const hIdx = hudBaseIdx + poolIdx;
@@ -458,11 +471,11 @@ const FighterArmyComponent = ({
         const showDetail = uData.isBoss || (uData.dSq || 0) < HUD_DETAIL_DIST_SQ;
 
         if (showDetail) {
-          const pct = Math.max(0, uData.hp / (uData.maxHp || 100));
+          const pct = Math.max(0, th / (tmh || 100));
           const by = uData.isBoss ? 8.2 : 3.8;
           const bs = uData.isBoss ? 2.5 : 1.0;
 
-          // 1. Shadow
+          // 1. Shadow (Using CP which is lerped from Buffer)
           _hudTemp.position.set(cp.x, -0.45, cp.z);
           _hudTemp.rotation.set(-Math.PI / 2, 0, 0);
           const ss = uData.isBoss ? 4.5 : 1.6;
@@ -532,7 +545,7 @@ const FighterArmyComponent = ({
       const isTooFar = (uData.dSq || 0) > ANIM_CULL_DIST_SQ; 
 
       if (!isTooFar && time - pItem.lastUpdate >= 0.016 * sf) {
-        pItem.mixer.update(delta * sf);
+        pItem.mixer.update(time - pItem.lastUpdate);
         pItem.lastUpdate = time;
       }
     });
@@ -577,9 +590,7 @@ const FighterArmyComponent = ({
       {characterPool.map((item, idx) => (<primitive key={"pool-fighter-" + idx} object={item.group} />))}
     </group>
   );
-};
-
-export const FighterArmy = React.memo(FighterArmyComponent);
+});
 
 useGLTF.preload('/assets-model/Knight_Golden_Female.glb', true, true, (loader) => {
   loader.setMeshoptDecoder(MeshoptDecoder);

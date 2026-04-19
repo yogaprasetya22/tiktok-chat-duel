@@ -8,6 +8,13 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import * as YUKA from "yuka";
 import { useStore } from "@/src/state/useStore";
+import { 
+    createWorld, 
+    defineComponent, 
+    Types, 
+    addEntity, 
+    addComponent, 
+} from 'bitecs';
 
 import type {
     ActiveUnit,
@@ -167,6 +174,31 @@ export const useBattleSystem = () => {
     const simulationTimeRef = useRef<number>(0);
     const physicsAccumulatorRef = useRef(0);
     const lastStateUpdate = useRef<number>(0);
+
+    // --- BITECS ECS ARCHITECTURE ---
+    const world = useMemo(() => createWorld(), []);
+    const frameCountRef = useRef(0);
+    const Position = useMemo(() => defineComponent({ x: Types.f32, y: Types.f32, z: Types.f32 }), []);
+    const Health = useMemo(() => defineComponent({ current: Types.f32, max: Types.f32 }), []);
+    const Status = useMemo(() => defineComponent({ 
+        type: Types.ui8, 
+        classIdx: Types.ui8,
+        state: Types.ui8,
+        active: Types.ui8
+    }), []);
+
+    // Entity mapping for pool management
+    const eidMap = useRef<number[]>(new Array(WORLD_UNIT_POOL_SIZE).fill(-1));
+
+    // Ref pointers to raw bitecs arrays for tight loop access
+    const _px = Position.x;
+    const _py = Position.y;
+    const _pz = Position.z;
+    const _vh = Health.current;
+    const _vmh = Health.max;
+    const _vActive = Status.active;
+    const _vType = Status.type;
+    const _vState = Status.state;
 
     // --- ZERO-ALLOCATION OBJECT POOL ---
     const unitPoolRef = useRef<ActiveUnit[]>([]);
@@ -465,6 +497,25 @@ export const useBattleSystem = () => {
                 statsRef.current.profileImages[name] = profileImage;
             }
 
+            // Sync to bitecs ECS
+            let eid = eidMap.current[poolIdx];
+            if (eid === -1) {
+                eid = addEntity(world);
+                addComponent(world, Position, eid);
+                addComponent(world, Health, eid);
+                addComponent(world, Status, eid);
+                eidMap.current[poolIdx] = eid;
+            }
+
+            _px[eid] = v.position.x;
+            _py[eid] = -0.4;
+            _pz[eid] = v.position.z;
+            _vh[eid] = u.hp;
+            _vmh[eid] = u.maxHp;
+            _vType[eid] = type === "player" ? 0 : 1;
+            _vActive[eid] = 1;
+            _vState[eid] = 1; // marching
+
             unitIndexRef.current.set(u.id, u);
         },
         [entityManager],
@@ -475,6 +526,7 @@ export const useBattleSystem = () => {
 
     const updateSimulation = useCallback(
         (delta: number) => {
+            frameCountRef.current++;
             const now = performance.now();
 
             // Handle Freeze Time (Hit-stop effect)
@@ -493,15 +545,19 @@ export const useBattleSystem = () => {
 
             // PERFORMANCE: Skip intensive loops if no units are active
             let activeCount = 0;
+            const eidArr = eidMap.current;
+            const activeArr = _vActive;
             for (let i = 0; i < WORLD_UNIT_POOL_SIZE; i++) {
-                if (unitPoolRef.current[i].isActive) activeCount++;
+                const eid = eidArr[i];
+                if (eid !== -1 && activeArr[eid]) activeCount++;
             }
             if (activeCount === 0 && gameStateRef.current !== "PLAYING") return;
 
             // --- 2D GRID BUCKET UPDATE (Zero-Allocation Global Grid) ---
-            // PERFORMANCE: This grid is shared between AI and Rendering.
-            // We update it once at the start of the simulation tick.
-            battleGrid.update(unitDataPoolRef.current);
+            // Optimization: Update grid every 2 frames to save CPU
+            if (frameCountRef.current % 2 === 0) {
+                battleGrid.update(unitDataPoolRef.current);
+            }
 
             // --- 2. ENTITY SIMULATION (Fixed Accumulator with Spiral Protection) ---
             const PHYSICS_STEP = 0.016; 
@@ -521,30 +577,42 @@ export const useBattleSystem = () => {
             }
             flushDamageBuffer(now);
 
-            // --- MAIN SIMULATION LOOP ---
-            for (let i = 0; i < WORLD_UNIT_POOL_SIZE; i++) {
-                const u = unitPoolRef.current[i];
-                const uData = unitDataPoolRef.current[i];
-                const v = vehiclePoolRef.current[i];
+            // --- MAIN SIMULATION LOOP (BITECS VECTORIZED) ---
+            const eids = eidMap.current;
+            const activeStates = _vActive;
+            const uPool = unitPoolRef.current;
+            const uiPool = unitDataPoolRef.current;
+            const vPool = vehiclePoolRef.current;
 
-                if (!u.isActive || u.hp <= 0) {
+            for (let i = 0; i < WORLD_UNIT_POOL_SIZE; i++) {
+                const eid = eids[i];
+                if (eid === -1 || !activeStates[eid]) continue;
+
+                const u = uPool[i];
+                const uData = uiPool[i];
+                const v = vPool[i];
+
+                if (_vh[eid] <= 0) {
                     uData.position[1] = -100;
-                    v.velocity.set(0, 0, 0); // Extra safety
+                    _py[eid] = -100;
+                    v.velocity.set(0, 0, 0); 
+                    _vActive[eid] = 0;
+                    u.isActive = false;
+                    uData.isActive = false;
                     continue;
                 }
 
-                if (u.hp <= 0 && !u.isDying) {
+                if (_vh[i] <= 0 && !u.isDying) {
                     u.isDying = true;
-                    u.deathTime = simNow; // Use simulation time!
+                    u.deathTime = simNow; 
                     uData.isDying = true;
                     v.maxSpeed = 0;
                     v.velocity.set(0, 0, 0);
                     v.steering.behaviors.length = 0;
                     entityManager.remove(v);
 
-                    // SUPREME IMPACT: Freeze Frame on Boss Death
                     if (u.isBoss) {
-                        freezeTimeRef.current = 200; // 0.2s Hit-stop
+                        freezeTimeRef.current = 200; 
                     }
                     continue;
                 }
@@ -590,8 +658,8 @@ export const useBattleSystem = () => {
                         if (potential.type === u.type) continue;
                         if (potential.hp <= 0 || potential.isDying) continue;
 
-                        const dx = uData.position[0] - potential.position[0];
-                        const dz = uData.position[2] - potential.position[2];
+                        const dx = _px[eid] - potential.position[0];
+                        const dz = _pz[eid] - potential.position[2];
                         const dSq = dx * dx + dz * dz;
 
                         let weight = 1.0;
@@ -615,21 +683,18 @@ export const useBattleSystem = () => {
                 }
 
                 // --- OPTIMIZED MOVEMENT & SEPARATION (Manual Grid-Based) ---
-                // CPU OFFLOAD: Steering only every 2 simulation steps.
-                // FIXED: Use frame-based logic to avoid units being "stuck"
                 const simFrame = Math.floor(simNow * 60); 
                 const moveCheck = (simFrame + i) % 2 === 0;
 
                 if (moveCheck && !u.isDying) {
-                    // Simple Separation Logic using battleGrid
                     const sepWeight = 0.5;
-                    const neighbors = battleGrid.queryRadius(uData.position[0], uData.position[2], 1.2);
+                    const neighbors = battleGrid.queryRadius(_px[i], _pz[i], 1.2);
                     for (let j = 0; j < neighbors.length; j++) {
                         const potential = neighbors[j];
                         if (potential.id === u.id) continue;
                         
-                        const dx = uData.position[0] - potential.position[0];
-                        const dz = uData.position[2] - potential.position[2];
+                        const dx = _px[i] - potential.position[0];
+                        const dz = _pz[i] - potential.position[2];
                         const dSq = dx * dx + dz * dz;
 
                         if (dSq < 1.0 && dSq > 0.001) {
@@ -653,6 +718,11 @@ export const useBattleSystem = () => {
                 const effectiveRange = u.range * rangeMult;
                 const rangeSq = effectiveRange * effectiveRange;
 
+                const dxB = _px[i];
+                const dzB = _pz[i] - targetBaseZ;
+                const distToBaseSq = dxB * dxB + dzB * dzB;
+                const baseInRange = distToBaseSq < rangeSq; // Use adjusted range
+
                 let currentTarget: ActiveUnit | undefined =
                     u.targetId && !isBaseTarget
                         ? unitIndexRef.current.get(u.targetId)
@@ -665,16 +735,11 @@ export const useBattleSystem = () => {
                     u.targetId = undefined;
                 }
 
-                const dxB = uData.position[0];
-                const dzB = uData.position[2] - targetBaseZ;
-                const distToBaseSq = dxB * dxB + dzB * dzB;
-                const baseInRange = distToBaseSq < rangeSq; // Use adjusted range
-
                 if (currentTarget) {
                     const tIdx = parseInt(currentTarget.id.split("-")[1]);
                     const tData = unitDataPoolRef.current[tIdx];
-                    const dxT = uData.position[0] - tData.position[0];
-                    const dzT = uData.position[2] - tData.position[2];
+                    const dxT = _px[i] - tData.position[0];
+                    const dzT = _pz[i] - tData.position[2];
                     const dSq = dxT * dxT + dzT * dzT;
 
                     if (dSq < u.range * u.range) {
@@ -703,12 +768,15 @@ export const useBattleSystem = () => {
                                 let hits = 0;
 
                                 // Main target logic inside AOE
-                                currentTarget.hp -= dmg;
-                                tData.hp = currentTarget.hp;
-                                if (currentTarget.hp <= 0) {
+                                _vh[tIdx] -= dmg;
+                                tData.hp = _vh[tIdx];
+                                currentTarget.hp = _vh[tIdx];
+                                if (_vh[tIdx] <= 0) {
+                                    _vActive[tIdx] = 0;
                                     currentTarget.isActive = false;
                                     tData.isActive = false;
                                     tData.position[1] = -100;
+                                    _py[tIdx] = -100;
                                     addKillEvent(u.userName, currentTarget.userName, "unit", u.profileImage);
                                     updateStats(u.userName, u.type, 0, true);
                                 }
@@ -734,17 +802,20 @@ export const useBattleSystem = () => {
                                     const dSq = dx * dx + dz * dz;
 
                                     if (dSq < searchRadius * searchRadius) {
-                                        p.hp -= dmg;
-                                        // Find index in pool to update data
                                         const pIdx = parseInt(p.id.split('-')[1]);
                                         if (pIdx >= 0) {
+                                            _vh[pIdx] -= dmg;
                                             const pData = unitDataPoolRef.current[pIdx];
-                                            if (pData) {
-                                                pData.hp = p.hp;
-                                                if (p.hp <= 0) {
-                                                    p.isActive = false;
+                                            const pUnit = unitIndexRef.current.get(p.id);
+                                            if (pData && pUnit) {
+                                                pData.hp = _vh[pIdx];
+                                                pUnit.hp = _vh[pIdx];
+                                                if (_vh[pIdx] <= 0) {
+                                                    _vActive[pIdx] = 0;
+                                                    pUnit.isActive = false;
                                                     pData.isActive = false;
                                                     pData.position[1] = -100;
+                                                    _py[pIdx] = -100;
                                                     addKillEvent(u.userName, p.userName, "unit", u.profileImage);
                                                     updateStats(u.userName, u.type, 0, true);
                                                 }
@@ -757,12 +828,15 @@ export const useBattleSystem = () => {
                                 }
                             } else {
                                 // Standard Single Target
-                                currentTarget.hp -= dmg;
-                                tData.hp = currentTarget.hp;
-                                if (currentTarget.hp <= 0) {
+                                _vh[tIdx] -= dmg;
+                                tData.hp = _vh[tIdx];
+                                currentTarget.hp = _vh[tIdx];
+                                if (_vh[tIdx] <= 0) {
+                                    _vActive[tIdx] = 0;
                                     currentTarget.isActive = false;
                                     tData.isActive = false;
                                     tData.position[1] = -100;
+                                    _py[tIdx] = -100;
                                     addKillEvent(u.userName, currentTarget.userName, "unit", u.profileImage);
                                     updateStats(u.userName, u.type, 0, true);
                                 }
@@ -776,8 +850,8 @@ export const useBattleSystem = () => {
                             }
                             uData.lastAttackTime = simNow;
                         }
-                    } else {
-                        uData.status = "chasing";
+                    } else if (u.targetId) {
+                                uData.status = "chasing";
                         const classWeatherMult =
                             weatherMults[u.unitClass]?.move_speed_mult || 1.0;
                         v.maxSpeed = u.speed * classWeatherMult;
@@ -855,9 +929,9 @@ export const useBattleSystem = () => {
                     v.velocity.set(0, 0, 0); 
                 }
 
-                // --- 3. POSITION GUARD (Dynamic Tolerance) ---
-                const oldX = uData.position[0];
-                const oldZ = uData.position[2];
+                // --- 3. POSITION GUARD & BUFFER SYNC ---
+                const oldX = _px[i];
+                const oldZ = _pz[i];
                 const newX = v.position.x;
                 const newZ = v.position.z;
 
@@ -869,15 +943,18 @@ export const useBattleSystem = () => {
                 const maxStepDistSq = maxStepDist * maxStepDist;
 
                 if (moveDistSq > maxStepDistSq) {
-                    // Only compute sqrt if we actually need to rescale (rare)
                     const ratio = maxStepDist / Math.sqrt(moveDistSq);
-                    uData.position[0] = oldX + dx * ratio;
-                    uData.position[2] = oldZ + dz * ratio;
-                    v.position.set(uData.position[0], -0.4, uData.position[2]);
+                    _px[i] = oldX + dx * ratio;
+                    _pz[i] = oldZ + dz * ratio;
+                    v.position.set(_px[i], -0.4, _pz[i]);
                 } else {
-                    uData.position[0] = newX;
-                    uData.position[2] = newZ;
+                    _px[i] = newX;
+                    _pz[i] = newZ;
                 }
+                
+                // Final Sync to unitData for renderer
+                uData.position[0] = _px[i];
+                uData.position[2] = _pz[i];
             }
 
             if (
@@ -964,6 +1041,16 @@ export const useBattleSystem = () => {
         damageQueue: damageQueueRef,
         settingsRef,
         simTimeRef: simulationTimeRef,
+        compBuffers: { 
+            px: _px, 
+            py: _py, 
+            pz: _pz, 
+            vHealth: _vh, 
+            vMaxHealth: _vmh, 
+            vType: _vType, 
+            vActive: _vActive,
+            eidMap: eidMap.current
+        },
         downloadPerfLogs: () => {},
         clearVFXCache: () => {},
     };

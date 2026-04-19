@@ -164,6 +164,7 @@ interface GameCanvasProps {
   assassinSpellsRef: React.RefObject<any[]>;
   downloadPerfLogs: () => void;
   clearVFXCache: () => void;
+  compBuffers: any;
 }
 
 
@@ -188,6 +189,7 @@ export const GameCanvas = React.memo(({
   assassinSpellsRef,
   downloadPerfLogs,
   clearVFXCache,
+  compBuffers,
 }: GameCanvasProps) => {
 
   const [dpr, setDpr] = useState(1.0);
@@ -404,6 +406,7 @@ export const GameCanvas = React.memo(({
             fighterSpellsRef={fighterSpellsRef}
             tankSpellsRef={tankSpellsRef}
             assassinSpellsRef={assassinSpellsRef}
+            compBuffers={compBuffers}
           />
 
 

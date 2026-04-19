@@ -9,6 +9,7 @@
         "@react-three/fiber": "^9.5.0",
         "@react-three/postprocessing": "^3.0.4",
         "@types/three": "^0.183.1",
+        "bitecs": "0.3.40",
         "leva": "^0.10.1",
         "lucide-react": "^1.7.0",
         "meshoptimizer": "^1.1.0",
@@ -18,7 +19,7 @@
         "react-dom": "19.2.4",
         "three": "^0.183.2",
         "three-stdlib": "^2.36.1",
-        "tiktok-live-connector": "latest",
+        "tiktok-live-connector": "2.1.0",
         "yuka": "^0.7.8",
         "zustand": "^5.0.12",
       },
@@ -105,7 +106,7 @@
 
     "@eslint/plugin-kit": ["@eslint/plugin-kit@0.4.1", "", { "dependencies": { "@eslint/core": "^0.17.0", "levn": "^0.4.1" } }, "sha512-43/qtrDUokr7LJqoF2c3+RInu/t4zfrpYdoSDfYyhg52rwLV6TnOvdG4fXm7IkSB3wErkcmJS9iEhjVtOSEjjA=="],
 
-    "@eulerstream/euler-api-sdk": ["@eulerstream/euler-api-sdk@0.1.7", "", { "dependencies": { "axios": "^1.9.0" } }, "sha512-nahq6cTun0XClhpjFqSDOA79GpJXa5wgEEQIRE/q8G5sM83BzkJcRkQPaI0SP1AUgovCuAiXNdhEhqtvdAVf5g=="],
+    "@eulerstream/euler-api-sdk": ["@eulerstream/euler-api-sdk@0.1.5", "", { "dependencies": { "axios": "^1.9.0" } }, "sha512-BdEitFq3bIPsY673Ap+/yfP80JhHQJKzEFTQJRMCt6GkX3guSKPHqdygRX4Rur7c9XmbDhBEG3Msj+ZM6uDIjw=="],
 
     "@floating-ui/core": ["@floating-ui/core@1.7.5", "", { "dependencies": { "@floating-ui/utils": "^0.2.11" } }, "sha512-1Ih4WTWyw0+lKyFMcBHGbb5U5FtuHJuujoyyr5zTaWS5EYMeT6Jb2AuDeftsCsEuchO+mM2ij5+q9crhydzLhQ=="],
 
@@ -486,6 +487,8 @@
     "baseline-browser-mapping": ["baseline-browser-mapping@2.10.14", "", { "bin": { "baseline-browser-mapping": "dist/cli.cjs" } }, "sha512-fOVLPAsFTsQfuCkvahZkzq6nf8KvGWanlYoTh0SVA0A/PIUxQGU2AOZAoD95n2gFLVDW/jP6sbGLny95nmEuHA=="],
 
     "bidi-js": ["bidi-js@1.0.3", "", { "dependencies": { "require-from-string": "^2.0.2" } }, "sha512-RKshQI1R3YQ+n9YJz2QQ147P66ELpa1FQEg20Dk8oW9t2KgLbpDLLp9aGZ7y8WHSshDknG0bknqGw5/tyCs5tw=="],
+
+    "bitecs": ["bitecs@0.3.40", "", {}, "sha512-wAylY4pNfX8IeIH5phtwt1lUNtHKrkoSNrArI7Ris2Y4nEQWFIVvXdgAuqprEg9bq8Wolmlj0gVfeG6MFmtI2Q=="],
 
     "brace-expansion": ["brace-expansion@1.1.13", "", { "dependencies": { "balanced-match": "^1.0.0", "concat-map": "0.0.1" } }, "sha512-9ZLprWS6EENmhEOpjCYW2c8VkmOvckIJZfkr7rBW6dObmfgJ/L1GpSYW5Hpo9lDz4D1+n0Ckz8rU7FwHDQiG/w=="],
 
@@ -1067,7 +1070,7 @@
 
     "three-stdlib": ["three-stdlib@2.36.1", "", { "dependencies": { "@types/draco3d": "^1.4.0", "@types/offscreencanvas": "^2019.6.4", "@types/webxr": "^0.5.2", "draco3d": "^1.4.1", "fflate": "^0.6.9", "potpack": "^1.0.1" }, "peerDependencies": { "three": ">=0.128.0" } }, "sha512-XyGQrFmNQ5O/IoKm556ftwKsBg11TIb301MB5dWNicziQBEs2g3gtOYIf7pFiLa0zI2gUwhtCjv9fmjnxKZ1Cg=="],
 
-    "tiktok-live-connector": ["tiktok-live-connector@2.1.1-beta1", "", { "dependencies": { "@bufbuild/protobuf": "^2.2.5", "@eulerstream/euler-api-sdk": "0.1.7", "axios": "^1.12.2", "callable-instance": "^2.0.0", "protobufjs": "^6.11.2", "typed-emitter": "^2.1.0", "ws": "^8.18.2" } }, "sha512-K//OhuyMqq9EAb/2S5jHlW14fsFtO2cXQmRG5ZGQe6Cykb89h4qnkZMdMarzujYxb1jaadzfWKlB2dlz6OmCTA=="],
+    "tiktok-live-connector": ["tiktok-live-connector@2.1.0", "", { "dependencies": { "@bufbuild/protobuf": "^2.2.5", "@eulerstream/euler-api-sdk": "0.1.5", "axios": "^1.12.2", "callable-instance": "^2.0.0", "protobufjs": "^6.11.2", "typed-emitter": "^2.1.0", "ws": "^8.18.2" } }, "sha512-HOhUu90XXdF4FlD88LUHIWpeytXzA5vBIigaU9gGYjUI2YhFhRXJ4R5imbnpJdFVmeSRKehIXMWzLkN/peRjGg=="],
 
     "tinyglobby": ["tinyglobby@0.2.15", "", { "dependencies": { "fdir": "^6.5.0", "picomatch": "^4.0.3" } }, "sha512-j2Zq4NyQYG5XMST4cbs02Ak8iJUdxRM0XI5QyxXuZOzKOINmWurp3smXu3y5wDcJrptwpSjgXHzIQxR0omXljQ=="],
 

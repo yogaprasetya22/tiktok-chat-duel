@@ -17,7 +17,7 @@ import * as YUKA from 'yuka';
 import { applyPainterlyStyle } from '../effects/PainterlyMaterials';
 
 
-interface MarksmanArmyProps {
+export interface MarksmanArmyProps {
   unitsMap: React.RefObject<UnitRuntimeData[]>;
   towerConfig: TowerConfig;
   settingsRef: React.RefObject<SimulationSettings>;
@@ -34,6 +34,7 @@ interface MarksmanArmyProps {
   hudBaseIdx: number;
   namePoolMap: React.MutableRefObject<Map<string, number>>;
   nameTextRefs: React.RefObject<any[]>;
+  compBuffers: any;
 }
 
 const POOL_SIZE = ARMY_POOL_SIZE; // Controlled from constants.ts
@@ -42,11 +43,11 @@ const _hudTemp = new THREE.Object3D();
 const _healthColor = new THREE.Color();
 const _whiteColor = new THREE.Color('#ffffff');
 
-export function MarksmanArmy({
+export const MarksmanArmy = React.memo(({
   unitsMap, towerConfig, settingsRef, mmSpellsRef, simTimeRef, vehicles,
   unitIndex, renderedIdsRef, shadowRef, healthBgRef, healthFillRef, notchRef, hudBaseIdx,
-  namePoolMap, nameTextRefs
-}: MarksmanArmyProps) {
+  namePoolMap, nameTextRefs, compBuffers
+}: MarksmanArmyProps) => {
   const poolMapRef = useRef<Map<string, number>>(new Map());
   const availableIndicesRef = useRef<number[]>([]);
   const activeSetRef = useRef<Set<string>>(new Set());
@@ -158,7 +159,10 @@ export function MarksmanArmy({
   useFrame((state, delta) => {
     frameCountRef.current++;
     const rawMap = unitsMap.current;
-    if (!rawMap || characterPool.length === 0) return;
+    const buffers = compBuffers;
+    if (!rawMap || characterPool.length === 0 || !buffers) return;
+
+    const { px, py, pz, vHealth, vMaxHealth, eidMap } = buffers;
 
     const time = state.clock.elapsedTime;
     const _activeSet = activeSetRef.current;
@@ -371,10 +375,12 @@ export function MarksmanArmy({
           poolMapRef.current.set(id, pIdx);
           const pItem = characterPool[pIdx];
           const teamMaterials = uData.type === 'player' ? teamMats.player : teamMats.enemy;
-          pItem.colorable.forEach((mesh: any) => {
-            const matIdx = mesh[`_matIdx_${mesh._assetIdx}`];
-            if (matIdx !== undefined) mesh.material = teamMaterials[matIdx];
-          });
+          if (pItem && pItem.colorable) {
+            pItem.colorable.forEach((mesh: any) => {
+              const matIdx = mesh[`_matIdx_${mesh._assetIdx}`];
+              if (matIdx !== undefined) mesh.material = teamMaterials[matIdx];
+            });
+          }
         } else return;
       }
 
@@ -385,13 +391,25 @@ export function MarksmanArmy({
         poolMapRef.current.delete(id);
         return;
       }
+
+      // HIGH PERFORMANCE: Direct Buffer Access
+      const poolIdx_ = parseInt(id.split('-')[1]);
+      const eid = eidMap[poolIdx_];
+      if (eid === -1) return;
+
+      const tx = px[eid];
+      const ty = py[eid];
+      const tz = pz[eid];
+      const th = vHealth[eid];
+      const tmh = vMaxHealth[eid];
+
       pItem.group.visible = true;
 
       const baseScale = uData.isBoss ? 4.2 : (1.3 + (uData.level || 1) * 0.1);
       pItem.group.scale.setScalar(baseScale * settings.unitScale);
 
       let targetAnim = 'Idle';
-      if (uData.isDying) targetAnim = 'Death';
+      if (uData.isDying || th <= 0) targetAnim = 'Death';
       else if (uData.status === 'marching') targetAnim = 'Run';
       else if (uData.status === 'attacking') {
         const timeSinceAtk = (simTimeRef.current || 0) - (uData.lastAttackTime || 0);
@@ -414,18 +432,17 @@ export function MarksmanArmy({
         }
       }
 
-      const tp = uData.position;
       const cp = pItem.group.position;
       const lerpFactor = 1.0 - Math.exp(-25 * delta);
       if (!pItem.initialized) {
-        cp.set(tp[0], tp[1], tp[2]);
+        cp.set(tx, ty, tz);
         pItem.rotation = uData.rotation[1];
         pItem.group.rotation.y = pItem.rotation;
         pItem.initialized = true;
       } else {
-        cp.x = THREE.MathUtils.lerp(cp.x, tp[0], lerpFactor);
-        cp.y = THREE.MathUtils.lerp(cp.y, tp[1], lerpFactor);
-        cp.z = THREE.MathUtils.lerp(cp.z, tp[2], lerpFactor);
+        cp.x = THREE.MathUtils.lerp(cp.x, tx, lerpFactor);
+        cp.y = THREE.MathUtils.lerp(cp.y, ty, lerpFactor);
+        cp.z = THREE.MathUtils.lerp(cp.z, tz, lerpFactor);
 
         let diff = uData.rotation[1] - pItem.rotation;
         while (diff < -Math.PI) diff += Math.PI * 2;
@@ -443,11 +460,11 @@ export function MarksmanArmy({
         const showDetail = uData.isBoss || (uData.dSq || 0) < HUD_DETAIL_DIST_SQ;
 
         if (showDetail) {
-          const pct = Math.max(0, uData.hp / (uData.maxHp || 100));
+          const pct = Math.max(0, th / (tmh || 100));
           const by = uData.isBoss ? 8.2 : 3.8;
           const bs = uData.isBoss ? 2.5 : 1.0;
 
-          // 1. Shadow
+          // 1. Shadow (Using CP which is lerped from Buffer)
           _hudTemp.position.set(cp.x, -0.45, cp.z);
           _hudTemp.rotation.set(-Math.PI / 2, 0, 0);
           const ss = uData.isBoss ? 4.5 : 1.6;
@@ -516,7 +533,7 @@ export function MarksmanArmy({
       const isTooFar = (uData.dSq || 0) > ANIM_CULL_DIST_SQ; 
 
       if (!isTooFar && time - pItem.lastUpdate >= 0.016 * sf) {
-        pItem.mixer.update(delta * sf);
+        pItem.mixer.update(time - pItem.lastUpdate);
         pItem.lastUpdate = time;
       }
     });
@@ -559,7 +576,7 @@ export function MarksmanArmy({
       {characterPool.map((item, idx) => (<primitive key={"pool-marksman-" + idx} object={item.group} />))}
     </group>
   );
-}
+});
 
 useGLTF.preload('/assets-model/Cowboy_Female.glb', true, true, (loader) => {
   loader.setMeshoptDecoder(MeshoptDecoder);

@@ -17,7 +17,7 @@ import * as YUKA from 'yuka';
 import { applyPainterlyStyle } from '../effects/PainterlyMaterials';
 
 
-interface MageArmyProps {
+export interface MageArmyProps {
   unitsMap: React.RefObject<UnitRuntimeData[]>;
   towerConfig: TowerConfig;
   settingsRef: React.RefObject<SimulationSettings>;
@@ -33,6 +33,7 @@ interface MageArmyProps {
   hudBaseIdx: number;
   namePoolMap: React.MutableRefObject<Map<string, number>>;
   nameTextRefs: React.RefObject<any[]>;
+  compBuffers: any;
 }
 
 const POOL_SIZE = ARMY_POOL_SIZE; // Controlled from constants.ts
@@ -40,11 +41,11 @@ const POOL_SIZE = ARMY_POOL_SIZE; // Controlled from constants.ts
 const _hudTemp = new THREE.Object3D();
 const _healthColor = new THREE.Color();
 
-export function MageArmy({
+export const MageArmy = React.memo(({
   unitsMap, towerConfig, settingsRef, spellsRef, simTimeRef, vehicles,
   unitIndex, renderedIdsRef, shadowRef, healthBgRef, healthFillRef, notchRef, hudBaseIdx,
-  namePoolMap, nameTextRefs
-}: MageArmyProps) {
+  namePoolMap, nameTextRefs, compBuffers
+}: MageArmyProps) => {
   const poolMapRef = useRef<Map<string, number>>(new Map());
   const availableIndicesRef = useRef<number[]>([]);
   const activeSetRef = useRef<Set<string>>(new Set());
@@ -176,7 +177,10 @@ export function MageArmy({
   useFrame((state, delta) => {
     frameCountRef.current++;
     const rawMap = unitsMap.current;
-    if (!rawMap || characterPool.length === 0) return;
+    const buffers = compBuffers;
+    if (!rawMap || characterPool.length === 0 || !buffers) return;
+
+    const { px, py, pz, vHealth, vMaxHealth, eidMap } = buffers;
 
     const time = state.clock.elapsedTime;
     const _activeSet = activeSetRef.current;
@@ -375,10 +379,12 @@ export function MageArmy({
           poolMapRef.current.set(id, pIdx);
           const pItem = characterPool[pIdx];
           const teamMaterials = uData.type === 'player' ? teamMats.player : teamMats.enemy;
-          pItem.colorable.forEach((mesh: any) => {
-            const matIdx = mesh[`_matIdx_${mesh._assetIdx}`];
-            if (matIdx !== undefined) mesh.material = teamMaterials[matIdx];
-          });
+          if (pItem && pItem.colorable) {
+            pItem.colorable.forEach((mesh: any) => {
+              const matIdx = mesh[`_matIdx_${mesh._assetIdx}`];
+              if (matIdx !== undefined) mesh.material = teamMaterials[matIdx];
+            });
+          }
         } else return;
       }
 
@@ -389,11 +395,23 @@ export function MageArmy({
         poolMapRef.current.delete(id);
         return;
       }
+
+      // HIGH PERFORMANCE: Direct Buffer Access
+      const poolIdx_ = parseInt(id.split('-')[1]);
+      const eid = eidMap[poolIdx_];
+      if (eid === -1) return;
+
+      const tx = px[eid];
+      const ty = py[eid];
+      const tz = pz[eid];
+      const th = vHealth[eid];
+      const tmh = vMaxHealth[eid];
+
       pItem.group.visible = true;
       pItem.group.scale.setScalar(uData.isBoss ? 4.0 : (1.3 + (uData.level || 1) * 0.1) * settings.unitScale);
 
       let targetAnim = 'Idle';
-      if (uData.isDying) targetAnim = 'Death';
+      if (uData.isDying || th <= 0) targetAnim = 'Death';
       else if (uData.status === 'marching') targetAnim = pItem.runAnim || 'Run';
       else if (uData.status === 'attacking') {
         const timeSinceAtk = (simTimeRef.current || 0) - (uData.lastAttackTime || 0);
@@ -412,22 +430,21 @@ export function MageArmy({
         }
       }
 
-      const tp = uData.position;
       const cp = pItem.group.position;
       
-      // Smooth Interpolation with Lag Resilience
+      // Smooth Interpolation with Buffer Positions
       const lerpFactor = 1.0 - Math.exp(-25 * delta); 
-      const distSq = (tp[0] - cp.x) ** 2 + (tp[2] - cp.z) ** 2;
+      const distSq = (tx - cp.x) ** 2 + (tz - cp.z) ** 2;
 
-      if (!pItem.initialized || distSq > 100) { // Increased snap threshold
-        cp.set(tp[0], tp[1], tp[2]);
+      if (!pItem.initialized || distSq > 100) { 
+        cp.set(tx, ty, tz);
         pItem.rotation = uData.rotation[1];
         pItem.group.rotation.y = pItem.rotation;
         pItem.initialized = true;
       } else {
-        cp.x += (tp[0] - cp.x) * lerpFactor;
-        cp.y += (tp[1] - cp.y) * lerpFactor;
-        cp.z += (tp[2] - cp.z) * lerpFactor;
+        cp.x += (tx - cp.x) * lerpFactor;
+        cp.y += (ty - cp.y) * lerpFactor;
+        cp.z += (tz - cp.z) * lerpFactor;
 
         let diff = uData.rotation[1] - pItem.rotation;
         while (diff < -Math.PI) diff += Math.PI * 2;
@@ -441,7 +458,7 @@ export function MageArmy({
       if (shadowRef.current && healthBgRef.current) {
         const showDetail = uData.isBoss || (uData.dSq || 0) < 32400;
         if (showDetail) {
-          const pct = Math.max(0, uData.hp / (uData.maxHp || 100));
+          const pct = Math.max(0, th / (tmh || 100));
           const by = uData.isBoss ? 8.2 : 3.8;
           const bs = uData.isBoss ? 2.5 : 1.0;
 
@@ -495,7 +512,7 @@ export function MageArmy({
 
       const sf = (uData.dSq || 0) > 3600 ? 5 : (uData.dSq || 0) > 400 ? 2 : 1;
       if ((uData.dSq || 0) <= ANIM_CULL_DIST_SQ && time - pItem.lastUpdate >= 0.016 * sf) {
-        pItem.mixer.update(delta * sf);
+        pItem.mixer.update(time - pItem.lastUpdate);
         pItem.lastUpdate = time;
       }
     });
@@ -535,7 +552,7 @@ export function MageArmy({
       {characterPool.map((item, idx) => (<primitive key={"pool-mage-" + idx} object={item.group} />))}
     </group>
   );
-}
+});
 
 useGLTF.preload('/assets-model/Witch.glb', true, true, (loader) => {
   loader.setMeshoptDecoder(MeshoptDecoder);
