@@ -49,6 +49,8 @@ const ShockwaveMaterial = () => new THREE.ShaderMaterial({
     transparent: true,
     depthWrite: false,
     blending: THREE.AdditiveBlending,
+    vertexColors: true,
+    defines: { USE_INSTANCING: '', USE_INSTANCING_COLOR: '' }
 });
 
 export function TankSpellEffect({ tankSpellsRef, simTimeRef }: { tankSpellsRef: React.RefObject<any[]>, simTimeRef: React.RefObject<number> }) {

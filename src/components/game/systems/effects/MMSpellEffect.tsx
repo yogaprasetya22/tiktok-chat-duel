@@ -53,6 +53,8 @@ const BulletMat = () => new THREE.ShaderMaterial({
     depthWrite: false,
     blending: THREE.AdditiveBlending,
     side: THREE.DoubleSide,
+    vertexColors: true,
+    defines: { USE_INSTANCING: '', USE_INSTANCING_COLOR: '' }
 });
 
 const _obj  = new THREE.Object3D();
@@ -66,7 +68,10 @@ export function MMSpellEffect({ spellsRef, unitRegistry, simTimeRef, bulletSpeed
   const _col = useMemo(() => new THREE.Color(), []);
 
   const bulletGeo = useMemo(() => {
-    const geo = new THREE.PlaneGeometry(1, 1);
+    // Cylinder is perfect for a 3D bullet/laser streak
+    const geo = new THREE.CylinderGeometry(0.5, 0.5, 1, 8);
+    // Rotate to align length (Y axis of cylinder) with Z axis for lookAt
+    geo.rotateX(Math.PI / 2);
     return geo;
   }, []);
 

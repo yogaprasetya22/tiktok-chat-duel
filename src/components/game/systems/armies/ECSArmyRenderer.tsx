@@ -56,9 +56,7 @@ interface ECSArmyRendererProps {
   simTimeRef: React.RefObject<number>;
   renderedIdsRef: React.RefObject<Set<string>>;
   shadowRef: React.RefObject<THREE.InstancedMesh>;
-  healthBgRef: React.RefObject<THREE.InstancedMesh>;
-  healthFillRef: React.RefObject<THREE.InstancedMesh>;
-  notchRef: React.RefObject<THREE.InstancedMesh>;
+  healthBarRef: React.RefObject<THREE.InstancedMesh>;
   namePoolMap: React.MutableRefObject<Map<string, number>>;
   nameTextRefs: React.RefObject<any[]>;
 }
@@ -132,7 +130,7 @@ const _whiteColor = new THREE.Color('#ffffff');
 
 const ECSArmyRendererInner = ({
   unitRegistry, activeIndicesRef, towerConfig, settingsRef, simTimeRef,
-  renderedIdsRef, shadowRef, healthBgRef, healthFillRef, notchRef,
+  renderedIdsRef, shadowRef, healthBarRef,
   namePoolMap, nameTextRefs,
 }: ECSArmyRendererProps) => {
 
@@ -266,9 +264,7 @@ const ECSArmyRendererInner = ({
     _hudTemp.position.set(0, -100, 0);
     _hudTemp.updateMatrix();
     shadowRef.current?.setMatrixAt(hIdx, _hudTemp.matrix);
-    healthBgRef.current?.setMatrixAt(hIdx, _hudTemp.matrix);
-    healthFillRef.current?.setMatrixAt(hIdx, _hudTemp.matrix);
-    notchRef.current?.setMatrixAt(hIdx, _hudTemp.matrix);
+    healthBarRef.current?.setMatrixAt(hIdx, _hudTemp.matrix);
   };
 
   // ── Main render loop ──────────────────────────────────────────────────────
@@ -282,7 +278,6 @@ const ECSArmyRendererInner = ({
     const time = state.clock.elapsedTime;
     const camPos = state.camera.position;
     const camQ = state.camera.quaternion;
-    const camRotY = state.camera.rotation.y;
     const settings = settingsRef.current;
     const frustum = (state as any).battleFrustum;
 
@@ -312,8 +307,6 @@ const ECSArmyRendererInner = ({
     }
 
     // Build sorted view: boss-first, then by distance
-    // We use activeIndices directly but sort a copy for rendering priority
-    // (BattleArmy already computes dSq on units)
     const unitCount = indices.length;
 
     // Per-class unit lists (to determine who gets a pool slot — closest ARMY_POOL_SIZE)
@@ -418,12 +411,11 @@ const ECSArmyRendererInner = ({
         item.group.updateMatrix();
         const hIdx = hudBase + slotIdx;
 
-        if (shadowRef.current && healthBgRef.current) {
+        if (shadowRef.current && healthBarRef.current) {
           const HUD_DETAIL_DIST_SQ = 180 * 180;
           const showDetail = uData.isBoss || (uData.dSq || 0) < HUD_DETAIL_DIST_SQ;
 
           if (showDetail) {
-            const pct = Math.max(0, uData.hp / (uData.maxHp || 100));
             const by  = uData.isBoss ? 7.0 : 3.2;
             const bs  = uData.isBoss ? 2.5 : 1.0;
             const ss  = uData.isBoss ? 4.5 : 1.6;
@@ -435,33 +427,24 @@ const ECSArmyRendererInner = ({
             _hudTemp.updateMatrix();
             shadowRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
 
-            // Health BG
+            // Health Bar
             _hudTemp.position.set(cp.x, by, cp.z);
             _hudTemp.quaternion.copy(camQ);
             _hudTemp.scale.set(bs, bs, 1);
             _hudTemp.updateMatrix();
-            healthBgRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
+            healthBarRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
 
-            // Health Fill
-            const fx = pct * bs;
-            _hudTemp.scale.set(fx, bs, 1);
-            const ox = (bs - fx) * 0.4;
-            _hudTemp.position.x -= Math.cos(camRotY) * ox;
-            _hudTemp.position.z += Math.sin(camRotY) * ox;
-            _hudTemp.updateMatrix();
-            healthFillRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
+            // Update custom shader attribute for health percentage & ticks
+            const healthAttr = healthBarRef.current.geometry.getAttribute('aHealthInfo') as THREE.InstancedBufferAttribute | undefined;
+            if (healthAttr) {
+                healthAttr.setXY(hIdx, uData.hp, uData.maxHp || 100);
+            }
 
             // Fill Color + Damage Flash
             _healthColor.set(teamColor);
             const flash = Date.now() - (uData.lastDamageTime || 0);
             if (flash < 100) _healthColor.lerp(_whiteColor, 1.0 - flash / 100);
-            healthFillRef.current.setColorAt(hIdx, _healthColor);
-
-            // Notch
-            _hudTemp.position.set(cp.x, by, cp.z);
-            _hudTemp.scale.set(bs, bs, 1);
-            _hudTemp.updateMatrix();
-            notchRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
+            healthBarRef.current.setColorAt(hIdx, _healthColor);
 
             // Name label sync
             if (namePoolMap.current.has(id) && nameTextRefs.current) {
@@ -481,11 +464,9 @@ const ECSArmyRendererInner = ({
             _hudTemp.updateMatrix();
             shadowRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
 
-            _hudTemp.position.set(0, -100, 0);
+            _hudTemp.scale.set(0.001, 0.001, 0.001);
             _hudTemp.updateMatrix();
-            healthBgRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
-            healthFillRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
-            notchRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
+            healthBarRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
           }
         }
 

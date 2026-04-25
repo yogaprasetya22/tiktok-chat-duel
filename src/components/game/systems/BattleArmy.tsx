@@ -65,30 +65,66 @@ const getLevelBadge = (level: number): string => {
 
 
 const MLHealthBarShader = {
-  uniforms: { time: { value: 0 } },
   vertexShader: `
-    attribute float aMaxHp;
+    attribute vec2 aHealthInfo; // x = hp, y = maxHp
     varying vec2 vUv;
-    varying float vMaxHp;
+    varying vec2 vHealthInfo;
+    #ifndef USE_INSTANCING_COLOR
+        attribute vec3 instanceColor;
+    #endif
+    varying vec3 vColor;
     void main() {
-      vUv = uv; vMaxHp = aMaxHp;
+      vUv = uv; 
+      vHealthInfo = aHealthInfo;
+      vColor = instanceColor;
       gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
     }
   `,
   fragmentShader: `
     varying vec2 vUv;
-    varying float vMaxHp;
+    varying vec2 vHealthInfo;
+    varying vec3 vColor;
     void main() {
-      float x = vUv.x;
-      if (x < 0.01 || x > 0.99) discard;
-      float totalSmallSegments = vMaxHp / 250.0;
+      float hp = vHealthInfo.x;
+      float maxHp = vHealthInfo.y;
+      float pct = maxHp > 0.0 ? clamp(hp / maxHp, 0.0, 1.0) : 0.0;
+      
+      // Calculate Border
+      float borderWidth = 0.015;
+      float borderHeight = 0.08;
+      bool isBorder = vUv.x < borderWidth || vUv.x > 1.0 - borderWidth || vUv.y < borderHeight || vUv.y > 1.0 - borderHeight;
+      if (isBorder) {
+          gl_FragColor = vec4(0.05, 0.05, 0.05, 0.9); // Black border
+          return;
+      }
+      
+      // Calculate Notches (every 250 HP)
+      float totalSmallSegments = maxHp / 250.0;
       float smallNotchStep = 1.0 / totalSmallSegments;
-      float smallNotch = mod(x, smallNotchStep);
-      float thickNotchStep = 1.0 / (vMaxHp / 1000.0);
-      float thickNotch = mod(x, thickNotchStep);
-      if (thickNotch < 0.018 && vMaxHp > 1000.0) gl_FragColor = vec4(0.0, 0.0, 0.0, 0.9);
-      else if (smallNotch < 0.01) gl_FragColor = vec4(0.0, 0.0, 0.0, 0.4);
-      else discard;
+      float smallNotch = mod(vUv.x, smallNotchStep);
+      
+      // Thick notches every 1000 HP
+      float thickNotchStep = 1.0 / (maxHp / 1000.0);
+      float thickNotch = mod(vUv.x, thickNotchStep);
+      
+      bool isThickNotch = thickNotch < 0.015 && maxHp > 1001.0 && vUv.x > 0.02 && vUv.x < 0.98;
+      bool isSmallNotch = smallNotch < 0.01 && vUv.x > 0.02 && vUv.x < 0.98;
+      
+      if (isThickNotch) {
+          gl_FragColor = vec4(0.0, 0.0, 0.0, 0.95); // Black thick notch
+          return;
+      }
+      if (isSmallNotch) {
+          gl_FragColor = vec4(0.0, 0.0, 0.0, 0.6); // Semi-transparent small notch
+          return;
+      }
+      
+      // Draw Fill vs Background
+      if (vUv.x <= pct) {
+          gl_FragColor = vec4(vColor, 1.0); // Health fill area
+      } else {
+          gl_FragColor = vec4(0.1, 0.1, 0.1, 0.75); // Missing health background area
+      }
     }
   `
 };
@@ -99,9 +135,7 @@ const BattleArmyComponent = ({
   tankSpellsRef, assassinSpellsRef, vfxRef, compBuffers
 }: BattleArmyProps) => {
   const shadowRef = useRef<THREE.InstancedMesh>(null!);
-  const healthBgRef = useRef<THREE.InstancedMesh>(null!);
-  const healthFillRef = useRef<THREE.InstancedMesh>(null!);
-  const notchRef = useRef<THREE.InstancedMesh>(null!);
+  const healthBarRef = useRef<THREE.InstancedMesh>(null!);
 
   const { spawnVFX } = useVFX();
 
@@ -116,40 +150,41 @@ const BattleArmyComponent = ({
     }
   }, [spawnVFX, vfxRef]);
 
-
-
   useEffect(() => {
-    if (notchRef.current) {
-      const maxHpArray = new Float32Array(MAX_UNITS).fill(250);
-      const attr = new THREE.InstancedBufferAttribute(maxHpArray, 1);
-      notchRef.current.geometry.setAttribute('aMaxHp', attr);
-    }
-
     tempObject.position.set(0, -1000, 0);
     tempObject.scale.set(0.001, 0.001, 0.001); 
     tempObject.updateMatrix();
     if (shadowRef.current) {
       for (let i = 0; i < 1500; i++) {
         shadowRef.current.setMatrixAt(i, tempObject.matrix);
-        healthBgRef.current?.setMatrixAt(i, tempObject.matrix);
-        healthFillRef.current?.setMatrixAt(i, tempObject.matrix);
-        notchRef.current?.setMatrixAt(i, tempObject.matrix);
+        healthBarRef.current?.setMatrixAt(i, tempObject.matrix);
       }
       shadowRef.current.instanceMatrix.needsUpdate = true;
-      if (healthBgRef.current) healthBgRef.current.instanceMatrix.needsUpdate = true;
-      if (healthFillRef.current) healthFillRef.current.instanceMatrix.needsUpdate = true;
-      if (notchRef.current) notchRef.current.instanceMatrix.needsUpdate = true;
+      if (healthBarRef.current) healthBarRef.current.instanceMatrix.needsUpdate = true;
     }
   }, []);
 
-  const healthGeo = useMemo(() => new THREE.PlaneGeometry(1.2, 0.18), []);
+  const healthGeo = useMemo(() => {
+    const geo = new THREE.PlaneGeometry(1.2, 0.18);
+    const healthInfoArray = new Float32Array(MAX_UNITS * 2);
+    for(let i=0; i<MAX_UNITS; i++) {
+        healthInfoArray[i*2] = 250;
+        healthInfoArray[i*2+1] = 250;
+    }
+    const attr = new THREE.InstancedBufferAttribute(healthInfoArray, 2);
+    attr.setUsage(THREE.DynamicDrawUsage);
+    geo.setAttribute('aHealthInfo', attr);
+    return geo;
+  }, []);
   const shadowGeo = useMemo(() => new THREE.CircleGeometry(0.6, 12), []);
-  const healthBgMat = useMemo(() => new THREE.MeshBasicMaterial({ color: '#000000', transparent: true, opacity: 0.85, depthWrite: false }), []);
-  const healthFillMat = useMemo(() => new THREE.MeshBasicMaterial({ vertexColors: false, depthWrite: false }), []);
-  const notchMat = useMemo(() => new THREE.ShaderMaterial({ ...MLHealthBarShader, transparent: true, depthWrite: false }), []);
   const shadowMat = useMemo(() => new THREE.MeshBasicMaterial({ color: '#000000', transparent: true, opacity: 0.3, depthWrite: false }), []);
-
-  useEffect(() => { if (healthFillMat) healthFillMat.transparent = true; }, [healthFillMat]);
+  const healthBarMat = useMemo(() => new THREE.ShaderMaterial({ 
+      ...MLHealthBarShader, 
+      transparent: true, 
+      depthWrite: false,
+      vertexColors: true,
+      defines: { USE_INSTANCING: '', USE_INSTANCING_COLOR: '' }
+  }), []);
 
   const nameGroupRef = useRef<THREE.Group>(null!);
   const namePoolMap = useRef<Map<string, number>>(new Map());
@@ -219,14 +254,10 @@ const BattleArmyComponent = ({
       if (frameCountRef.current % 15 === 0) {
         for (let i = 0; i < 1500; i++) {
           shadowRef.current?.setMatrixAt(i, _hideMatrix);
-          healthBgRef.current?.setMatrixAt(i, _hideMatrix);
-          healthFillRef.current?.setMatrixAt(i, _hideMatrix);
-          notchRef.current?.setMatrixAt(i, _hideMatrix);
+          healthBarRef.current?.setMatrixAt(i, _hideMatrix);
         }
         shadowRef.current.instanceMatrix.needsUpdate = true;
-        healthBgRef.current.instanceMatrix.needsUpdate = true;
-        healthFillRef.current.instanceMatrix.needsUpdate = true;
-        notchRef.current.instanceMatrix.needsUpdate = true;
+        if (healthBarRef.current) healthBarRef.current.instanceMatrix.needsUpdate = true;
       }
     }
 
@@ -282,15 +313,11 @@ const BattleArmyComponent = ({
 
     // 3. Signal Updates for InstancedMeshes (Positions are updated by individual Armies)
     if (shadowRef.current) shadowRef.current.instanceMatrix.needsUpdate = true;
-    if (healthBgRef.current) healthBgRef.current.instanceMatrix.needsUpdate = true;
-    if (healthFillRef.current) {
-      healthFillRef.current.instanceMatrix.needsUpdate = true;
-      if (healthFillRef.current.instanceColor) healthFillRef.current.instanceColor.needsUpdate = true;
-    }
-    if (notchRef.current) {
-      notchRef.current.instanceMatrix.needsUpdate = true;
-      const maxHpAttr = notchRef.current.geometry.getAttribute('aMaxHp');
-      if (maxHpAttr) maxHpAttr.needsUpdate = true;
+    if (healthBarRef.current) {
+      healthBarRef.current.instanceMatrix.needsUpdate = true;
+      if (healthBarRef.current.instanceColor) healthBarRef.current.instanceColor.needsUpdate = true;
+      const attr = healthBarRef.current.geometry.getAttribute('aHealthInfo');
+      if (attr) attr.needsUpdate = true;
     }
   });
 
@@ -308,9 +335,7 @@ const BattleArmyComponent = ({
         simTimeRef={simTimeRef}
         renderedIdsRef={renderedIdsRef}
         shadowRef={shadowRef}
-        healthBgRef={healthBgRef}
-        healthFillRef={healthFillRef}
-        notchRef={notchRef}
+        healthBarRef={healthBarRef}
         namePoolMap={namePoolMap}
         nameTextRefs={nameTextRefs}
       />
@@ -337,10 +362,8 @@ const BattleArmyComponent = ({
       <AssassinSpellEffect assassinSpellsRef={assassinSpellsRef} simTimeRef={simTimeRef} />
 
       {/* Centralized HUD Layer (Extended pool to support class offsets) */}
-      <instancedMesh ref={shadowRef} args={[null as any, null as any, 1500]} geometry={shadowGeo} material={shadowMat} />
-      <instancedMesh ref={healthBgRef} args={[null as any, null as any, 1500]} geometry={healthGeo} material={healthBgMat} renderOrder={4} />
-      <instancedMesh ref={healthFillRef} args={[null as any, null as any, 1500]} geometry={healthGeo} material={healthFillMat} renderOrder={5} />
-      <instancedMesh ref={notchRef} args={[null as any, null as any, 1500]} geometry={healthGeo} material={notchMat} renderOrder={6} />
+      <instancedMesh ref={shadowRef} args={[null as any, null as any, 1500]} geometry={shadowGeo} material={shadowMat} frustumCulled={false} />
+      <instancedMesh ref={healthBarRef} args={[null as any, null as any, 1500]} geometry={healthGeo} material={healthBarMat} renderOrder={7} frustumCulled={false} />
 
       <group ref={nameGroupRef}>
         {useMemo(() => Array.from({ length: NAME_POOL_SIZE }, (_, i) => (

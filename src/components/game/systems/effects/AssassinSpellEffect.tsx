@@ -50,6 +50,8 @@ const CritMaterial = () => new THREE.ShaderMaterial({
     transparent: true,
     depthWrite: false,
     blending: THREE.AdditiveBlending,
+    vertexColors: true,
+    defines: { USE_INSTANCING: '', USE_INSTANCING_COLOR: '' }
 });
 
 export function AssassinSpellEffect({ assassinSpellsRef, simTimeRef }: { assassinSpellsRef: React.RefObject<any[]>, simTimeRef: React.RefObject<number> }) {

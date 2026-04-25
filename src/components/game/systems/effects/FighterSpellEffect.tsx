@@ -46,6 +46,8 @@ const SlashMaterial = () => new THREE.ShaderMaterial({
     depthWrite: false,
     blending: THREE.AdditiveBlending,
     side: THREE.DoubleSide,
+    vertexColors: true,
+    defines: { USE_INSTANCING: '', USE_INSTANCING_COLOR: '' }
 });
 
 export function FighterSpellEffect({ fighterSpellsRef, simTimeRef }: { fighterSpellsRef: React.RefObject<any[]>, simTimeRef: React.RefObject<number> }) {
