@@ -439,18 +439,18 @@ export const StormEnvironment = ({ baseDistance = 24, potatoMode = false }: { ba
         mieDirectionalG={0.8}
       />
       <hemisphereLight
-        intensity={weather === 'CLEAR' ? 1.2 : 0.8}
-        color={weather === 'THUNDER' ? "#cfe2ff" : "#fff4e0"}
-        groundColor={weather === 'CLEAR' ? "#7a5c3a" : "#444444"}
+        intensity={weather === 'CLEAR' ? 2.5 : 2.0}
+        color={weather === 'THUNDER' ? "#cfe2ff" : "#ffffff"}
+        groundColor={weather === 'CLEAR' ? "#7a5c3a" : "#666666"}
       />
-      <ambientLight intensity={weather === 'CLEAR' ? 0.6 : 0.5} />
+      <ambientLight intensity={weather === 'CLEAR' ? 1.5 : 1.2} />
       <directionalLight
         position={sunVec.multiplyScalar(150).toArray()}
-        intensity={weather === 'CLEAR' ? 5.0 : 1.5}
+        intensity={weather === 'CLEAR' ? 6.0 : 3.5}
         color={
-          weather === 'CLEAR' ? "#fff4e0" :  // kuning hangat saat cerah
-            weather === 'RAIN' ? "#d1e9ff" :  // biru dingin saat hujan
-              "#cfe2ff"                            // biru pucat saat petir
+          weather === 'CLEAR' ? "#ffffff" :  
+            weather === 'RAIN' ? "#e6f2ff" :  
+              "#e0ebff"                            
         }
         castShadow={!isSetup}
         shadow-mapSize={isSetup ? [512, 512] : [1024, 1024]}
@@ -466,7 +466,7 @@ export const StormEnvironment = ({ baseDistance = 24, potatoMode = false }: { ba
       {(weather === 'RAIN' || weather === 'THUNDER') && <Rain />}
       {weather === 'THUNDER' && <Lightning />}
       
-      <fog attach="fog" args={[weather === 'CLEAR' ? "#f0f5ff" : "#1a1a1a", weather === 'CLEAR' ? 80 : 35, weather === 'CLEAR' ? 350 : 160]} />
+      <fog attach="fog" args={[weather === 'CLEAR' ? "#ffffff" : "#a3b1c6", weather === 'CLEAR' ? 80 : 45, weather === 'CLEAR' ? 350 : 200]} />
     </group>
   );
 };

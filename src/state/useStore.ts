@@ -97,7 +97,7 @@ export const useStore = create<BattleState>((set) => ({
   weather: "CLEAR",
   setWeather: (weather) => set({ weather }),
 
-  environment: "DIORAMA",
+  environment: "STORM",
   setEnvironment: (environment) => set({ environment }),
 
   resetStore: (config) => set({
