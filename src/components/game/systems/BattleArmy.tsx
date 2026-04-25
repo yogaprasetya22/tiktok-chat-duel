@@ -7,17 +7,13 @@ import { Text } from '@react-three/drei';
 import { useVFX } from './VFXManager';
 import { ActiveUnit, TowerConfig, SimulationSettings, UnitRuntimeData } from '@/src/core/domain/unit.types';
 import * as YUKA from 'yuka';
-import { FighterArmy } from './armies/FighterArmy';
-import { TankArmy } from './armies/TankArmy';
-import { MageArmy } from './armies/MageArmy';
-import { MarksmanArmy } from './armies/MarksmanArmy';
-import { AssassinArmy } from './armies/AssassinArmy';
-import { InstancedImpostorRenderer } from './armies/InstancedImpostorRenderer';
-import { MageSpellEffect, SpellEntry } from './effects/MageSpellEffect';
-import { MMSpellEffect } from './effects/MMSpellEffect';
 import { FighterSpellEffect } from './effects/FighterSpellEffect';
 import { TankSpellEffect } from './effects/TankSpellEffect';
 import { AssassinSpellEffect } from './effects/AssassinSpellEffect';
+import { ECSArmyRenderer } from './armies/ECSArmyRenderer';
+import { InstancedImpostorRenderer } from './armies/InstancedImpostorRenderer';
+import { MageSpellEffect, SpellEntry } from './effects/MageSpellEffect';
+import { MMSpellEffect } from './effects/MMSpellEffect';
 // 
 
 interface BattleArmyProps {
@@ -50,6 +46,8 @@ _hideObj.position.set(0, -100, 0);
 _hideObj.scale.set(0, 0, 0);
 _hideObj.updateMatrix();
 const _hideMatrix = _hideObj.matrix.clone();
+const _frustum = new THREE.Frustum();
+const _projMatrix = new THREE.Matrix4();
 
 
 
@@ -97,7 +95,7 @@ const MLHealthBarShader = {
 
 const BattleArmyComponent = ({
   unitRegistry, towerConfig, updateSimulation, settingsRef, simTimeRef,
-  vehicles, unitIndex, spellsRef, mmSpellsRef, fighterSpellsRef,
+  spellsRef, mmSpellsRef, fighterSpellsRef,
   tankSpellsRef, assassinSpellsRef, vfxRef, compBuffers
 }: BattleArmyProps) => {
   const shadowRef = useRef<THREE.InstancedMesh>(null!);
@@ -164,6 +162,11 @@ const BattleArmyComponent = ({
   const cachedActiveUnits = useRef<any[]>([]);
   const frameCountRef = useRef(0);
   useFrame((state, delta) => {
+    // 0. Update Frustum for class animators
+    _projMatrix.multiplyMatrices(state.camera.projectionMatrix, state.camera.matrixWorldInverse);
+    _frustum.setFromProjectionMatrix(_projMatrix);
+    (state as any).battleFrustum = _frustum;
+
     // Optimized Simulation Step: Pass raw delta to system which handles sub-stepping internally
     updateSimulation(delta);
 
@@ -180,20 +183,32 @@ const BattleArmyComponent = ({
     // PERFORMANCE: Throttle sorting and unit filtering to every 5 frames
     if (frameCountRef.current % 5 === 0 || cachedActiveUnits.current.length === 0) {
       const activeUnits: any[] = [];
-      for (let i = 0; i < rawMap.length; i++) {
+      const buckets: Record<string, UnitRuntimeData[]> = { fighter: [], tank: [], mage: [], marksman: [], assassin: [] };
+      
+      const indices = compBuffers?.activeIndices || [];
+      for (let k = 0; k < indices.length; k++) {
+        const i = indices[k];
         const u = rawMap[i];
-        if (!u.isActive || u.hp <= 0) continue;
+        if (!u || !u.isActive || u.hp <= 0) continue;
         const dx = camPos.x - u.position[0];
         const dz = camPos.z - u.position[2];
         u.dSq = dx * dx + dz * dz;
         activeUnits.push(u);
+        if (buckets[u.unitClass]) buckets[u.unitClass].push(u);
       }
 
       activeUnits.sort((a, b) => {
         if (a.isBoss !== b.isBoss) return a.isBoss ? -1 : 1;
         return a.dSq - b.dSq;
       });
+      
+      // Sort each bucket by distance too, so the armies don't have to
+      for (const key in buckets) {
+        buckets[key].sort((a, b) => (a.dSq || 0) - (b.dSq || 0));
+      }
+
       cachedActiveUnits.current = activeUnits;
+      (state as any).unitBuckets = buckets; // Pass to children via state to avoid prop drilling if possible, or just props
     }
 
     const activeUnits = cachedActiveUnits.current;
@@ -281,12 +296,24 @@ const BattleArmyComponent = ({
 
   return (
     <group>
-      {/* Full-3D Animated Unit Rendering by Class — Each gets 120-200 slot offset in the HUD buffer */}
-      <FighterArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} renderedIdsRef={renderedIdsRef} shadowRef={shadowRef} healthBgRef={healthBgRef} healthFillRef={healthFillRef} notchRef={notchRef} hudBaseIdx={0} namePoolMap={namePoolMap} nameTextRefs={nameTextRefs} fighterSpellsRef={fighterSpellsRef} compBuffers={compBuffers} />
-      <TankArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} renderedIdsRef={renderedIdsRef} shadowRef={shadowRef} healthBgRef={healthBgRef} healthFillRef={healthFillRef} notchRef={notchRef} hudBaseIdx={250} namePoolMap={namePoolMap} nameTextRefs={nameTextRefs} tankSpellsRef={tankSpellsRef} compBuffers={compBuffers} />
-      <MageArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} spellsRef={spellsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} renderedIdsRef={renderedIdsRef} shadowRef={shadowRef} healthBgRef={healthBgRef} healthFillRef={healthFillRef} notchRef={notchRef} hudBaseIdx={500} namePoolMap={namePoolMap} nameTextRefs={nameTextRefs} compBuffers={compBuffers} />
-      <MarksmanArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} spellsRef={spellsRef} mmSpellsRef={mmSpellsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} renderedIdsRef={renderedIdsRef} shadowRef={shadowRef} healthBgRef={healthBgRef} healthFillRef={healthFillRef} notchRef={notchRef} hudBaseIdx={750} namePoolMap={namePoolMap} nameTextRefs={nameTextRefs} compBuffers={compBuffers} />
-      <AssassinArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} renderedIdsRef={renderedIdsRef} shadowRef={shadowRef} healthBgRef={healthBgRef} healthFillRef={healthFillRef} notchRef={notchRef} hudBaseIdx={1000} namePoolMap={namePoolMap} nameTextRefs={nameTextRefs} assassinSpellsRef={assassinSpellsRef} compBuffers={compBuffers} />
+      {/* ECSArmyRenderer: Unified renderer replacing FighterArmy/TankArmy/MageArmy/MarksmanArmy/AssassinArmy
+          - LAZY POOL: 0 models at startup, clone only when units actually spawn → no idle FPS drop
+          - SINGLE useFrame: one loop for all 5 classes reading from ECS TypedArrays
+          - Pure data-driven: no OOP, no class instances */}
+      <ECSArmyRenderer
+        unitRegistry={unitRegistry}
+        activeIndicesRef={compBuffers?.activeIndices}
+        towerConfig={towerConfig}
+        settingsRef={settingsRef}
+        simTimeRef={simTimeRef}
+        renderedIdsRef={renderedIdsRef}
+        shadowRef={shadowRef}
+        healthBgRef={healthBgRef}
+        healthFillRef={healthFillRef}
+        notchRef={notchRef}
+        namePoolMap={namePoolMap}
+        nameTextRefs={nameTextRefs}
+      />
 
       {/* LOD Impostor Layer: far-away units rendered as InstancedMesh billboards (2 draw calls) */}
       <InstancedImpostorRenderer
@@ -295,6 +322,7 @@ const BattleArmyComponent = ({
         playerColor={towerConfig.player.color}
         enemyColor={towerConfig.enemy.color}
         settingsRef={settingsRef}
+        activeIndices={compBuffers?.activeIndices}
       />
 
       {/* Mage GLSL Spell Projectiles */}

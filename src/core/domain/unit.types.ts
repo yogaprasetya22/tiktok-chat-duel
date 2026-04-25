@@ -2,9 +2,9 @@
 // BATTLE SYSTEM - TYPE DEFINITIONS
 // ============================================================
 // All interfaces and types for the battle simulation system.
+export const WORLD_UNIT_POOL_SIZE = 1500;
 // This module has NO side effects and NO React dependencies.
 // ============================================================
-export const WORLD_UNIT_POOL_SIZE = 250;
 
 export interface UnitStats {
     hp: number;

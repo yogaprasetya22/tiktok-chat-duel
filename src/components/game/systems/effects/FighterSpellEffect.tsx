@@ -1,20 +1,22 @@
 'use client';
+/**
+ * FighterSpellEffect — Redesigned
+ * Modern energy slash: sharp diagonal beam with fade edge, no heavy noise loops.
+ * Single InstancedMesh, additive blending, ~1 draw call for all active slashes.
+ */
 import * as THREE from 'three';
 import React, { useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 
 const MAX_SLASHES = 200;
 
-const SlashShader = {
+const SlashMaterial = () => new THREE.ShaderMaterial({
     vertexShader: `
         varying vec2 vUv;
-        varying vec3 vColor;
-        #include <common>
-
         #ifndef USE_INSTANCING_COLOR
             attribute vec3 instanceColor;
         #endif
-
+        varying vec3 vColor;
         void main() {
             vUv = uv;
             vColor = instanceColor;
@@ -24,98 +26,73 @@ const SlashShader = {
     fragmentShader: `
         varying vec2 vUv;
         varying vec3 vColor;
-        
-        float hash(vec2 p) {
-            return fract(sin(dot(p, vec2(12.1, 31.7))) * 43758.5453);
-        }
-
         void main() {
-            vec2 uv = vUv - vec2(0.5, 0.0);
-            float dist = length(uv);
-            
-            // Primary intense arc
-            float arc = smoothstep(0.5, 0.45, dist) * smoothstep(0.3, 0.38, dist);
-            
-            // "Busy" noise / heat distortion look
-            float noise = hash(vUv * 20.0);
-            float streaks = smoothstep(0.4, 0.5, hash(vUv * vec2(1.0, 50.0)));
-            
-            // Edge glow
-            float glow = smoothstep(0.5, 0.2, dist) * smoothstep(0.1, 0.4, dist);
-            
-            float alpha = (arc * 1.5 + glow * 0.6 + streaks * 0.3) * smoothstep(0.0, 0.2, vUv.x) * smoothstep(1.0, 0.7, vUv.x);
-            
-            vec3 color = vColor * (2.0 + noise);
-            color = mix(color, vec3(1.0, 1.0, 1.0), arc * 0.8); // White hot core
-            
-            gl_FragColor = vec4(color * 3.0, alpha);
-            if (gl_FragColor.a < 0.05) discard;
+            // Sharp diagonal slash: bright center, fade edges
+            vec2 c = vUv - 0.5;
+            // Primary slash beam along X
+            float beam = smoothstep(0.12, 0.0, abs(c.y - c.x * 0.15));
+            // Secondary thinner slash for depth
+            float beam2 = smoothstep(0.06, 0.0, abs(c.y + c.x * 0.1)) * 0.5;
+            // Fade at ends
+            float fade = smoothstep(0.5, 0.1, abs(c.x));
+            float alpha = (beam + beam2) * fade;
+            // White-hot core
+            vec3 col = mix(vColor * 3.0, vec3(1.0), beam * 0.9);
+            gl_FragColor = vec4(col, alpha * 0.95);
+            if (gl_FragColor.a < 0.04) discard;
         }
-    `
-};
+    `,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide,
+});
 
 export function FighterSpellEffect({ fighterSpellsRef, simTimeRef }: { fighterSpellsRef: React.RefObject<any[]>, simTimeRef: React.RefObject<number> }) {
     const meshRef = useRef<THREE.InstancedMesh>(null!);
-    const _tempObj = useMemo(() => new THREE.Object3D(), []);
-    const _color = useMemo(() => new THREE.Color(), []);
+    const _obj = useMemo(() => new THREE.Object3D(), []);
+    const _col = useMemo(() => new THREE.Color(), []);
 
-    useFrame((_state) => {
+    useFrame(() => {
         if (!meshRef.current || !fighterSpellsRef.current) return;
         const spells = fighterSpellsRef.current;
         const simTime = simTimeRef.current || 0;
         const mesh = meshRef.current;
-        let activeCount = 0;
+        let n = 0;
 
         for (let i = 0; i < spells.length; i++) {
             const s = spells[i];
             if (!s.active) continue;
 
             const age = simTime - s.startTime;
-            const duration = 400; 
-            const alpha = 1.0 - (age / duration);
+            const t = age / 350; // normalize 0→1 over 350ms
+            if (t >= 1) { s.active = false; continue; }
 
-            if (alpha <= 0) {
-                s.active = false;
-                continue;
-            }
+            const ease = 1 - t * t; // quadratic fade out
 
-            const scale = 1.1 + (1.0 - alpha) * 1.6;
-            
-            // VOLUMETRIC TRIPLE-SLASH: Layer 3 instances per slash with different tilts
-            for (let j = 0; j < 3; j++) {
-                if (activeCount >= MAX_SLASHES) break;
-                
-                _tempObj.position.set(s.x, s.y, s.z);
-                // Interleaved rotations to create a "thick" 3D volume
-                _tempObj.rotation.set(
-                    (j - 1) * 0.4, // Tilt X
-                    s.rotation + (j - 1) * 0.1, // Offset Y
-                    (j - 1) * 0.2 // Tilt Z
-                );
-                
-                _tempObj.scale.set(scale, scale * 0.6, scale);
-                _tempObj.updateMatrix();
-                mesh.setMatrixAt(activeCount, _tempObj.matrix);
-                
-                _color.set(s.color).multiplyScalar(1.0 - j * 0.2); // inner layers darker
-                mesh.setColorAt(activeCount, _color);
-                activeCount++;
+            // Two diagonal slash layers
+            for (let j = 0; j < 2; j++) {
+                if (n >= MAX_SLASHES) break;
+                _obj.position.set(s.x, s.y + j * 0.15, s.z);
+                _obj.rotation.set(0, s.rotation + j * 0.25, 0);
+                // Scale grows slightly then fades
+                const sc = (1.5 + t * 0.8) * ease;
+                _obj.scale.set(sc * 2.5, sc, sc);
+                _obj.updateMatrix();
+                mesh.setMatrixAt(n, _obj.matrix);
+                _col.set(s.color).multiplyScalar(ease * 2.5);
+                mesh.setColorAt(n, _col);
+                n++;
             }
         }
 
-        mesh.count = activeCount;
+        mesh.count = n;
         mesh.instanceMatrix.needsUpdate = true;
         if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     });
 
-    const geometry = useMemo(() => new THREE.PlaneGeometry(3, 1.5), []);
-    const material = useMemo(() => new THREE.ShaderMaterial({
-        ...SlashShader,
-        transparent: true,
-        side: THREE.DoubleSide,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending,
-    }), []);
+    const geo = useMemo(() => new THREE.PlaneGeometry(1, 1), []);
+    const mat = useMemo(() => SlashMaterial(), []);
 
-    return <instancedMesh ref={meshRef} args={[geometry, material, MAX_SLASHES]} frustumCulled={false} />;
+    return <instancedMesh ref={meshRef} args={[geo, mat, MAX_SLASHES]} frustumCulled={false} />;
 }

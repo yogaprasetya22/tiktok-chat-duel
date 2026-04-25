@@ -17,7 +17,7 @@ import * as YUKA from 'yuka';
 import { applyPainterlyStyle } from '../effects/PainterlyMaterials';
 
 
-export interface MageArmyProps {
+interface MageArmyProps {
   unitsMap: React.RefObject<UnitRuntimeData[]>;
   towerConfig: TowerConfig;
   settingsRef: React.RefObject<SimulationSettings>;
@@ -41,23 +41,21 @@ const POOL_SIZE = ARMY_POOL_SIZE; // Controlled from constants.ts
 const _hudTemp = new THREE.Object3D();
 const _healthColor = new THREE.Color();
 
-export const MageArmy = React.memo(({
+export function MageArmy({
   unitsMap, towerConfig, settingsRef, spellsRef, simTimeRef, vehicles,
   unitIndex, renderedIdsRef, shadowRef, healthBgRef, healthFillRef, notchRef, hudBaseIdx,
-  namePoolMap, nameTextRefs, compBuffers
-}: MageArmyProps) => {
+  namePoolMap, nameTextRefs
+}: MageArmyProps) {
   const poolMapRef = useRef<Map<string, number>>(new Map());
   const availableIndicesRef = useRef<number[]>([]);
   const activeSetRef = useRef<Set<string>>(new Set());
   const frameCountRef = useRef(0);
   const { spawnVFX } = useVFX();
   const lastVFXRef = useRef<Map<string, number>>(new Map());
-  const lastSortTimeRef = useRef(0);
 
   useEffect(() => {
     availableIndicesRef.current = Array.from({ length: POOL_SIZE }, (_, i) => i);
-    poolMapRef.current.clear();
-  }, [POOL_SIZE]);
+  }, []);
 
   const mage1 = useGLTF('/assets-model/Witch.glb', true, true, (loader) => {
     loader.setMeshoptDecoder(MeshoptDecoder);
@@ -66,42 +64,12 @@ export const MageArmy = React.memo(({
     loader.setMeshoptDecoder(MeshoptDecoder);
   }) as any;
 
-  // Shared Materials for Teams (Optimized)
-  const teamMats = useMemo(() => {
-    const mats: Record<string, THREE.Material[]> = { player: [], enemy: [] };
-    const assets = [mage1, mage2];
-
-    assets.forEach((asset, assetIdx) => {
-      if (!asset.scene) return;
-      asset.scene.traverse((child: any) => {
-        if (child.isMesh && child.material) {
-          const name = child.name.toLowerCase();
-          const isColorable = name.includes('cloth') || name.includes('trim') || name.includes('jewel') || name.includes('robe') || name.includes('cloak') || name.includes('cape') || name.includes('scarf') || name.includes('primary') || name.includes('team');
-          
-          if (isColorable) {
-            const mP = child.material.clone();
-            const mE = child.material.clone();
-            applyPainterlyStyle(mP);
-            applyPainterlyStyle(mE);
-            mP.color.set(towerConfig.player.color);
-            mE.color.set(towerConfig.enemy.color);
-            child[`_matIdx_${assetIdx}`] = mats.player.length;
-            mats.player.push(mP);
-            mats.enemy.push(mE);
-          }
-        }
-      });
-    });
-    return mats;
-  }, [mage1, mage2, towerConfig.player.color, towerConfig.enemy.color]);
-
   const characterPool = useMemo(() => {
     const items: any[] = [];
     if (!mage1.scene || !mage2.scene) return [];
     const availableAssets = [mage1, mage2];
     for (let i = 0; i < POOL_SIZE; i++) {
-      const assetIdx = Math.floor(Math.random() * availableAssets.length);
-      const selectedAsset = availableAssets[assetIdx];
+      const selectedAsset = availableAssets[Math.floor(Math.random() * availableAssets.length)];
       const clone = SkeletonUtils.clone(selectedAsset.scene);
       const mixer = new THREE.AnimationMixer(clone);
       const actions: Record<string, THREE.AnimationAction> = {};
@@ -109,17 +77,18 @@ export const MageArmy = React.memo(({
         selectedAsset.animations.forEach((clip: THREE.AnimationClip) => { actions[clip.name] = mixer.clipAction(clip); });
       }
       const colorable: THREE.Mesh[] = [];
-      clone.matrixAutoUpdate = false;
       clone.traverse((child: any) => {
         if (child.isMesh) {
-          child.matrixAutoUpdate = false;
           child.castShadow = false;
           child.receiveShadow = false;
           child.frustumCulled = true;
-          child._assetIdx = assetIdx;
           const name = child.name.toLowerCase();
           const isColorable = name.includes('cloth') || name.includes('trim') || name.includes('jewel') || name.includes('robe') || name.includes('cloak') || name.includes('cape') || name.includes('scarf') || name.includes('primary') || name.includes('team');
           if (isColorable) {
+            if (child.material) {
+              child.material = child.material.clone();
+              applyPainterlyStyle(child.material);
+            }
             colorable.push(child);
           }
         }
@@ -145,14 +114,6 @@ export const MageArmy = React.memo(({
     return items;
   }, [mage1, mage2]);
 
-  // Handle color switching in Actor Loop
-  useEffect(() => {
-    return () => {
-      // Cleanup shared materials
-      Object.values(teamMats).forEach(teamArr => teamArr.forEach(m => m.dispose()));
-    };
-  }, [teamMats]);
-
   useEffect(() => {
     return () => {
       characterPool.forEach(item => {
@@ -177,10 +138,7 @@ export const MageArmy = React.memo(({
   useFrame((state, delta) => {
     frameCountRef.current++;
     const rawMap = unitsMap.current;
-    const buffers = compBuffers;
-    if (!rawMap || characterPool.length === 0 || !buffers) return;
-
-    const { px, py, pz, vHealth, vMaxHealth, eidMap } = buffers;
+    if (!rawMap || characterPool.length === 0) return;
 
     const time = state.clock.elapsedTime;
     const _activeSet = activeSetRef.current;
@@ -198,13 +156,9 @@ export const MageArmy = React.memo(({
       return;
     }
 
-    const myUnits: UnitRuntimeData[] = [];
-    for (let i = 0; i < rawMap.length; i++) {
-      const u = rawMap[i];
-      if (!u.isActive || u.hp <= 0 || u.unitClass !== 'mage') continue;
-      myUnits.push(u);
-    }
-    myUnits.sort((a, b) => (a.dSq || 0) - (b.dSq || 0));
+    const buckets = (state as any).unitBuckets;
+    const myUnits: UnitRuntimeData[] = buckets ? buckets.mage : [];
+    if (!myUnits) return;
 
     // --- 1. BRAIN LOOP ---
     for (let i = 0; i < myUnits.length; i++) {
@@ -325,8 +279,7 @@ export const MageArmy = React.memo(({
             if (seekB) {
               const dx = uData.position[0] - target.position[0];
               const dz = uData.position[2] - target.position[2];
-              const dSq = dx * dx + dz * dz;
-              if (dSq < 16) { // Reduced from 49 (7m) to 16 (4m)
+              if (dx * dx + dz * dz < 49) {
                 const retreatDirZ = uData.type === 'player' ? 1 : -1;
                 seekB.target.set(uData.position[0] + (uData.position[0] - target.position[0]) * 2, 0, uData.position[2] + (uData.position[2] - target.position[2]) * 2 + (retreatDirZ * 5));
               } else {
@@ -357,15 +310,8 @@ export const MageArmy = React.memo(({
       }
     }
 
-    // --- 1. SPATIAL FILTERING & THROTTLED SORTING ---
-    if (state.clock.elapsedTime - (lastSortTimeRef.current || 0) > 0.16) {
-        myUnits.sort((a, b) => {
-            if (a.isBoss !== b.isBoss) return a.isBoss ? -1 : 1;
-            return (a.dSq || 0) - (b.dSq || 0);
-        });
-        lastSortTimeRef.current = state.clock.elapsedTime;
-    }
-
+    // --- 2. ACTOR LOOP ---
+    myUnits.sort((a, b) => (a.isBoss !== b.isBoss ? -1 : (a.dSq || 0) - (b.dSq || 0)));
     const visibleUnits = myUnits.slice(0, POOL_SIZE);
 
     visibleUnits.forEach((uData) => {
@@ -378,40 +324,22 @@ export const MageArmy = React.memo(({
           const pIdx = availableIndicesRef.current.shift()!;
           poolMapRef.current.set(id, pIdx);
           const pItem = characterPool[pIdx];
-          const teamMaterials = uData.type === 'player' ? teamMats.player : teamMats.enemy;
-          if (pItem && pItem.colorable) {
-            pItem.colorable.forEach((mesh: any) => {
-              const matIdx = mesh[`_matIdx_${mesh._assetIdx}`];
-              if (matIdx !== undefined) mesh.material = teamMaterials[matIdx];
-            });
-          }
+          const teamColor = uData.type === 'player' ? towerConfig.player.color : towerConfig.enemy.color;
+          pItem.colorable.forEach((mesh: THREE.Mesh) => {
+            (mesh.material as THREE.MeshStandardMaterial).color.set(teamColor);
+          });
         } else return;
       }
 
       const poolIdx = poolMapRef.current.get(id);
       if (poolIdx === undefined) return;
       const pItem = characterPool[poolIdx];
-      if (!pItem || !pItem.colorable) {
-        poolMapRef.current.delete(id);
-        return;
-      }
-
-      // HIGH PERFORMANCE: Direct Buffer Access
-      const poolIdx_ = parseInt(id.split('-')[1]);
-      const eid = eidMap[poolIdx_];
-      if (eid === -1) return;
-
-      const tx = px[eid];
-      const ty = py[eid];
-      const tz = pz[eid];
-      const th = vHealth[eid];
-      const tmh = vMaxHealth[eid];
-
+      if (!pItem) return;
       pItem.group.visible = true;
       pItem.group.scale.setScalar(uData.isBoss ? 4.0 : (1.3 + (uData.level || 1) * 0.1) * settings.unitScale);
 
       let targetAnim = 'Idle';
-      if (uData.isDying || th <= 0) targetAnim = 'Death';
+      if (uData.isDying) targetAnim = 'Death';
       else if (uData.status === 'marching') targetAnim = pItem.runAnim || 'Run';
       else if (uData.status === 'attacking') {
         const timeSinceAtk = (simTimeRef.current || 0) - (uData.lastAttackTime || 0);
@@ -430,22 +358,18 @@ export const MageArmy = React.memo(({
         }
       }
 
+      const tp = uData.position;
       const cp = pItem.group.position;
-      
-      // Smooth Interpolation with Buffer Positions
-      const lerpFactor = 1.0 - Math.exp(-25 * delta); 
-      const distSq = (tx - cp.x) ** 2 + (tz - cp.z) ** 2;
-
-      if (!pItem.initialized || distSq > 100) { 
-        cp.set(tx, ty, tz);
+      const lerpFactor = 1.0 - Math.exp(-25 * delta);
+      if (!pItem.initialized) {
+        cp.set(tp[0], tp[1], tp[2]);
         pItem.rotation = uData.rotation[1];
         pItem.group.rotation.y = pItem.rotation;
         pItem.initialized = true;
       } else {
-        cp.x += (tx - cp.x) * lerpFactor;
-        cp.y += (ty - cp.y) * lerpFactor;
-        cp.z += (tz - cp.z) * lerpFactor;
-
+        cp.x = THREE.MathUtils.lerp(cp.x, tp[0], lerpFactor);
+        cp.y = THREE.MathUtils.lerp(cp.y, tp[1], lerpFactor);
+        cp.z = THREE.MathUtils.lerp(cp.z, tp[2], lerpFactor);
         let diff = uData.rotation[1] - pItem.rotation;
         while (diff < -Math.PI) diff += Math.PI * 2;
         while (diff > Math.PI) diff -= Math.PI * 2;
@@ -458,8 +382,8 @@ export const MageArmy = React.memo(({
       if (shadowRef.current && healthBgRef.current) {
         const showDetail = uData.isBoss || (uData.dSq || 0) < 32400;
         if (showDetail) {
-          const pct = Math.max(0, th / (tmh || 100));
-          const by = uData.isBoss ? 8.2 : 3.8;
+          const pct = Math.max(0, uData.hp / (uData.maxHp || 100));
+          const by = uData.isBoss ? 7.0 : 3.2;
           const bs = uData.isBoss ? 2.5 : 1.0;
 
           _hudTemp.position.set(cp.x, -0.45, cp.z);
@@ -491,7 +415,7 @@ export const MageArmy = React.memo(({
             const nameSlot = namePoolMap.current.get(id)!;
             const nameMesh = nameTextRefs.current[nameSlot];
             if (nameMesh) {
-              nameMesh.position.set(cp.x, (uData.isBoss ? 8.4 : 4.0) + (uData.isBoss ? 2.2 : 0.9), cp.z);
+              nameMesh.position.set(cp.x, (uData.isBoss ? 7.2 : 3.4) + (uData.isBoss ? 1.8 : 0.7), cp.z);
               nameMesh.quaternion.copy(state.camera.quaternion);
             }
           }
@@ -510,9 +434,11 @@ export const MageArmy = React.memo(({
         }
       }
 
+      const frustum = (state as any).battleFrustum;
+      const isVisible = frustum ? frustum.containsPoint(cp) : true;
       const sf = (uData.dSq || 0) > 3600 ? 5 : (uData.dSq || 0) > 400 ? 2 : 1;
-      if ((uData.dSq || 0) <= ANIM_CULL_DIST_SQ && time - pItem.lastUpdate >= 0.016 * sf) {
-        pItem.mixer.update(time - pItem.lastUpdate);
+      if ((uData.dSq || 0) <= ANIM_CULL_DIST_SQ && isVisible && time - pItem.lastUpdate >= 0.016 * sf) {
+        pItem.mixer.update(delta * sf);
         pItem.lastUpdate = time;
       }
     });
@@ -535,14 +461,16 @@ export const MageArmy = React.memo(({
       }
     });
 
-    // SUPREME OPTIMIZATION: Update shader uniforms only once per shared material per team
-    const timeVal = (simTimeRef.current || 0) * 0.001;
     if (frameCountRef.current % 2 === 0) {
-      teamMats.player.forEach((mat: any) => {
-        if (mat.userData.painterlyShader) mat.userData.painterlyShader.uniforms.time.value = timeVal;
+      poolMapRef.current.forEach((poolIdx) => {
+      const item = characterPool[poolIdx];
+      if (!item) return;
+      item.colorable.forEach((mesh: THREE.Mesh) => {
+        const mat = mesh.material as THREE.Material;
+        if (mat.userData.painterlyShader) {
+          mat.userData.painterlyShader.uniforms.time.value = (simTimeRef.current || 0) * 0.001;
+        }
       });
-      teamMats.enemy.forEach((mat: any) => {
-        if (mat.userData.painterlyShader) mat.userData.painterlyShader.uniforms.time.value = timeVal;
       });
     }
   });
@@ -552,7 +480,7 @@ export const MageArmy = React.memo(({
       {characterPool.map((item, idx) => (<primitive key={"pool-mage-" + idx} object={item.group} />))}
     </group>
   );
-});
+}
 
 useGLTF.preload('/assets-model/Witch.glb', true, true, (loader) => {
   loader.setMeshoptDecoder(MeshoptDecoder);

@@ -30,31 +30,41 @@ export class SpatialHashGrid {
     /**
      * Rebuilds the grid. Reuses the arrays in the pool.
      */
-    update(units: UnitRuntimeData[]) {
+    update(units: UnitRuntimeData[], activeIndices?: number[]) {
         // Reset all active arrays in the map without disposing them
         this.grid.forEach(arr => arr.length = 0);
         this.grid.clear();
         this.poolIdx = 0;
 
-        for (let i = 0; i < units.length; i++) {
-            const u = units[i];
-            if (!u.isActive || u.hp <= 0 || u.isDying) continue;
-            
-            const key = this.getKey(u.position[0], u.position[2]);
-            let cell = this.grid.get(key);
-            if (!cell) {
-                // Grab from pool instead of 'new Array()'
-                cell = this.cellPool[this.poolIdx++];
-                // Fallback in case pertempuran is massive
-                if (!cell) {
-                    cell = [];
-                    this.cellPool.push(cell);
-                    this.poolIdx = this.cellPool.length;
-                }
-                this.grid.set(key, cell);
+        if (activeIndices) {
+            for (let k = 0; k < activeIndices.length; k++) {
+                const i = activeIndices[k];
+                const u = units[i];
+                if (!u || !u.isActive || u.hp <= 0 || u.isDying) continue;
+                this.insert(u);
             }
-            cell.push(u);
+        } else {
+            for (let i = 0; i < units.length; i++) {
+                const u = units[i];
+                if (!u.isActive || u.hp <= 0 || u.isDying) continue;
+                this.insert(u);
+            }
         }
+    }
+
+    private insert(u: UnitRuntimeData) {
+        const key = this.getKey(u.position[0], u.position[2]);
+        let cell = this.grid.get(key);
+        if (!cell) {
+            cell = this.cellPool[this.poolIdx++];
+            if (!cell) {
+                cell = [];
+                this.cellPool.push(cell);
+                this.poolIdx = this.cellPool.length;
+            }
+            this.grid.set(key, cell);
+        }
+        cell.push(u);
     }
 
     private resultBuffer: UnitRuntimeData[] = [];

@@ -1,20 +1,22 @@
 'use client';
+/**
+ * AssassinSpellEffect — Redesigned
+ * Modern crit flash: sharp star burst + ripple, no heavy streak computation.
+ * Billboard quad, faces camera, 1 draw call.
+ */
 import * as THREE from 'three';
 import React, { useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 
 const MAX_FLASHES = 150;
 
-const CritShader = {
+const CritMaterial = () => new THREE.ShaderMaterial({
     vertexShader: `
         varying vec2 vUv;
-        varying vec3 vColor;
-        #include <common>
-
         #ifndef USE_INSTANCING_COLOR
             attribute vec3 instanceColor;
         #endif
-
+        varying vec3 vColor;
         void main() {
             vUv = uv;
             vColor = instanceColor;
@@ -24,96 +26,76 @@ const CritShader = {
     fragmentShader: `
         varying vec2 vUv;
         varying vec3 vColor;
-        
-        float hash(vec2 p) {
-            return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
-        }
-
         void main() {
-            vec2 uv = vUv - 0.5;
-            float dist = length(uv);
-            
-            // Kinetic streaks
-            float angle = atan(uv.y, uv.x);
-            float streaks = step(0.98, sin(angle * 12.0 + hash(vUv) * 0.5));
-            streaks *= smoothstep(0.5, 0.2, dist);
-            
-            // Sharp cross flash
-            float beamH = smoothstep(0.04, 0.0, abs(uv.y)) * smoothstep(0.5, 0.1, abs(uv.x));
-            float beamV = smoothstep(0.04, 0.0, abs(uv.x)) * smoothstep(0.5, 0.1, abs(uv.y));
-            float core = smoothstep(0.12, 0.0, dist);
-            
-            float alpha = max(max(beamH, beamV), core + streaks);
-            
-            // Intense bloom
-            vec3 finalColor = vColor * 4.0;
-            finalColor = mix(finalColor, vec3(1.0), core * 0.8);
-            
-            gl_FragColor = vec4(finalColor, alpha);
-            if (gl_FragColor.a < 0.1) discard;
+            vec2 c = vUv - 0.5;
+            float d = length(c);
+
+            // 4-point star: cross beams
+            float beamH = smoothstep(0.025, 0.0, abs(c.y)) * smoothstep(0.5, 0.05, abs(c.x));
+            float beamV = smoothstep(0.025, 0.0, abs(c.x)) * smoothstep(0.5, 0.05, abs(c.y));
+
+            // Diagonal beams (45°) for 8-point look
+            float diag1 = smoothstep(0.02, 0.0, abs(c.y - c.x)) * smoothstep(0.4, 0.05, d);
+            float diag2 = smoothstep(0.02, 0.0, abs(c.y + c.x)) * smoothstep(0.4, 0.05, d);
+
+            // Soft core glow
+            float core = smoothstep(0.15, 0.0, d);
+
+            float alpha = beamH + beamV + (diag1 + diag2) * 0.6 + core * 0.8;
+            vec3 col = mix(vColor * 4.0, vec3(1.0), core * 0.7 + (beamH + beamV) * 0.5);
+            gl_FragColor = vec4(col, clamp(alpha, 0.0, 1.0));
+            if (gl_FragColor.a < 0.04) discard;
         }
-    `
-};
+    `,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+});
 
 export function AssassinSpellEffect({ assassinSpellsRef, simTimeRef }: { assassinSpellsRef: React.RefObject<any[]>, simTimeRef: React.RefObject<number> }) {
     const meshRef = useRef<THREE.InstancedMesh>(null!);
-    const _tempObj = useMemo(() => new THREE.Object3D(), []);
-    const _color = useMemo(() => new THREE.Color(), []);
+    const _obj = useMemo(() => new THREE.Object3D(), []);
+    const _col = useMemo(() => new THREE.Color(), []);
 
     useFrame((state) => {
         if (!meshRef.current || !assassinSpellsRef.current) return;
         const spells = assassinSpellsRef.current;
         const simTime = simTimeRef.current || 0;
         const mesh = meshRef.current;
-        let activeCount = 0;
+        let n = 0;
 
         for (let i = 0; i < spells.length; i++) {
             const s = spells[i];
             if (!s.active) continue;
 
             const age = simTime - s.startTime;
-            const duration = 300; 
-            const alpha = 1.0 - (age / duration);
+            const t = age / 280; // 280ms — snappy
+            if (t >= 1) { s.active = false; continue; }
 
-            if (alpha <= 0) {
-                s.active = false;
-                continue;
-            }
+            // Sharp pop: fast in, eased out
+            const ease = Math.pow(1 - t, 1.5);
+            const sc = (0.6 + t * 1.8) * ease + 0.2;
 
-            const scaleBase = 1.2 + (1.0 - alpha) * 2.5;
-            
-            // LAYERED FLASH: 2 instances per hit
-            for (let j = 0; j < 2; j++) {
-                if (activeCount >= MAX_FLASHES) break;
-                
-                _tempObj.position.set(s.x, s.y, s.z);
-                _tempObj.quaternion.copy(state.camera.quaternion); 
-                
-                // Rotate second layer
-                if (j === 1) _tempObj.rotateZ(Math.PI / 4);
-                
-                _tempObj.scale.setScalar(scaleBase * (j === 0 ? 1.0 : 0.7));
-                _tempObj.updateMatrix();
-                mesh.setMatrixAt(activeCount, _tempObj.matrix);
-                
-                _color.set(s.color).multiplyScalar(j === 0 ? 1.0 : 1.5);
-                mesh.setColorAt(activeCount, _color);
-                activeCount++;
-            }
+            if (n >= MAX_FLASHES) break;
+
+            _obj.position.set(s.x, s.y, s.z);
+            _obj.quaternion.copy(state.camera.quaternion);
+            _obj.scale.setScalar(sc * 2.2);
+            _obj.updateMatrix();
+            mesh.setMatrixAt(n, _obj.matrix);
+
+            _col.set(s.color).multiplyScalar(ease * 3.0);
+            mesh.setColorAt(n, _col);
+            n++;
         }
 
-        mesh.count = activeCount;
+        mesh.count = n;
         mesh.instanceMatrix.needsUpdate = true;
         if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     });
 
-    const geometry = useMemo(() => new THREE.PlaneGeometry(1, 1), []);
-    const material = useMemo(() => new THREE.ShaderMaterial({
-        ...CritShader,
-        transparent: true,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending,
-    }), []);
+    const geo = useMemo(() => new THREE.PlaneGeometry(1, 1), []);
+    const mat = useMemo(() => CritMaterial(), []);
 
-    return <instancedMesh ref={meshRef} args={[geometry, material, MAX_FLASHES]} frustumCulled={false} />;
+    return <instancedMesh ref={meshRef} args={[geo, mat, MAX_FLASHES]} frustumCulled={false} />;
 }

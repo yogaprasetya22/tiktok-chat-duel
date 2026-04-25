@@ -204,6 +204,7 @@ export const useBattleSystem = () => {
     const unitPoolRef = useRef<ActiveUnit[]>([]);
     const unitDataPoolRef = useRef<UnitRuntimeData[]>([]);
     const vehiclePoolRef = useRef<YUKA.Vehicle[]>([]);
+    const activeIndicesRef = useRef<number[]>([]);
 
     useEffect(() => {
         const units: ActiveUnit[] = [];
@@ -379,6 +380,7 @@ export const useBattleSystem = () => {
         damageQueueRef.current.length = 0;
         spellsRef.current.forEach((s) => (s.active = false));
         mmSpellsRef.current.forEach((s) => (s.active = false));
+        activeIndicesRef.current = [];
     }, [entityManager]);
 
     const spawnUnit = useCallback(
@@ -484,6 +486,7 @@ export const useBattleSystem = () => {
             uData.hp = u.hp;
             uData.maxHp = u.maxHp;
             uData.position = [v.position.x, -0.4, v.position.z];
+            uData.rotation = [0, 0, 0];
             uData.unitClass = unitClass;
             uData.isBoss = isBoss;
             uData.lastAttackTime = 0;
@@ -492,6 +495,11 @@ export const useBattleSystem = () => {
             uData.range = u.range;
             uData.speed = u.speed;
             uData.profileImage = profileImage;
+            // ECS fields used by ECSArmyRenderer for steering/visual
+            uData.laneOffset = laneOffset;
+            uData.jitterOffset = Math.random() * Math.PI * 2;
+            uData.encirclementRadius = (c.ai_behavior?.encirclement || 1.2) * 1.25;
+            uData.laneSwaggerAmp = c.ai_behavior?.swagger || 0.3;
 
             if (profileImage) {
                 statsRef.current.profileImages[name] = profileImage;
@@ -515,6 +523,10 @@ export const useBattleSystem = () => {
             _vType[eid] = type === "player" ? 0 : 1;
             _vActive[eid] = 1;
             _vState[eid] = 1; // marching
+
+            if (!activeIndicesRef.current.includes(poolIdx)) {
+                activeIndicesRef.current.push(poolIdx);
+            }
 
             unitIndexRef.current.set(u.id, u);
         },
@@ -556,7 +568,7 @@ export const useBattleSystem = () => {
             // --- 2D GRID BUCKET UPDATE (Zero-Allocation Global Grid) ---
             // Optimization: Update grid every 2 frames to save CPU
             if (frameCountRef.current % 2 === 0) {
-                battleGrid.update(unitDataPoolRef.current);
+                battleGrid.update(unitDataPoolRef.current, activeIndicesRef.current);
             }
 
             // --- 2. ENTITY SIMULATION (Fixed Accumulator with Spiral Protection) ---
@@ -583,8 +595,15 @@ export const useBattleSystem = () => {
             const uPool = unitPoolRef.current;
             const uiPool = unitDataPoolRef.current;
             const vPool = vehiclePoolRef.current;
+            const activeIdxArray = activeIndicesRef.current;
 
-            for (let i = 0; i < WORLD_UNIT_POOL_SIZE; i++) {
+            // Cleanup dead indices from tracking array
+            if (frameCountRef.current % 30 === 0) {
+              activeIndicesRef.current = activeIdxArray.filter(idx => uPool[idx].isActive);
+            }
+
+            for (let k = 0; k < activeIdxArray.length; k++) {
+                const i = activeIdxArray[k];
                 const eid = eids[i];
                 if (eid === -1 || !activeStates[eid]) continue;
 
@@ -849,6 +868,133 @@ export const useBattleSystem = () => {
                                 );
                             }
                             uData.lastAttackTime = simNow;
+
+                            // --- VFX TRIGGER: Class-specific spell effects ---
+                            // (Previously triggered from Army components; now centralized here)
+                            const teamColor = u.type === 'player'
+                                ? towerConfigRef.current.player.color
+                                : towerConfigRef.current.enemy.color;
+                            const fwdX = Math.sin(uData.rotation[1] || 0);
+                            const fwdZ = Math.cos(uData.rotation[1] || 0);
+                            const launchY = uData.position[1] + 1.8;
+
+                            switch (u.unitClass) {
+                                case 'fighter': {
+                                    const spells = fighterSpellsRef.current;
+                                    for (let si = 0; si < spells.length; si++) {
+                                        if (!spells[si].active) {
+                                            spells[si].x = uData.position[0] + fwdX * 0.8;
+                                            spells[si].y = 1.2;
+                                            spells[si].z = uData.position[2] + fwdZ * 0.8;
+                                            spells[si].rotation = uData.rotation[1] || 0;
+                                            spells[si].startTime = simNow;
+                                            spells[si].color = teamColor;
+                                            spells[si].active = true;
+                                            spells[si].progress = 0;
+                                            break;
+                                        }
+                                    }
+                                    break;
+                                }
+                                case 'tank': {
+                                    const spells = tankSpellsRef.current;
+                                    for (let si = 0; si < spells.length; si++) {
+                                        if (!spells[si].active) {
+                                            spells[si].x = tData.position[0];
+                                            spells[si].y = 0.2;
+                                            spells[si].z = tData.position[2];
+                                            spells[si].startTime = simNow;
+                                            spells[si].color = teamColor;
+                                            spells[si].active = true;
+                                            spells[si].progress = 0;
+                                            break;
+                                        }
+                                    }
+                                    break;
+                                }
+                                case 'mage': {
+                                    const spells = spellsRef.current;
+                                    // Primary target
+                                    for (let si = 0; si < spells.length; si++) {
+                                        if (!spells[si].active) {
+                                            spells[si].fromX = uData.position[0];
+                                            spells[si].fromY = launchY;
+                                            spells[si].fromZ = uData.position[2];
+                                            spells[si].toX = tData.position[0];
+                                            spells[si].toY = tData.position[1] + 1.0;
+                                            spells[si].toZ = tData.position[2];
+                                            spells[si].targetId = currentTarget!.id;
+                                            spells[si].startTime = simNow;
+                                            spells[si].color = teamColor;
+                                            spells[si].active = true;
+                                            spells[si].progress = 0;
+                                            break;
+                                        }
+                                    }
+                                    // AOE secondary targets
+                                    const aoeNearby = battleGrid.queryRadius(tData.position[0], tData.position[2], 3.5);
+                                    let aoeCount = 0;
+                                    for (let aj = 0; aj < aoeNearby.length && aoeCount < 3; aj++) {
+                                        const ap = aoeNearby[aj];
+                                        if (!ap.isActive || ap.type === u.type || ap.id === currentTarget!.id) continue;
+                                        for (let si = 0; si < spells.length; si++) {
+                                            if (!spells[si].active) {
+                                                spells[si].fromX = uData.position[0];
+                                                spells[si].fromY = launchY;
+                                                spells[si].fromZ = uData.position[2];
+                                                spells[si].toX = ap.position[0];
+                                                spells[si].toY = ap.position[1] + 1.0;
+                                                spells[si].toZ = ap.position[2];
+                                                spells[si].targetId = ap.id;
+                                                spells[si].startTime = simNow;
+                                                spells[si].color = teamColor;
+                                                spells[si].active = true;
+                                                spells[si].progress = 0;
+                                                aoeCount++;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    break;
+                                }
+                                case 'marksman': {
+                                    const spells = mmSpellsRef.current;
+                                    for (let si = 0; si < spells.length; si++) {
+                                        if (!spells[si].active) {
+                                            spells[si].fromX = uData.position[0] + fwdX * 2.5;
+                                            spells[si].fromY = launchY;
+                                            spells[si].fromZ = uData.position[2] + fwdZ * 2.5;
+                                            spells[si].toX = tData.position[0];
+                                            spells[si].toY = tData.position[1] + 1.2;
+                                            spells[si].toZ = tData.position[2];
+                                            spells[si].targetId = currentTarget!.id;
+                                            spells[si].startTime = simNow;
+                                            spells[si].color = teamColor;
+                                            spells[si].active = true;
+                                            spells[si].progress = 0;
+                                            spells[si].isBullet = true;
+                                            break;
+                                        }
+                                    }
+                                    break;
+                                }
+                                case 'assassin': {
+                                    const spells = assassinSpellsRef.current;
+                                    for (let si = 0; si < spells.length; si++) {
+                                        if (!spells[si].active) {
+                                            spells[si].x = tData.position[0];
+                                            spells[si].y = 1.3;
+                                            spells[si].z = tData.position[2];
+                                            spells[si].startTime = simNow;
+                                            spells[si].color = '#FFFF00';
+                                            spells[si].active = true;
+                                            spells[si].progress = 0;
+                                            break;
+                                        }
+                                    }
+                                    break;
+                                }
+                            }
                         }
                     } else if (u.targetId) {
                                 uData.status = "chasing";
@@ -856,8 +1002,44 @@ export const useBattleSystem = () => {
                             weatherMults[u.unitClass]?.move_speed_mult || 1.0;
                         v.maxSpeed = u.speed * classWeatherMult;
                         const seek = v.steering.behaviors[0] as any;
-                        if (seek?.target) {
-                            seek.target.set(tData.position[0], 0, tData.position[2]);
+                        if (seek?.target && tData) {
+                            if (u.unitClass === 'mage') {
+                                // Mage: maintain range, retreat if too close
+                                const ddx = _px[i] - tData.position[0];
+                                const ddz = _pz[i] - tData.position[2];
+                                if (ddx*ddx + ddz*ddz < 49) {
+                                    const rDir = u.type === 'player' ? 1 : -1;
+                                    seek.target.set(_px[i] + ddx * 2, 0, _pz[i] + ddz * 2 + rDir * 5);
+                                } else {
+                                    seek.target.set(tData.position[0], 0, tData.position[2]);
+                                }
+                            } else if (u.unitClass === 'marksman') {
+                                // Marksman: orbit at range
+                                const angleHash = ((i * 2654435761) >>> 0) % 360;
+                                const angle = angleHash * (Math.PI / 180);
+                                const orbitR = uData.encirclementRadius || 1.25;
+                                const ddx = _px[i] - tData.position[0];
+                                const ddz = _pz[i] - tData.position[2];
+                                // Only orbit if within comfortable range, else approach
+                                if (ddx*ddx + ddz*ddz < 80 * 80) {
+                                    seek.target.set(
+                                        tData.position[0] + Math.cos(angle) * orbitR,
+                                        0,
+                                        tData.position[2] + Math.sin(angle) * orbitR
+                                    );
+                                } else {
+                                    seek.target.set(tData.position[0], 0, tData.position[2]);
+                                }
+                            } else {
+                                // Fighter / Tank / Assassin: charge directly at enemy
+                                // Tiny offset so multiple melee units don't stack on exact same point
+                                const offsetX = ((i * 127) % 7 - 3) * 0.25;
+                                const offsetZ = ((i * 53)  % 7 - 3) * 0.25;
+                                seek.target.set(
+                                    tData.position[0] + offsetX, 0,
+                                    tData.position[2] + offsetZ
+                                );
+                            }
                         }
                     }
                 } else if (baseInRange) {
@@ -917,7 +1099,63 @@ export const useBattleSystem = () => {
 
                     v.maxSpeed = baseSpeed;
                     const seek = v.steering.behaviors[0] as any;
-                    if (seek?.target) seek.target.set(0, 0, targetBaseZ);
+                    if (seek?.target) {
+                        // Lane offset + class-specific swagger for natural spread
+                        const swagger = Math.sin(i * 8.0 + (uData.jitterOffset || 0)) * (uData.laneSwaggerAmp || 0.3);
+                        seek.target.set((uData.laneOffset || 0) + swagger, 0, targetBaseZ);
+                    }
+                }
+
+                // --- ROTATION LERP (visual, runs with physics delta) ---
+                {
+                    const rotSmooth = settings.rotationSmoothing || 0.12;
+                    const velSq = v.velocity.x ** 2 + v.velocity.z ** 2;
+                    if ((uData.status === 'marching' || uData.status === 'chasing') && velSq > 0.05) {
+                        // Velocity-based rotation: face the direction of movement
+                        const targetRot = Math.atan2(v.velocity.x, v.velocity.z);
+                        let diff = targetRot - uData.rotation[1];
+                        while (diff < -Math.PI) diff += Math.PI * 2;
+                        while (diff >  Math.PI) diff -= Math.PI * 2;
+                        uData.rotation[1] += diff * Math.min(rotSmooth * 2, 1.0);
+                    } else if (uData.status === 'attacking') {
+                        // Face the target when attacking
+                        const tIdx2 = u.targetId && !isBaseTarget ? parseInt(u.targetId.split('-')[1]) : -1;
+                        const td2 = tIdx2 !== -1 ? uiPool[tIdx2] : null;
+                        const tx2 = (td2 && td2.isActive && td2.id === u.targetId) ? td2.position[0] : 0;
+                        const tz2 = (td2 && td2.isActive && td2.id === u.targetId) ? td2.position[2] : targetBaseZ;
+                        const targetRot = Math.atan2(tx2 - _px[i], tz2 - _pz[i]);
+                        let diff = targetRot - uData.rotation[1];
+                        while (diff < -Math.PI) diff += Math.PI * 2;
+                        while (diff >  Math.PI) diff -= Math.PI * 2;
+                        uData.rotation[1] += diff * Math.min(rotSmooth, 1.0);
+                    }
+                }
+
+                // --- ASSASSIN BLINK (moved from AssassinArmy) ---
+                if (u.unitClass === 'assassin' && u.targetId && !isBaseTarget) {
+                    const blinkCooldownS = 6000; // 6 seconds in ms
+                    const lastBlink = uData.lastBlinkTime || 0;
+                    if (simNow - lastBlink > blinkCooldownS) {
+                        const tIdx3 = parseInt(u.targetId.split('-')[1]);
+                        const td3 = uiPool[tIdx3];
+                        if (td3 && td3.isActive && td3.id === u.targetId &&
+                            (td3.unitClass === 'mage' || td3.unitClass === 'marksman')) {
+                            const ddx = _px[i] - td3.position[0];
+                            const ddz = _pz[i] - td3.position[2];
+                            const dSq2 = ddx*ddx + ddz*ddz;
+                            if (dSq2 > 45 && dSq2 < 400) {
+                                const bAngle = Math.atan2(ddz, ddx);
+                                const bx = td3.position[0] + Math.cos(bAngle) * 1.5;
+                                const bz = td3.position[2] + Math.sin(bAngle) * 1.5;
+                                v.position.set(bx, 0, bz);
+                                _px[i] = bx; _pz[i] = bz;
+                                uData.position[0] = bx; uData.position[2] = bz;
+                                uData.lastBlinkTime = simNow;
+                                uData.pendingCrit = true;
+                                uData.status = 'attacking';
+                            }
+                        }
+                    }
                 }
 
 
@@ -974,21 +1212,19 @@ export const useBattleSystem = () => {
 
             if (simNow - lastStateUpdate.current > 100) {
                 lastStateUpdate.current = simNow;
-                let pC = 0,
-                    eC = 0;
-                for (let i = 0; i < WORLD_UNIT_POOL_SIZE; i++) {
-                    if (
-                        unitPoolRef.current[i].isActive &&
-                        !unitPoolRef.current[i].isDying
-                    ) {
-                        if (unitPoolRef.current[i].type === "player") pC++;
+                let pC = 0, eC = 0;
+                const activeIndices = activeIndicesRef.current;
+                const uPool = unitPoolRef.current;
+                for (let k = 0; k < activeIndices.length; k++) {
+                    const i = activeIndices[k];
+                    const u = uPool[i];
+                    if (u.isActive && !u.isDying) {
+                        if (u.type === "player") pC++;
                         else eC++;
                     }
                 }
                 useStore.getState().setArmyCounts(pC, eC);
-                useStore
-                    .getState()
-                    .setBaseHp(playerBaseHpRef.current, enemyBaseHpRef.current);
+                useStore.getState().setBaseHp(playerBaseHpRef.current, enemyBaseHpRef.current);
                 useStore.getState().setLiveStats({ ...statsRef.current });
             }
         },
@@ -1023,17 +1259,16 @@ export const useBattleSystem = () => {
         assassinSpellsRef: assassinSpellsRef,
         stats: statsRef.current,
         triggerAirstrike: (side: "player" | "enemy") => {
-            for (let i = 0; i < WORLD_UNIT_POOL_SIZE; i++) {
-                const u = unitPoolRef.current[i];
+            const activeIndices = activeIndicesRef.current;
+            const uPool = unitPoolRef.current;
+            const uiPool = unitDataPoolRef.current;
+            for (let k = 0; k < activeIndices.length; k++) {
+                const i = activeIndices[k];
+                const u = uPool[i];
                 if (u.isActive && u.type === side && !u.isDying) {
                     u.hp -= u.maxHp * 0.4;
-                    unitDataPoolRef.current[i].hp = u.hp;
-                    accumulateDamage(
-                        u.id,
-                        u.maxHp * 0.4,
-                        unitDataPoolRef.current[i].position,
-                        "#FFFFFF",
-                    );
+                    uiPool[i].hp = u.hp;
+                    accumulateDamage(u.id, u.maxHp * 0.4, uiPool[i].position, "#FFFFFF");
                 }
             }
         },
@@ -1049,7 +1284,8 @@ export const useBattleSystem = () => {
             vMaxHealth: _vmh, 
             vType: _vType, 
             vActive: _vActive,
-            eidMap: eidMap.current
+            eidMap: eidMap.current,
+            activeIndices: activeIndicesRef,
         },
         downloadPerfLogs: () => {},
         clearVFXCache: () => {},

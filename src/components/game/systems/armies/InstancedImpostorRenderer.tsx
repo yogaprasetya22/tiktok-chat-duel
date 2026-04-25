@@ -35,6 +35,7 @@ interface InstancedImpostorRendererProps {
   playerColor: string;
   enemyColor: string;
   settingsRef: React.RefObject<any>;
+  activeIndices?: number[];
 }
 
 // Reusable dummy Object3D for matrix composition — zero-alloc pattern
@@ -65,6 +66,7 @@ export function InstancedImpostorRenderer({
   playerColor,
   enemyColor,
   settingsRef,
+  activeIndices,
 }: InstancedImpostorRendererProps) {
   const meshRef = useRef<THREE.InstancedMesh>(null!);
   const lastCountRef = useRef(0);
@@ -160,46 +162,42 @@ export function InstancedImpostorRenderer({
     const mesh = meshRef.current;
     if (!rawMap || !mesh) return;
 
-
-
     // Pre-compute team colors
     _playerColor.set(playerColor);
     _enemyColor.set(enemyColor);
 
     let idx = 0;
+    const indices = activeIndices || [];
 
-    for (let i = 0; i < rawMap.length; i++) {
+    for (let k = 0; k < indices.length; k++) {
       if (idx >= LOD_IMPOSTOR_MAX) break;
+      const i = indices[k];
       const u = rawMap[i];
-      if (!u.isActive || u.hp <= 0) continue;
+      if (!u || !u.isActive || u.hp <= 0) continue;
 
       const id = u.id;
-
-      // Skip units already rendered as full 3D by army pools
       if (renderedIds.has(id)) continue;
-
-      // Compute distance to camera
-
-
-      // Fallback: If not rendered by full-3D pool, ALWAYS render as impostor
-      // This prevents "invisible units" if the 3D pools are full.
-      // Potato mode still forces everyone to be impostors.
+      
+      const frustum = (state as any).battleFrustum;
+      const isVisible = frustum ? frustum.containsPoint(_dummy.position.set(u.position[0], 0, u.position[2])) : true;
+      
+      if (!isVisible) {
+        mesh.setMatrixAt(idx, _hidePos);
+        idx++;
+        continue;
+      }
 
       // Compose the impostor transform via dummy Object3D
       const scale = u.isBoss ? LOD_IMPOSTOR_BOSS_SCALE : LOD_IMPOSTOR_SCALE;
       const unitScale = settingsRef.current?.unitScale || 1.0;
 
       _dummy.position.set(u.position[0], u.position[1] + scale * 0.5 * unitScale, u.position[2]);
-      
-      // Billboard: face the camera
       _dummy.quaternion.copy(state.camera.quaternion);
-      
       _dummy.scale.setScalar(scale * unitScale);
       _dummy.updateMatrix();
 
       mesh.setMatrixAt(idx, _dummy.matrix);
 
-      // Set team color with class tint
       const baseColor = u.type === 'player' ? _playerColor : _enemyColor;
       const tint = CLASS_TINT[u.unitClass] || [1, 1, 1];
       _color.setRGB(
@@ -208,7 +206,6 @@ export function InstancedImpostorRenderer({
         baseColor.b * tint[2]
       );
 
-      // Flash white if recently damaged
       const now = Date.now();
       const flashAge = now - (u.lastDamageTime || 0);
       if (flashAge < 120) {
@@ -220,19 +217,19 @@ export function InstancedImpostorRenderer({
       idx++;
     }
 
-    // Hide remaining instances from previous frame to avoid "Ghosting"
-    // IMPROVEMENT: Hide ALL remaining slots in one frame to ensure no "leaking" units
-    for (let i = idx; i < LOD_IMPOSTOR_MAX; i++) {
+    // Optimization: Only hide what was visible in previous frame or what changed
+    // For simplicity, we still hide the rest but it's much faster if LOD_IMPOSTOR_MAX is smaller.
+    // However, we only do it up to the previous count + some margin if needed.
+    const hideStart = idx;
+    const hideEnd = Math.max(idx, lastCountRef.current);
+    for (let i = hideStart; i < hideEnd; i++) {
       mesh.setMatrixAt(i, _hidePos);
     }
     lastCountRef.current = idx;
 
-    // Single batch update — this is the key perf win
     mesh.instanceMatrix.needsUpdate = true;
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-
-    // Update instance count for frustrate culling optimization
-    mesh.count = LOD_IMPOSTOR_MAX; // Always set to max but hide via matrix
+    mesh.count = LOD_IMPOSTOR_MAX;
     
     // Clear for next frame so armies can repopulate
     renderedIdsRef.current.clear();

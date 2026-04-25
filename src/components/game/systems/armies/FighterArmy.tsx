@@ -42,10 +42,10 @@ const _hudTemp = new THREE.Object3D();
 const _healthColor = new THREE.Color();
 const _whiteColor = new THREE.Color('#ffffff');
 
-export const FighterArmy = React.memo(({
+const FighterArmyComponent = ({
   unitsMap, towerConfig, settingsRef, simTimeRef, vehicles, unitIndex,
   renderedIdsRef, shadowRef, healthBgRef, healthFillRef, notchRef, hudBaseIdx,
-  namePoolMap, nameTextRefs, fighterSpellsRef, compBuffers
+  namePoolMap, nameTextRefs, fighterSpellsRef
 }: FighterArmyProps) => {
   const poolMapRef = useRef<Map<string, number>>(new Map());
   const availableIndicesRef = useRef<number[]>([]);
@@ -53,12 +53,10 @@ export const FighterArmy = React.memo(({
   const lastVFXRef = useRef<Map<string, number>>(new Map());
   const frameCountRef = useRef(0);
   const { spawnVFX } = useVFX();
-  const lastSortTimeRef = useRef(0);
 
   useEffect(() => {
     availableIndicesRef.current = Array.from({ length: POOL_SIZE }, (_, i) => i);
-    poolMapRef.current.clear();
-  }, [POOL_SIZE]);
+  }, []);
 
   const f1 = useGLTF('/assets-model/Knight_Golden_Female.glb', true, true, (loader) => {
     loader.setMeshoptDecoder(MeshoptDecoder);
@@ -70,43 +68,13 @@ export const FighterArmy = React.memo(({
     loader.setMeshoptDecoder(MeshoptDecoder);
   }) as any;
 
-  // Shared Materials for Teams (Optimized)
-  const teamMats = useMemo(() => {
-    const mats: Record<string, THREE.Material[]> = { player: [], enemy: [] };
-    const assets = [f1, f2, f3];
-
-    assets.forEach((asset, assetIdx) => {
-      if (!asset.scene) return;
-      asset.scene.traverse((child: any) => {
-        if (child.isMesh && child.material) {
-          const name = child.name.toLowerCase();
-          const isColorable = name.includes('cape') || name.includes('cloth') || name.includes('trim') || name.includes('helmet') || name.includes('shoulder') || name.includes('robe') || name.includes('cloak') || name.includes('primary') || name.includes('team');
-          
-          if (isColorable) {
-            const mP = child.material.clone();
-            const mE = child.material.clone();
-            applyPainterlyStyle(mP);
-            applyPainterlyStyle(mE);
-            mP.color.set(towerConfig.player.color);
-            mE.color.set(towerConfig.enemy.color);
-            child[`_matIdx_${assetIdx}`] = mats.player.length;
-            mats.player.push(mP);
-            mats.enemy.push(mE);
-          }
-        }
-      });
-    });
-    return mats;
-  }, [f1, f2, f3, towerConfig.player.color, towerConfig.enemy.color]);
-
   const characterPool = useMemo(() => {
     const items: any[] = [];
     if (!f1.scene || !f2.scene || !f3.scene) return [];
     const availableAssets = [f1, f2, f3];
 
     for (let i = 0; i < POOL_SIZE; i++) {
-      const assetIdx = Math.floor(Math.random() * availableAssets.length);
-      const selectedAsset = availableAssets[assetIdx];
+      const selectedAsset = availableAssets[Math.floor(Math.random() * availableAssets.length)];
       const clone = SkeletonUtils.clone(selectedAsset.scene);
       const mixer = new THREE.AnimationMixer(clone);
       const actions: Record<string, THREE.AnimationAction> = {};
@@ -116,17 +84,18 @@ export const FighterArmy = React.memo(({
       }
 
       const colorable: THREE.Mesh[] = [];
-      clone.matrixAutoUpdate = false;
       clone.traverse((child: any) => {
         if (child.isMesh) {
-          child.matrixAutoUpdate = false;
           child.castShadow = false;
           child.receiveShadow = false;
           child.frustumCulled = true;
-          child._assetIdx = assetIdx;
           const name = child.name.toLowerCase();
           const isColorable = name.includes('cape') || name.includes('cloth') || name.includes('trim') || name.includes('helmet') || name.includes('shoulder') || name.includes('robe') || name.includes('cloak') || name.includes('primary') || name.includes('team');
           if (isColorable) {
+            if (child.material) {
+              child.material = child.material.clone();
+              applyPainterlyStyle(child.material);
+            }
             colorable.push(child);
           }
         }
@@ -137,12 +106,6 @@ export const FighterArmy = React.memo(({
     }
     return items;
   }, [f1, f2, f3]);
-
-  useEffect(() => {
-    return () => {
-      Object.values(teamMats).forEach(teamArr => teamArr.forEach(m => m.dispose()));
-    };
-  }, [teamMats]);
 
   useEffect(() => {
     return () => {
@@ -168,10 +131,7 @@ export const FighterArmy = React.memo(({
   useFrame((state, delta) => {
     frameCountRef.current++;
     const rawMap = unitsMap.current;
-    const buffers = compBuffers;
-    if (!rawMap || characterPool.length === 0 || !buffers) return;
-
-    const { px, py, pz, vHealth, vMaxHealth, eidMap } = buffers;
+    if (!rawMap || characterPool.length === 0) return;
 
     const time = state.clock.elapsedTime;
     const _activeSet = activeSetRef.current;
@@ -191,14 +151,9 @@ export const FighterArmy = React.memo(({
 
     let isChasing = false;
 
-    // Filter and SORT units by distance to prioritize close units for the 3D pool
-    const myUnits: UnitRuntimeData[] = [];
-    for (let i = 0; i < rawMap.length; i++) {
-      const u = rawMap[i];
-      if (!u.isActive || u.hp <= 0 || u.unitClass !== 'fighter') continue;
-      myUnits.push(u);
-    }
-    myUnits.sort((a, b) => (a.dSq || 0) - (b.dSq || 0));
+    const buckets = (state as any).unitBuckets;
+    const myUnits: UnitRuntimeData[] = buckets ? buckets.fighter : [];
+    if (!myUnits) return;
 
     // --- 1. BRAIN LOOP: Process ALL units of this class for AI/Steering ---
     for (let i = 0; i < myUnits.length; i++) {
@@ -358,19 +313,11 @@ export const FighterArmy = React.memo(({
       }
     }
 
-    // --- 1. STABLE POOL MANAGEMENT & VISIBILITY ---
-    // Optimization: Throttle sorting and use a distance-weighted selection to prevent "blinking"
-    if (state.clock.elapsedTime - (lastSortTimeRef.current || 0) > 0.2) {
-        myUnits.sort((a, b) => {
-            if (a.isBoss !== b.isBoss) return a.isBoss ? -1 : 1;
-            // Stable Sort: Prefer units already in the pool to avoid swapping flickers
-            const aIn = poolMapRef.current.has(a.id) ? 0.8 : 1.0;
-            const bIn = poolMapRef.current.has(b.id) ? 0.8 : 1.0;
-            return (a.dSq || 0) * aIn - (b.dSq || 0) * bIn;
-        });
-        lastSortTimeRef.current = state.clock.elapsedTime;
-    }
-
+    // --- 2. ACTOR LOOP: Process POOL_SIZE units for rendering ---
+    myUnits.sort((a, b) => {
+      if (a.isBoss !== b.isBoss) return -1;
+      return (a.dSq || 0) - (b.dSq || 0);
+    });
     const visibleUnits = myUnits.slice(0, POOL_SIZE);
 
     visibleUnits.forEach((uData) => {
@@ -383,46 +330,32 @@ export const FighterArmy = React.memo(({
           const pIdx = availableIndicesRef.current.shift()!;
           poolMapRef.current.set(id, pIdx);
           const pItem = characterPool[pIdx];
-          const teamMaterials = uData.type === 'player' ? teamMats.player : teamMats.enemy;
-          if (pItem && pItem.colorable) {
-            pItem.colorable.forEach((mesh: any) => {
-              const matIdx = mesh[`_matIdx_${mesh._assetIdx}`];
-              if (matIdx !== undefined) mesh.material = teamMaterials[matIdx];
-            });
-          }
+          const teamColor = uData.type === 'player' ? towerConfig.player.color : towerConfig.enemy.color;
+          pItem.colorable.forEach((mesh: THREE.Mesh) => {
+            (mesh.material as THREE.MeshStandardMaterial).color.set(teamColor);
+          });
         } else return;
       }
 
       const poolIdx = poolMapRef.current.get(id);
       if (poolIdx === undefined) return;
       const pItem = characterPool[poolIdx];
-      if (!pItem || !pItem.colorable) {
+      if (!pItem) {
         poolMapRef.current.delete(id);
         return;
       }
-
-      // HIGH PERFORMANCE: Direct Buffer Access
-      const poolIdx_ = parseInt(id.split('-')[1]);
-      const eid = eidMap[poolIdx_];
-      if (eid === -1) return;
-
-      const tx = px[eid];
-      const ty = py[eid];
-      const tz = pz[eid];
-      const th = vHealth[eid];
-      const tmh = vMaxHealth[eid];
-
       pItem.group.visible = true;
 
       const baseScale = uData.isBoss ? 4.5 : (1.4 + (uData.level || 1) * 0.1);
       pItem.group.scale.setScalar(baseScale * settings.unitScale);
 
       let targetAnim = 'Idle';
-      if (uData.isDying || th <= 0) targetAnim = 'Death';
+      if (uData.isDying) targetAnim = 'Death';
       else if (uData.status === 'marching') targetAnim = 'Run';
       else if (uData.status === 'attacking') {
         const timeSinceAtk = (simTimeRef.current || 0) - (uData.lastAttackTime || 0);
         const atkName = pItem.actions['SwordSlash'] ? 'SwordSlash' : (pItem.actions['Attack'] ? 'Attack' : 'Idle');
+        // KINETIC OPTIMIZATION: Only animate attack for 600ms after a hit
         targetAnim = timeSinceAtk < 650 ? atkName : 'Idle';
       }
       if (!pItem.actions[targetAnim]) targetAnim = 'Idle';
@@ -439,30 +372,32 @@ export const FighterArmy = React.memo(({
         }
       }
 
+      const tp = uData.position;
       const cp = pItem.group.position;
 
-      // Smooth Interpolation with Buffer Positions
-      const lerpFactor = 1.0 - Math.exp(-25 * delta); 
-      const distSq = (tx - cp.x) ** 2 + (tz - cp.z) ** 2;
+      // Interpolation: Snap if jump is too large (Lag resilience)
+      const distSq = (tp[0] - cp.x) ** 2 + (tp[2] - cp.z) ** 2;
 
-      if (!pItem.initialized || distSq > 100) { 
-        cp.set(tx, ty, tz);
+      const lerpFactor = 1.0 - Math.exp(-45 * delta); // Snappier smoothing
+      if (!pItem.initialized || distSq > 25) { // Snap if > 5m
+        cp.set(tp[0], tp[1], tp[2]);
         pItem.rotation = uData.rotation[1];
         pItem.group.rotation.y = pItem.rotation;
         pItem.initialized = true;
       } else {
-        cp.x += (tx - cp.x) * lerpFactor;
-        cp.y += (ty - cp.y) * lerpFactor;
-        cp.z += (tz - cp.z) * lerpFactor;
+        cp.x = THREE.MathUtils.lerp(cp.x, tp[0], lerpFactor);
+        cp.y = THREE.MathUtils.lerp(cp.y, tp[1], lerpFactor);
+        cp.z = THREE.MathUtils.lerp(cp.z, tp[2], lerpFactor);
 
         let diff = uData.rotation[1] - pItem.rotation;
         while (diff < -Math.PI) diff += Math.PI * 2;
         while (diff > Math.PI) diff -= Math.PI * 2;
-        pItem.rotation += diff * (1.0 - Math.exp(-12 * delta));
+        pItem.rotation += diff * (1.0 - Math.exp(-15 * delta));
         pItem.group.rotation.y = pItem.rotation;
       }
 
-      // HUD Sync using Buffer data
+      // --- HUD SYNC (Frame-Perfect) ---
+      // We manually update world matrix to ensure sibling elements (HUD) match the character exactly
       pItem.group.updateMatrix();
 
       const hIdx = hudBaseIdx + poolIdx;
@@ -471,11 +406,11 @@ export const FighterArmy = React.memo(({
         const showDetail = uData.isBoss || (uData.dSq || 0) < HUD_DETAIL_DIST_SQ;
 
         if (showDetail) {
-          const pct = Math.max(0, th / (tmh || 100));
-          const by = uData.isBoss ? 8.2 : 3.8;
+          const pct = Math.max(0, uData.hp / (uData.maxHp || 100));
+          const by = uData.isBoss ? 7.0 : 3.2;
           const bs = uData.isBoss ? 2.5 : 1.0;
 
-          // 1. Shadow (Using CP which is lerped from Buffer)
+          // 1. Shadow
           _hudTemp.position.set(cp.x, -0.45, cp.z);
           _hudTemp.rotation.set(-Math.PI / 2, 0, 0);
           const ss = uData.isBoss ? 4.5 : 1.6;
@@ -518,7 +453,7 @@ export const FighterArmy = React.memo(({
             const nameMesh = nameTextRefs.current[nameSlot];
             if (nameMesh) {
               const hover = Math.sin(state.clock.elapsedTime * 3 + id.length) * 0.1;
-              nameMesh.position.set(cp.x, (uData.isBoss ? 8.4 : 4.0) + (uData.isBoss ? 2.2 : 0.9) + hover, cp.z);
+              nameMesh.position.set(cp.x, (uData.isBoss ? 7.2 : 3.4) + (uData.isBoss ? 1.8 : 0.7) + hover, cp.z);
               nameMesh.quaternion.copy(state.camera.quaternion);
             }
           }
@@ -539,13 +474,14 @@ export const FighterArmy = React.memo(({
         }
       }
 
-      // SUPREME OPTIMIZATION: Animation Mixer Culling
-      // If unit is too far (impostor range), stop the heavy bone calculations entirely
+      // SUPREME OPTIMIZATION: Animation Mixer Culling + Frustum Culling
+      const frustum = (state as any).battleFrustum;
+      const isVisible = frustum ? frustum.containsPoint(cp) : true;
       const sf = (uData.dSq || 0) > 3600 ? 5 : (uData.dSq || 0) > 400 ? 2 : 1;
       const isTooFar = (uData.dSq || 0) > ANIM_CULL_DIST_SQ; 
 
-      if (!isTooFar && time - pItem.lastUpdate >= 0.016 * sf) {
-        pItem.mixer.update(time - pItem.lastUpdate);
+      if (!isTooFar && isVisible && time - pItem.lastUpdate >= 0.016 * sf) {
+        pItem.mixer.update(delta * sf);
         pItem.lastUpdate = time;
       }
     });
@@ -571,16 +507,18 @@ export const FighterArmy = React.memo(({
       }
     });
 
-    // SUPREME OPTIMIZATION: Update shader uniforms only once per shared material per team
-    const timeVal = (simTimeRef.current || 0) * 0.001;
-    if (frameCountRef.current % 2 === 0) { // Throttled to 30fps for per-team uniforms
-      teamMats.player.forEach((mat: any) => {
-        if (mat.userData.painterlyShader) mat.userData.painterlyShader.uniforms.time.value = timeVal;
+    // Optimized Shader Uniform Update: Only update uniforms for units currently "on-duty"
+    poolMapRef.current.forEach((poolIdx) => {
+      const item = characterPool[poolIdx];
+      if (!item) return;
+      const timeVal = (simTimeRef.current || 0) * 0.001;
+      item.colorable.forEach((mesh: THREE.Mesh) => {
+        const mat = mesh.material as THREE.Material;
+        if (mat.userData.painterlyShader) {
+          mat.userData.painterlyShader.uniforms.time.value = timeVal;
+        }
       });
-      teamMats.enemy.forEach((mat: any) => {
-        if (mat.userData.painterlyShader) mat.userData.painterlyShader.uniforms.time.value = timeVal;
-      });
-    }
+    });
   });
 
 
@@ -590,7 +528,9 @@ export const FighterArmy = React.memo(({
       {characterPool.map((item, idx) => (<primitive key={"pool-fighter-" + idx} object={item.group} />))}
     </group>
   );
-});
+};
+
+export const FighterArmy = React.memo(FighterArmyComponent);
 
 useGLTF.preload('/assets-model/Knight_Golden_Female.glb', true, true, (loader) => {
   loader.setMeshoptDecoder(MeshoptDecoder);
