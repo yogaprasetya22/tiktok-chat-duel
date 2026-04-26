@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useRef } from 'react';
 import { Trophy, Sword, Users, RefreshCw, Star, Crown } from 'lucide-react';
 import { Canvas } from '@react-three/fiber';
-import { useGLTF, useAnimations, Float, Environment, ContactShadows } from '@react-three/drei';
+import { useGLTF, useAnimations, Float, Environment } from '@react-three/drei';
 import * as THREE from 'three';
 
 interface MVPData {

@@ -7,7 +7,6 @@ import * as THREE from 'three';
 import { applyPainterlyStyle } from "../systems/effects/PainterlyMaterials";
 
 const _obj = new THREE.Object3D();
-const _matrix = new THREE.Matrix4();
 
 // ─── Module-level cache ────────────────────────────────────────────────────────
 // Geometry dan material hanya diproses SEKALI selama session, bukan per-render.
@@ -23,7 +22,7 @@ function getOrBuildMeshData(
   // Cek apakah sudah diproses sebelumnya
   const existingGeos = Array.from(geoCache.entries())
     .filter(([k]) => k.startsWith(cacheKey))
-    .map(([k], i) => ({
+    .map(([k]) => ({
       geometry: geoCache.get(k)!,
       material: matCache.get(k)!,
     }));
