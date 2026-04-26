@@ -3,6 +3,7 @@ import { useFrame } from "@react-three/fiber";
 import { Environment } from "@react-three/drei";
 import * as THREE from "three";
 import { useStore } from "@/src/state/useStore";
+
 import { applyPainterlyStyle, PainterlyShaderUtils } from "../systems/effects/PainterlyMaterials";
 
 
@@ -122,10 +123,11 @@ const Rock = () => {
         meshRef.current.setMatrixAt(i, dummy.matrix);
     }
     meshRef.current.instanceMatrix.needsUpdate = true;
+    meshRef.current.geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 150);
   }, []);
 
   return (
-    <instancedMesh ref={meshRef} args={[null as any, null as any, ROCK_COUNT]} castShadow receiveShadow>
+    <instancedMesh ref={meshRef} args={[null as any, null as any, ROCK_COUNT]} castShadow receiveShadow frustumCulled={true}>
       <icosahedronGeometry args={[1, 0]} />
       <meshStandardMaterial 
         color="#666666" 
@@ -169,15 +171,17 @@ const Forest = ({ potatoMode }: { potatoMode?: boolean }) => {
         }
         trunkRef.current.instanceMatrix.needsUpdate = true;
         topRef.current.instanceMatrix.needsUpdate = true;
+        trunkRef.current.geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 150);
+        topRef.current.geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 150);
     }, []);
 
     return (
         <group>
-            <instancedMesh ref={trunkRef} args={[null as any, null as any, TREE_COUNT]} castShadow>
+            <instancedMesh ref={trunkRef} args={[null as any, null as any, TREE_COUNT]} castShadow frustumCulled={true}>
                 <cylinderGeometry args={[0.2, 0.4, 4, 6]} />
                 <meshStandardMaterial color="#4d2915" onBeforeCompile={(s: any) => applyPainterlyStyle(s as any)} />
             </instancedMesh>
-            <instancedMesh ref={topRef} args={[null as any, null as any, TREE_COUNT]} castShadow>
+            <instancedMesh ref={topRef} args={[null as any, null as any, TREE_COUNT]} castShadow frustumCulled={true}>
                 <coneGeometry args={[1, 2, 6]} />
                 <meshStandardMaterial color="#1a3d1a" onBeforeCompile={(s: any) => applyPainterlyStyle(s as any)} />
             </instancedMesh>
@@ -390,7 +394,7 @@ export const StormEnvironment = ({ baseDistance = 24, potatoMode = false }: { ba
   const isSetup = gameState === 'SETUP';
 
   // 3. Performance Optimized Weather Transition System (Running like a Bitecs System)
-  useFrame(() => {
+  useFrame((_state, _delta) => {
     const weather = weatherRef.current;
     
     // Calculate target values based on current weather

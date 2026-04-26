@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import React, { useRef, useMemo, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
+import { Text } from '@react-three/drei';
 import { useVFX } from './VFXManager';
 import { ActiveUnit, TowerConfig, SimulationSettings, UnitRuntimeData } from '@/src/core/domain/unit.types';
 import * as YUKA from 'yuka';
@@ -13,7 +14,8 @@ import { ECSArmyRenderer } from './armies/ECSArmyRenderer';
 import { InstancedImpostorRenderer } from './armies/InstancedImpostorRenderer';
 import { MageSpellEffect, SpellEntry } from './effects/MageSpellEffect';
 import { MMSpellEffect } from './effects/MMSpellEffect';
-import { InstancedNameTagSystem } from './effects/InstancedNameTagSystem';
+// 
+
 interface BattleArmyProps {
   unitRegistry: React.RefObject<UnitRuntimeData[]>;
   towerConfig: TowerConfig;
@@ -34,6 +36,7 @@ interface BattleArmyProps {
 
 
 import { WORLD_UNIT_POOL_SIZE as MAX_UNITS } from '@/src/core/domain/unit.types';
+const NAME_POOL_SIZE = 60; // Further reduction to 60 for extreme performance
 
 const tempObject = new THREE.Object3D();
 
@@ -48,7 +51,16 @@ const _projMatrix = new THREE.Matrix4();
 
 
 
-
+const LEVEL_COLORS: Record<number, string> = {
+  1: '#FFFFFF', 2: '#4CAF50', 3: '#2196F3', 4: '#9c27b0', 5: '#facc15',
+};
+const getLevelColor = (level: number): string => LEVEL_COLORS[Math.min(level, 5)] ?? '#FFFFFF';
+const getLevelBadge = (level: number): string => {
+  if (level >= 5) return '[GODLY] ';
+  if (level >= 4) return '[ELITE] ';
+  if (level >= 3) return '[PRO] ';
+  return '';
+};
 
 
 
@@ -174,7 +186,15 @@ const BattleArmyComponent = ({
       defines: { USE_INSTANCING: '', USE_INSTANCING_COLOR: '' }
   }), []);
 
+  const nameGroupRef = useRef<THREE.Group>(null!);
+  const namePoolMap = useRef<Map<string, number>>(new Map());
+  const nameAvailableSlots = useRef<number[]>(Array.from({ length: NAME_POOL_SIZE }, (_, i) => i));
+  const nameTextRefs = useRef<(any | null)[]>(Array(NAME_POOL_SIZE).fill(null));
+  const nameSlotContent = useRef<string[]>(Array(NAME_POOL_SIZE).fill(''));
+  const nameSlotColor = useRef<string[]>(Array(NAME_POOL_SIZE).fill('#ffffff'));
 
+  const lastNameCullTime = useRef(0);
+  const cachedActiveUnits = useRef<any[]>([]);
   const frameCountRef = useRef(0);
   useFrame((state, delta) => {
     // 0. Update Frustum for class animators
@@ -191,11 +211,12 @@ const BattleArmyComponent = ({
     // battleGrid is already updated by useBattleSystem simulation loop. 
     // Removing duplicate call here to save CPU cycles.
 
+    const time = state.clock.elapsedTime;
     const camPos = state.camera.position;
     frameCountRef.current++;
 
     // PERFORMANCE: Throttle sorting and unit filtering to every 5 frames
-    if (frameCountRef.current % 5 === 0) {
+    if (frameCountRef.current % 5 === 0 || cachedActiveUnits.current.length === 0) {
       const activeUnits: any[] = [];
       const buckets: Record<string, UnitRuntimeData[]> = { fighter: [], tank: [], mage: [], marksman: [], assassin: [] };
       
@@ -221,9 +242,13 @@ const BattleArmyComponent = ({
         buckets[key].sort((a, b) => (a.dSq || 0) - (b.dSq || 0));
       }
 
-      (state as any).unitBuckets = buckets; 
+      cachedActiveUnits.current = activeUnits;
+      (state as any).unitBuckets = buckets; // Pass to children via state to avoid prop drilling if possible, or just props
     }
 
+    const activeUnits = cachedActiveUnits.current;
+    // Ultimate Visibility: Names stay visible even when zoomed out moderately (45m)
+    const HUD_DETAIL_DIST_SQ = 45 * 45; 
     const isPotato = !!settingsRef.current.potatoMode;
     if (isPotato) {
       if (frameCountRef.current % 15 === 0) {
@@ -233,6 +258,56 @@ const BattleArmyComponent = ({
         }
         shadowRef.current.instanceMatrix.needsUpdate = true;
         if (healthBarRef.current) healthBarRef.current.instanceMatrix.needsUpdate = true;
+      }
+    }
+
+    // 2. Name Labels Lifecycle (Positioning is now delegated to Armies)
+      // Throttled: 15fps for name lifecycle
+      if (frameCountRef.current % 4 === 0) {
+        lastNameCullTime.current = time;
+
+      // Cleanup names for units that are dead, too far, or if in potato mode
+      for (const [uid, slot] of namePoolMap.current.entries()) {
+        const uIdx = parseInt(uid.split('-')[1]);
+        const u = rawMap[uIdx];
+        // Release name slot if unit is dead, too far, or potato mode is on
+        const gone = !u || !u.isActive || u.id !== uid || u.hp <= 0 || (u.dSq || 0) > HUD_DETAIL_DIST_SQ || isPotato;
+        if (gone) {
+          if (nameTextRefs.current[slot]) {
+            nameTextRefs.current[slot].visible = false;
+            nameTextRefs.current[slot].position.set(0, -100, 0); // extra hide
+          }
+          nameAvailableSlots.current.push(slot);
+          namePoolMap.current.delete(uid);
+        }
+      }
+
+      // Assign slots to new near units
+      if (!isPotato) {
+        for (let i = 0; i < activeUnits.length; i++) {
+          const u = activeUnits[i];
+          const id = u.id;
+          if (namePoolMap.current.has(id) || namePoolMap.current.size >= NAME_POOL_SIZE || nameAvailableSlots.current.length === 0) continue;
+          if (u.dSq > HUD_DETAIL_DIST_SQ) continue;
+
+          const slot = nameAvailableSlots.current.shift()!;
+          namePoolMap.current.set(id, slot);
+          const mesh = nameTextRefs.current[slot];
+          if (mesh) {
+            const badge = getLevelBadge(u.level || 1);
+            const label = badge + u.userName;
+            if (nameSlotContent.current[slot] !== label) { mesh.text = label; nameSlotContent.current[slot] = label; }
+
+            const col = getLevelColor(u.level || 1);
+            if (nameSlotColor.current[slot] !== col) { mesh.color = col; nameSlotColor.current[slot] = col; }
+
+            // LARGER NAMES for maximum visibility
+            mesh.fontSize = u.isBoss ? 1.4 : 0.75; 
+            mesh.outlineWidth = 0.12;
+            mesh.outlineColor = "#000000";
+            mesh.visible = true;
+          }
+        }
       }
     }
 
@@ -261,6 +336,8 @@ const BattleArmyComponent = ({
         renderedIdsRef={renderedIdsRef}
         shadowRef={shadowRef}
         healthBarRef={healthBarRef}
+        namePoolMap={namePoolMap}
+        nameTextRefs={nameTextRefs}
       />
 
       {/* LOD Impostor Layer: far-away units rendered as InstancedMesh billboards (2 draw calls) */}
@@ -288,8 +365,25 @@ const BattleArmyComponent = ({
       <instancedMesh ref={shadowRef} args={[null as any, null as any, 1500]} geometry={shadowGeo} material={shadowMat} frustumCulled={false} />
       <instancedMesh ref={healthBarRef} args={[null as any, null as any, 1500]} geometry={healthGeo} material={healthBarMat} renderOrder={7} frustumCulled={false} />
 
-      {/* High-Performance Instanced NameTags & Profile Pictures */}
-      <InstancedNameTagSystem unitRegistry={unitRegistry} />
+      <group ref={nameGroupRef}>
+        {useMemo(() => Array.from({ length: NAME_POOL_SIZE }, (_, i) => (
+          <Text
+            key={"name-" + i}
+            ref={(el) => { nameTextRefs.current[i] = el; }}
+            visible={false}
+            fontSize={0.45}
+            color="#ffffff"
+            outlineWidth={0.08}
+            outlineColor="#000000"
+            anchorX="center"
+            anchorY="middle"
+            renderOrder={10}
+            depthOffset={-2}
+          >
+            {''}
+          </Text>
+        )), [])}
+      </group>
     </group>
   );
 };

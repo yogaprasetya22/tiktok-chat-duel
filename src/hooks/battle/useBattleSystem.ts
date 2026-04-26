@@ -357,9 +357,11 @@ export const useBattleSystem = () => {
         if (type === "player") {
             stats.playerDamage[userName] = (stats.playerDamage[userName] || 0) + dmg;
             if (isKill) stats.playerKills[userName] = (stats.playerKills[userName] || 0) + 1;
+            if (dmg > 0) stats.playerHits[userName] = (stats.playerHits[userName] || 0) + 1;
         } else {
             stats.enemyDamage[userName] = (stats.enemyDamage[userName] || 0) + dmg;
             if (isKill) stats.enemyKills[userName] = (stats.enemyKills[userName] || 0) + 1;
+            if (dmg > 0) stats.enemyHits[userName] = (stats.enemyHits[userName] || 0) + 1;
         }
     }, []);
 
@@ -504,6 +506,7 @@ export const useBattleSystem = () => {
             if (profileImage) {
                 statsRef.current.profileImages[name] = profileImage;
             }
+            statsRef.current.unitsSpawned[name] = (statsRef.current.unitsSpawned[name] || 0) + 1;
 
             // Sync to bitecs ECS
             let eid = eidMap.current[poolIdx];
@@ -682,8 +685,18 @@ export const useBattleSystem = () => {
                         const dSq = dx * dx + dz * dz;
 
                         let weight = 1.0;
-                        if (isFighter) weight = 3.0;
-                        else if (potential.isBoss) weight = 2.0;
+                        if (isAssassin) {
+                            // Assassins prioritize Mage and MM heavily
+                            if (potential.unitClass === 'mage' || potential.unitClass === 'marksman') {
+                                weight = 15.0; // Extremely high priority
+                            } else {
+                                weight = 0.05; // Ignore frontline (tank/fighter)
+                            }
+                        } else if (isFighter) {
+                            weight = 3.0;
+                        } else if (potential.isBoss) {
+                            weight = 2.0;
+                        }
 
                         const score = weight / (dSq + 0.1);
                         if (score > bestScore) {
@@ -1101,7 +1114,9 @@ export const useBattleSystem = () => {
                     const seek = v.steering.behaviors[0] as any;
                     if (seek?.target) {
                         // Focus on the center tower (target x = 0) to avoid getting stuck at lane edges!
-                        const swagger = Math.sin(i * 8.0 + (uData.jitterOffset || 0)) * (uData.laneSwaggerAmp || 1.5); // Add slightly more swagger to prevent stacking
+                        const swagger =
+                            Math.sin(i * 8.0 + (uData.jitterOffset || 0)) *
+                            (uData.laneSwaggerAmp || 1.5); // Add slightly more swagger to prevent stacking
                         seek.target.set(swagger, 0, targetBaseZ);
                     }
                 }
@@ -1131,28 +1146,52 @@ export const useBattleSystem = () => {
                     }
                 }
 
-                // --- ASSASSIN BLINK (moved from AssassinArmy) ---
+                // --- ASSASSIN BLINK (Tactical Backline Teleport) ---
                 if (u.unitClass === 'assassin' && u.targetId && !isBaseTarget) {
-                    const blinkCooldownS = 6000; // 6 seconds in ms
+                    const blinkCooldownS = 4000; // Faster blink (4s) for more dynamic behavior
                     const lastBlink = uData.lastBlinkTime || 0;
+                    
                     if (simNow - lastBlink > blinkCooldownS) {
                         const tIdx3 = parseInt(u.targetId.split('-')[1]);
                         const td3 = uiPool[tIdx3];
+                        
                         if (td3 && td3.isActive && td3.id === u.targetId &&
                             (td3.unitClass === 'mage' || td3.unitClass === 'marksman')) {
+                            
                             const ddx = _px[i] - td3.position[0];
                             const ddz = _pz[i] - td3.position[2];
                             const dSq2 = ddx*ddx + ddz*ddz;
-                            if (dSq2 > 45 && dSq2 < 400) {
-                                const bAngle = Math.atan2(ddz, ddx);
-                                const bx = td3.position[0] + Math.cos(bAngle) * 1.5;
-                                const bz = td3.position[2] + Math.sin(bAngle) * 1.5;
+                            
+                            // Trigger when approaching (around 6 meters radius)
+                            if (dSq2 < 36 && dSq2 > 4) {
+                                // Calculate teleport position BEHIND the target
+                                // We use target's relative direction or team movement
+                                const targetForward = u.type === 'player' ? -1.8 : 1.8;
+                                const bx = td3.position[0];
+                                const bz = td3.position[2] + targetForward;
+                                
                                 v.position.set(bx, 0, bz);
                                 _px[i] = bx; _pz[i] = bz;
                                 uData.position[0] = bx; uData.position[2] = bz;
+                                
                                 uData.lastBlinkTime = simNow;
-                                uData.pendingCrit = true;
+                                uData.pendingCrit = true; // Assassin deals heavy damage after blink
                                 uData.status = 'attacking';
+                                
+                                // Flash VFX color
+                                const spells = assassinSpellsRef.current;
+                                for (let si = 0; si < spells.length; si++) {
+                                    if (!spells[si].active) {
+                                        spells[si].x = bx;
+                                        spells[si].y = 1.3;
+                                        spells[si].z = bz;
+                                        spells[si].startTime = simNow;
+                                        spells[si].color = '#ff00ff'; // Purple flash for teleport
+                                        spells[si].active = true;
+                                        spells[si].progress = 0;
+                                        break;
+                                    }
+                                }
                             }
                         }
                     }
@@ -1236,12 +1275,45 @@ export const useBattleSystem = () => {
         setTowerConfig,
         spawnUnit,
         resetBattle,
-        getMVPData: () => ({
-            topDamage: null,
-            topSpawner: null,
-            playerTopHit: null,
-            enemyTopHit: null,
-        }),
+        getMVPData: () => {
+            const stats = statsRef.current;
+            const getMax = (record: Record<string, number>) => {
+                let maxUser = "N/A";
+                let maxValue = 0;
+                Object.entries(record).forEach(([user, val]) => {
+                    if (val > maxValue) {
+                        maxValue = val;
+                        maxUser = user;
+                    }
+                });
+                return maxValue > 0 ? { username: maxUser, value: maxValue } : null;
+            };
+
+            const allUsers = new Set([
+                ...Object.keys(stats.playerKills),
+                ...Object.keys(stats.enemyKills),
+                ...Object.keys(stats.playerDamage),
+                ...Object.keys(stats.enemyDamage)
+            ]);
+
+            const top5 = Array.from(allUsers)
+                .map(username => {
+                    const kills = (stats.playerKills[username] || 0) + (stats.enemyKills[username] || 0);
+                    const damage = (stats.playerDamage[username] || 0) + (stats.enemyDamage[username] || 0);
+                    const spawns = stats.unitsSpawned[username] || 0;
+                    return { username, kills, damage, spawns, profileImage: stats.profileImages[username] };
+                })
+                .sort((a, b) => b.kills !== a.kills ? b.kills - a.kills : b.damage - a.damage)
+                .slice(0, 5);
+
+            return {
+                topDamage: getMax({ ...stats.playerDamage, ...stats.enemyDamage }),
+                topSpawner: getMax(stats.unitsSpawned),
+                playerTopHit: getMax(stats.playerHits),
+                enemyTopHit: getMax(stats.enemyHits),
+                top5
+            };
+        },
         setMapObstacles,
         mapObstacles,
         debug,

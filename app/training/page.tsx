@@ -37,8 +37,6 @@ export default function TrainingPage() {
     fighterSpellsRef,
     tankSpellsRef,
     assassinSpellsRef,
-    downloadPerfLogs,
-    clearVFXCache,
     compBuffers,
   } = useBattleSystem();
 
@@ -158,7 +156,6 @@ export default function TrainingPage() {
             mapObstacles={[]}
             debug={true} // Always show debug in training
             unitRegistry={unitRegistry}
-            isFullscreen={true}
             updateSimulation={updateSimulation}
             damageQueue={damageQueue}
             settingsRef={settingsRef}
@@ -170,8 +167,6 @@ export default function TrainingPage() {
             fighterSpellsRef={fighterSpellsRef}
             tankSpellsRef={tankSpellsRef}
             assassinSpellsRef={assassinSpellsRef}
-            downloadPerfLogs={downloadPerfLogs}
-            clearVFXCache={clearVFXCache}
             compBuffers={compBuffers}
           />
         </div>

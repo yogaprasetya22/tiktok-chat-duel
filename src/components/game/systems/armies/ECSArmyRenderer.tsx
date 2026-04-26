@@ -57,6 +57,8 @@ interface ECSArmyRendererProps {
   renderedIdsRef: React.RefObject<Set<string>>;
   shadowRef: React.RefObject<THREE.InstancedMesh>;
   healthBarRef: React.RefObject<THREE.InstancedMesh>;
+  namePoolMap: React.MutableRefObject<Map<string, number>>;
+  nameTextRefs: React.RefObject<any[]>;
 }
 
 // ─── Per-class config (static) ───────────────────────────────────────────────
@@ -129,6 +131,7 @@ const _whiteColor = new THREE.Color('#ffffff');
 const ECSArmyRendererInner = ({
   unitRegistry, activeIndicesRef, towerConfig, settingsRef, simTimeRef,
   renderedIdsRef, shadowRef, healthBarRef,
+  namePoolMap, nameTextRefs,
 }: ECSArmyRendererProps) => {
 
   // ── Load all GLTF assets (preload happens at bottom of file) ──
@@ -443,7 +446,16 @@ const ECSArmyRendererInner = ({
             if (flash < 100) _healthColor.lerp(_whiteColor, 1.0 - flash / 100);
             healthBarRef.current.setColorAt(hIdx, _healthColor);
 
-
+            // Name label sync
+            if (namePoolMap.current.has(id) && nameTextRefs.current) {
+              const nameSlot = namePoolMap.current.get(id)!;
+              const nameMesh = nameTextRefs.current[nameSlot];
+              if (nameMesh) {
+                const hover = Math.sin(state.clock.elapsedTime * 3 + id.length) * 0.1;
+                nameMesh.position.set(cp.x, (uData.isBoss ? 9.0 : 4.1) + hover, cp.z);
+                nameMesh.quaternion.copy(camQ);
+              }
+            }
           } else {
             // Far: shadow only
             _hudTemp.position.set(cp.x, -0.45, cp.z);

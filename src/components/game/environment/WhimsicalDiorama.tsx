@@ -42,7 +42,7 @@ const Rain = () => {
     }, []);
     useFrame((state) => { RainMaterial.uniforms.time.value = state.clock.elapsedTime; });
     return (
-        <instancedMesh ref={meshRef} args={[undefined, undefined, RAIN_COUNT]}>
+        <instancedMesh ref={meshRef} args={[undefined, undefined, RAIN_COUNT]} frustumCulled={false}>
             <cylinderGeometry args={[0.015, 0.015, 1.2, 3]} />
             <primitive object={RainMaterial} attach="material" />
         </instancedMesh>
@@ -93,7 +93,7 @@ const PainterlyGrass = ({ baseDistance = 24 }) => {
     }, [baseDistance, dummy]);
 
     return (
-        <instancedMesh ref={meshRef} args={[undefined, undefined, GRASS_COUNT]}>
+        <instancedMesh ref={meshRef} args={[undefined, undefined, GRASS_COUNT]} frustumCulled={false}>
             <planeGeometry args={[0.2, 0.8, 1, 3]} />
             <primitive object={PainterlyGrassMaterial} attach="material" />
         </instancedMesh>
@@ -142,7 +142,7 @@ const FloatingDebris = ({ count = 40 }) => {
     });
 
     return (
-        <instancedMesh ref={meshRef} args={[undefined, undefined, count]}>
+        <instancedMesh ref={meshRef} args={[undefined, undefined, count]} frustumCulled={false}>
             <icosahedronGeometry args={[1, 0]} />
             <meshToonMaterial color="#fca311" />
         </instancedMesh>

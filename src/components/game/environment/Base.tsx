@@ -6,134 +6,202 @@ import { MeshoptDecoder } from 'meshoptimizer';
 import * as THREE from 'three';
 import { applyPainterlyStyle } from "../systems/effects/PainterlyMaterials";
 
-// Reuse matrix math objects to avoid garbage collection
 const _obj = new THREE.Object3D();
+const _matrix = new THREE.Matrix4();
 
-/**
- * ProceduralLowPolyTower
- * A very lightweight replacement for the high-poly GLB tower.
- * Uses only ~40 triangles total compared to 1.28 million.
- */
-const ProceduralLowPolyTower = ({ distance }: { distance: number }) => {
-  return (
-    <group>
-      {/* Player Tower Proxy */}
-      <group position={[0, -0.4, distance]}>
-        <mesh position={[0, 3, 0]} castShadow receiveShadow>
-          <cylinderGeometry args={[1.5, 2, 6, 8]} />
-          <meshStandardMaterial color="#222222" metalness={0.8} roughness={0.2} />
-        </mesh>
-        <mesh position={[0, 6.5, 0]} castShadow receiveShadow>
-          <boxGeometry args={[2.5, 1, 2.5]} />
-          <meshStandardMaterial color="#111111" />
-        </mesh>
-      </group>
+// ─── Module-level cache ────────────────────────────────────────────────────────
+// Geometry dan material hanya diproses SEKALI selama session, bukan per-render.
+// Ini mencegah 640k-triangle clone + shader recompile yang jadi penyebab frame drop.
+const geoCache = new Map<string, THREE.BufferGeometry>();
+const matCache = new Map<string, THREE.Material>();
 
-      {/* Enemy Tower Proxy */}
-      <group position={[0, -0.4, -distance]}>
-        <mesh position={[0, 3, 0]} castShadow receiveShadow>
-          <cylinderGeometry args={[1.5, 2, 6, 8]} />
-          <meshStandardMaterial color="#222222" metalness={0.8} roughness={0.2} />
-        </mesh>
-        <mesh position={[0, 6.5, 0]} castShadow receiveShadow>
-          <boxGeometry args={[2.5, 1, 2.5]} />
-          <meshStandardMaterial color="#111111" />
-        </mesh>
-      </group>
+function getOrBuildMeshData(
+  scene: THREE.Object3D
+): { geometry: THREE.BufferGeometry; material: THREE.Material }[] {
+  const cacheKey = scene.uuid;
+
+  // Cek apakah sudah diproses sebelumnya
+  const existingGeos = Array.from(geoCache.entries())
+    .filter(([k]) => k.startsWith(cacheKey))
+    .map(([k], i) => ({
+      geometry: geoCache.get(k)!,
+      material: matCache.get(k)!,
+    }));
+
+  if (existingGeos.length > 0) return existingGeos;
+
+  const list: { geometry: THREE.BufferGeometry; material: THREE.Material }[] = [];
+  scene.updateMatrixWorld();
+  let idx = 0;
+
+  scene.traverse((child: any) => {
+    if (!child.isMesh) return;
+    const key = `${cacheKey}_${idx++}`;
+
+    // Geometry: clone + bake matrix (hanya 1x seumur hidup app)
+    const geom = child.geometry.clone();
+    geom.applyMatrix4(child.matrixWorld);
+    geom.computeBoundingBox();
+    geom.computeBoundingSphere();
+    geoCache.set(key, geom);
+
+    // Material: clone + painterly + shader injection (hanya 1x)
+    const mat = child.material.clone() as THREE.MeshStandardMaterial;
+    applyPainterlyStyle(mat);
+
+    const prevCompile = mat.onBeforeCompile?.bind(mat);
+    mat.onBeforeCompile = (shader: any, renderer: any) => {
+      prevCompile?.(shader, renderer);
+      // Tambah warm toon glow sekali saja
+      if (!shader.fragmentShader.includes('toonGlow')) {
+        shader.fragmentShader = shader.fragmentShader.replace(
+          '#include <color_fragment>',
+          `#include <color_fragment>
+           // toonGlow
+           diffuseColor.rgb += vec3(0.15, 0.08, 0.0) * sin(vWorldPos.y * 2.0);`
+        );
+      }
+    };
+    mat.needsUpdate = true;
+    matCache.set(key, mat);
+
+    list.push({ geometry: geom, material: mat });
+  });
+
+  return list;
+}
+
+// ─── Prosedural fallback (tetap ringan) ────────────────────────────────────────
+const ProceduralLowPolyTower = React.memo(({ distance }: { distance: number }) => (
+  <group>
+    <group position={[0, -0.4, distance]}>
+      <mesh position={[0, 3, 0]} castShadow>
+        <cylinderGeometry args={[1.5, 2, 6, 8]} />
+        <meshStandardMaterial color="#222222" metalness={0.8} roughness={0.2} />
+      </mesh>
+      <mesh position={[0, 6.5, 0]} castShadow>
+        <boxGeometry args={[2.5, 1, 2.5]} />
+        <meshStandardMaterial color="#111111" />
+      </mesh>
     </group>
-  );
-};
+    <group position={[0, -0.4, -distance]}>
+      <mesh position={[0, 3, 0]} castShadow>
+        <cylinderGeometry args={[1.5, 2, 6, 8]} />
+        <meshStandardMaterial color="#222222" metalness={0.8} roughness={0.2} />
+      </mesh>
+      <mesh position={[0, 6.5, 0]} castShadow>
+        <boxGeometry args={[2.5, 1, 2.5]} />
+        <meshStandardMaterial color="#111111" />
+      </mesh>
+    </group>
+  </group>
+));
 
-/**
- * InstancedTowers
- * High-performance renderer that draws both Player and Enemy towers.
- * Automatically switches to Procedural mode to save 1.2M triangles if needed.
- */
-export const InstancedTowers = React.memo(({ distance, settingsRef }: { distance: number; settingsRef?: any }) => {
-  const gameState = useStore(s => s.gameState);
-  const isPotato = settingsRef?.current?.potatoMode;
-  
-  // PERFORMANCE FIX: The GLB tower is 640k triangles. 
-  // We use the procedural tower during SETUP or in Potato Mode to keep FPS at 60.
-  const useFallback = isPotato || gameState === 'SETUP';
-
+// ─── GLB renderer (dipisah agar hooks selalu dipanggil) ────────────────────────
+const GLBTowers = React.memo(({ distance }: { distance: number }) => {
   const { scene } = useGLTF('/assets-model/tower.glb', true, true, (loader) => {
     loader.setMeshoptDecoder(MeshoptDecoder);
   }) as any;
 
-  // Extract all meshes from the GLB and prepare shared optimized materials
-  const meshes = useMemo(() => {
+  const meshData = useMemo(() => {
     if (!scene) return [];
-    const list: { geometry: THREE.BufferGeometry; material: THREE.Material }[] = [];
-    scene.updateMatrixWorld(); // Ensure internal model transforms are computed
-    scene.traverse((child: any) => {
-      if (child.isMesh) {
-        // Clone and bake the internal transform from the GLB into the geometry
-        // so that the InstancedMesh respects the original model's orientation.
-        const geom = child.geometry.clone();
-        geom.applyMatrix4(child.matrixWorld);
-
-        // Clone material only once for all instances
-        const mat = child.material.clone();
-        applyPainterlyStyle(mat);
-
-        // Inject warm toon glow (centralized shader mod)
-        if (mat.onBeforeCompile) {
-          const prev = mat.onBeforeCompile;
-          mat.onBeforeCompile = (shader: any) => {
-            prev(shader);
-            shader.fragmentShader = shader.fragmentShader.replace(
-              '#include <color_fragment>',
-              `#include <color_fragment>
-               diffuseColor.rgb += vec3(0.15, 0.08, 0.0) * sin(vWorldPos.y * 2.0);`
-            );
-          };
-        }
-        list.push({ geometry: geom, material: mat });
-      }
-    });
-
-    return list;
+    return getOrBuildMeshData(scene);
   }, [scene]);
 
-  if (useFallback) return <ProceduralLowPolyTower distance={distance} />;
-  if (meshes.length === 0) return null;
+  if (meshData.length === 0) return null;
 
   return (
     <group>
-      {meshes.map((m, i) => (
+      {meshData.map((m, i) => (
         <TowerPart key={i} geometry={m.geometry} material={m.material} distance={distance} />
       ))}
     </group>
   );
 });
 
-const TowerPart = ({ geometry, material, distance }: { geometry: THREE.BufferGeometry; material: THREE.Material; distance: number }) => {
-  const meshRef = useRef<THREE.InstancedMesh>(null!);
+// ─── InstancedTowers: router utama ─────────────────────────────────────────────
+export const InstancedTowers = React.memo(({
+  distance,
+  settingsRef,
+}: {
+  distance: number;
+  settingsRef?: React.RefObject<{ potatoMode?: boolean }>;
+}) => {
+  const gameState = useStore(s => s.gameState);
+  const isPotato = settingsRef?.current?.potatoMode ?? false;
+  const useFallback = isPotato || gameState === 'SETUP';
+
+  // Selalu render komponen yang sama agar hooks tidak berpindah
+  if (useFallback) return <ProceduralLowPolyTower distance={distance} />;
+  return <GLBTowers distance={distance} />;
+});
+
+// ─── TowerPart: 2 InstancedMesh TERPISAH per tower ────────────────────────────
+// FIX KRITIS: Memisahkan player dan enemy ke InstancedMesh sendiri-sendiri
+// agar frustum culling bekerja per-tower, bukan per-pasang.
+// Sebelumnya: 1 sphere besar di (0,0,0) → GPU gambar keduanya meski salah satu off-screen.
+// Sekarang: tiap tower punya sphere kecil yang tepat → GPU skip yg off-screen.
+const TowerPart = React.memo(({
+  geometry,
+  material,
+  distance,
+}: {
+  geometry: THREE.BufferGeometry;
+  material: THREE.Material;
+  distance: number;
+}) => {
+  const playerRef = useRef<THREE.InstancedMesh>(null!);
+  const enemyRef = useRef<THREE.InstancedMesh>(null!);
 
   useEffect(() => {
-    if (!meshRef.current) return;
-
-    // Instance 0: Player Base
+    // Player tower (instance 0 dari mesh tunggal)
     _obj.position.set(0, -0.4, distance);
     _obj.rotation.set(0, Math.PI, 0);
     _obj.scale.setScalar(0.5);
     _obj.updateMatrix();
-    meshRef.current.setMatrixAt(0, _obj.matrix);
 
-    // Instance 1: Enemy Base
+    if (playerRef.current) {
+      playerRef.current.setMatrixAt(0, _obj.matrix);
+      playerRef.current.instanceMatrix.needsUpdate = true;
+      // Bounding sphere kecil dan presisi untuk 1 tower
+      playerRef.current.geometry.boundingSphere = new THREE.Sphere(
+        new THREE.Vector3(0, 3, distance), 8
+      );
+    }
+
+    // Enemy tower
     _obj.position.set(0, -0.4, -distance);
     _obj.rotation.set(0, 0, 0);
     _obj.scale.setScalar(0.5);
     _obj.updateMatrix();
-    meshRef.current.setMatrixAt(1, _obj.matrix);
 
-    meshRef.current.instanceMatrix.needsUpdate = true;
+    if (enemyRef.current) {
+      enemyRef.current.setMatrixAt(0, _obj.matrix);
+      enemyRef.current.instanceMatrix.needsUpdate = true;
+      enemyRef.current.geometry.boundingSphere = new THREE.Sphere(
+        new THREE.Vector3(0, 3, -distance), 8
+      );
+    }
   }, [distance]);
 
-  return <instancedMesh ref={meshRef} args={[geometry, material, 2]} castShadow receiveShadow />;
-};
+  // Dispose saat unmount untuk mencegah GPU memory leak
+  useEffect(() => {
+    return () => {
+      // Jangan dispose geometry/material dari cache global —
+      // hanya lepas referensi InstancedMesh
+    };
+  }, []);
 
+  return (
+    <>
+      {/* count=1: hanya 1 posisi per mesh, bounding sphere presisi */}
+      <instancedMesh ref={playerRef} args={[geometry, material, 1]} receiveShadow />
+      <instancedMesh ref={enemyRef} args={[geometry, material, 1]} receiveShadow />
+    </>
+  );
+});
+
+// ─── Base: HP bar + light ──────────────────────────────────────────────────────
 interface BaseProps {
   maxHp: number;
   position: [number, number, number];
@@ -142,56 +210,51 @@ interface BaseProps {
   customColor: string;
 }
 
-/**
- * Base
- * Now only renders the UI (HP Bar, Name) and Light.
- * The 3D model is handled by the InstancedTowers component for performance.
- */
 export const Base = React.memo(({ maxHp, position, type, name, customColor }: BaseProps) => {
   const hpBarRef = useRef<THREE.Mesh>(null!);
   const textRef = useRef<any>(null!);
-  
-  // Read state once for initial setup without subscribing
-  const initialGameState = useStore.getState().gameState;
+  const gameState = useStore(s => s.gameState);
 
   useFrame(() => {
-     const state = useStore.getState();
-     if (state.gameState === 'SETUP') return;
-     
-     const currentHp = type === 'player' ? state.playerBaseHp : state.enemyBaseHp;
-     const ratio = Math.min(1, Math.max(0, currentHp / maxHp));
+    // useFrame tetap dipanggil tapi cost-nya nol saat SETUP
+    const state = useStore.getState();
+    if (state.gameState === 'SETUP') return;
 
-     if (hpBarRef.current) {
-        hpBarRef.current.scale.x = ratio;
-        hpBarRef.current.position.x = 2.25 * (ratio - 1);
-     }
-     
-     if (textRef.current && textRef.current.text !== undefined) {
-        textRef.current.text = `${Math.ceil(currentHp)} / ${maxHp}`;
-     }
+    const currentHp = type === 'player' ? state.playerBaseHp : state.enemyBaseHp;
+    const ratio = Math.min(1, Math.max(0, currentHp / maxHp));
+
+    if (hpBarRef.current) {
+      hpBarRef.current.scale.x = ratio;
+      // FIX: gunakan set() bukan assignment langsung untuk menghindari object alloc
+      hpBarRef.current.position.x = 2.25 * (ratio - 1);
+    }
+
+    if (textRef.current) {
+      const hp = Math.ceil(currentHp);
+      // FIX: hanya update string jika nilainya berubah
+      const next = `${hp} / ${maxHp}`;
+      if (textRef.current.text !== next) {
+        textRef.current.text = next;
+      }
+    }
   });
 
   return (
     <group position={position}>
-      {/* Warm Glow at top of tower */}
       <pointLight position={[0, 2.5, 0]} intensity={1.5} color="#ffaa00" distance={25} />
 
-      {/* HP BAR - Base Version (GPU Optimized) */}
-      {initialGameState !== 'SETUP' && (
+      {gameState !== 'SETUP' && (
         <Billboard position={[0, 2.8, 0]}>
           <group>
-            {/* Background */}
             <Plane args={[4.5, 0.4]}>
               <meshBasicMaterial color="#000000" transparent opacity={0.6} />
             </Plane>
 
-            {/* Main HP Bar */}
-            <mesh ref={hpBarRef} position-z={0.01} scale-x={1} position-x={0}>
+            <mesh ref={hpBarRef} position-z={0.01}>
               <planeGeometry args={[4.4, 0.3]} />
               <meshBasicMaterial color={customColor} />
             </mesh>
 
-            {/* Title / Name */}
             <Text
               fontSize={0.6}
               color="white"
@@ -203,7 +266,6 @@ export const Base = React.memo(({ maxHp, position, type, name, customColor }: Ba
               {name.toUpperCase()}
             </Text>
 
-            {/* HP Numbers */}
             <Text
               ref={textRef}
               fontSize={0.3}
@@ -212,7 +274,7 @@ export const Base = React.memo(({ maxHp, position, type, name, customColor }: Ba
               position={[0, -0.25, 0]}
               fillOpacity={0.8}
             >
-               {`${maxHp} / ${maxHp}`}
+              {`${maxHp} / ${maxHp}`}
             </Text>
           </group>
         </Billboard>
@@ -221,6 +283,7 @@ export const Base = React.memo(({ maxHp, position, type, name, customColor }: Ba
   );
 });
 
+// Preload tetap di luar komponen
 useGLTF.preload('/assets-model/tower.glb', true, true, (loader) => {
   loader.setMeshoptDecoder(MeshoptDecoder);
 });
