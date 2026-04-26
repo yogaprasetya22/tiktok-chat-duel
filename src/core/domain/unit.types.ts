@@ -26,7 +26,7 @@ export interface UnitStats {
     level?: number;
 }
 
-export interface ClassStatusStats {
+interface ClassStatusStats {
     hp: number;
     hp_regen: number;
     atk: number;
@@ -54,7 +54,7 @@ export interface ClassStatusStats {
 
 export type ClassConfig = Record<"fighter" | "tank" | "mage" | "marksman" | "assassin", ClassStatusStats>;
 
-export interface TeamConfig {
+interface TeamConfig {
     name: string;
     color: string;
     active: boolean;

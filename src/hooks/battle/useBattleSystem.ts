@@ -284,12 +284,16 @@ export const useBattleSystem = () => {
             color: string,
         ) => {
             const existing = damageBufferRef.current.get(targetId);
+            const poolIdx = parseInt(targetId.split('-')[1]);
+            const uData = unitDataPoolRef.current[poolIdx];
+            if (uData) uData.lastDamageTime = simulationTimeRef.current;
+            
             if (existing) {
                 existing.total += value;
                 existing.position[0] = position[0];
                 existing.position[1] = position[1];
                 existing.position[2] = position[2];
-                existing.lastHit = Date.now();
+                existing.lastHit = performance.now();
             } else {
                 damageBufferRef.current.set(targetId, {
                     total: value,

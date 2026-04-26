@@ -265,6 +265,11 @@ const ECSArmyRendererInner = ({
   };
 
   // ── Main render loop ──────────────────────────────────────────────────────
+  const sortFrameRef = useRef(0);
+  const sortedBucketsRef = useRef<Record<ClassKey, UnitRuntimeData[]>>({
+    fighter: [], tank: [], mage: [], marksman: [], assassin: [],
+  });
+
   useFrame((state, delta) => {
     const rawMap = unitRegistry.current;
     if (!rawMap) return;
@@ -303,30 +308,45 @@ const ECSArmyRendererInner = ({
       return;
     }
 
-    // Build sorted view: boss-first, then by distance
+    sortFrameRef.current++;
+    const classBuckets = sortedBucketsRef.current;
     const unitCount = indices.length;
 
-    // Per-class unit lists (to determine who gets a pool slot — closest ARMY_POOL_SIZE)
-    const classBuckets: Record<ClassKey, UnitRuntimeData[]> = {
-      fighter: [], tank: [], mage: [], marksman: [], assassin: [],
-    };
+    // Throttle sort to every 30 frames (saves ~50% of sort cost)
+    if (sortFrameRef.current % 30 === 0) {
+      // Rebuild class buckets
+      for (const k of Object.keys(classBuckets) as ClassKey[]) classBuckets[k] = [];
 
-    for (let k = 0; k < unitCount; k++) {
-      const i = indices[k];
-      const u = rawMap[i];
-      if (!u || !u.isActive || u.hp <= 0 || u.isDying) continue;
-      const dx = camPos.x - u.position[0];
-      const dz = camPos.z - u.position[2];
-      u.dSq = dx * dx + dz * dz;
-      const bucket = classBuckets[u.unitClass];
-      if (bucket) bucket.push(u);
+      for (let k = 0; k < unitCount; k++) {
+        const i = indices[k];
+        const u = rawMap[i];
+        if (!u || !u.isActive || u.hp <= 0 || u.isDying) continue;
+        const dx = camPos.x - u.position[0];
+        const dz = camPos.z - u.position[2];
+        u.dSq = dx * dx + dz * dz;
+        const bucket = classBuckets[u.unitClass];
+        if (bucket) bucket.push(u);
+      }
+
+      // Sort each bucket
+      for (const classKey of Object.keys(classBuckets) as ClassKey[]) {
+        classBuckets[classKey].sort((a, b) => (a.isBoss !== b.isBoss) ? (a.isBoss ? -1 : 1) : (a.dSq || 0) - (b.dSq || 0));
+      }
+    } else {
+      // Still update dSq each frame for culling accuracy
+      for (let k = 0; k < unitCount; k++) {
+        const i = indices[k];
+        const u = rawMap[i];
+        if (!u) continue;
+        const dx = camPos.x - u.position[0];
+        const dz = camPos.z - u.position[2];
+        u.dSq = dx * dx + dz * dz;
+      }
     }
 
-    // For each class: sort by distance, take top ARMY_POOL_SIZE to render
+    // For each class: take top ARMY_POOL_SIZE to render
     (Object.keys(classBuckets) as ClassKey[]).forEach(classKey => {
       const bucket = classBuckets[classKey];
-      bucket.sort((a, b) => (a.isBoss !== b.isBoss) ? (a.isBoss ? -1 : 1) : (a.dSq || 0) - (b.dSq || 0));
-
       const visibleUnits = bucket.length > ARMY_POOL_SIZE ? bucket.slice(0, ARMY_POOL_SIZE) : bucket;
       const pool = p[classKey];
       const hudBase = CLASS_HUD_BASE[classKey];
@@ -372,10 +392,9 @@ const ECSArmyRendererInner = ({
           }
         }
 
-        // ── Position Lerp ──────────────────────────────────────────────────
+        // ── Position Lerp (cheap fixed lerp, no Math.exp) ──────────────────
         const tp = uData.position;
         const cp = item.group.position;
-        const lerpFactor = 1.0 - Math.exp(-45 * delta);
         const distSq = (tp[0] - cp.x) ** 2 + (tp[2] - cp.z) ** 2;
 
         if (!item.initialized || distSq > 25) {
@@ -384,25 +403,27 @@ const ECSArmyRendererInner = ({
           item.group.rotation.y = item.rotation;
           item.initialized = true;
         } else {
-          cp.x = THREE.MathUtils.lerp(cp.x, tp[0], lerpFactor);
-          cp.y = THREE.MathUtils.lerp(cp.y, tp[1], lerpFactor);
-          cp.z = THREE.MathUtils.lerp(cp.z, tp[2], lerpFactor);
+          cp.x += (tp[0] - cp.x) * 0.25;
+          cp.y += (tp[1] - cp.y) * 0.25;
+          cp.z += (tp[2] - cp.z) * 0.25;
 
           let diff = uData.rotation[1] - item.rotation;
           while (diff < -Math.PI) diff += Math.PI * 2;
           while (diff >  Math.PI) diff -= Math.PI * 2;
-          item.rotation += diff * (1.0 - Math.exp(-15 * delta));
+          item.rotation += diff * 0.15;
           item.group.rotation.y = item.rotation;
         }
 
-        // ── Painterly Shader Uniform Time ──────────────────────────────────
-        const timeVal = (simTimeRef.current || 0) * 0.001;
-        item.colorable.forEach(mesh => {
-          const mat = mesh.material as THREE.Material;
-          if (mat.userData.painterlyShader) {
-            mat.userData.painterlyShader.uniforms.time.value = timeVal;
+        // ── Painterly Shader (throttled to every 10 frames) ──────────────────
+        if (sortFrameRef.current % 10 === 0) {
+          const timeVal = (simTimeRef.current || 0) * 0.001;
+          for (let ci = 0; ci < item.colorable.length; ci++) {
+            const mat = item.colorable[ci].material as THREE.Material;
+            if (mat.userData.painterlyShader) {
+              mat.userData.painterlyShader.uniforms.time.value = timeVal;
+            }
           }
-        });
+        }
 
         // ── HUD Sync ───────────────────────────────────────────────────────
         item.group.updateMatrix();
@@ -439,7 +460,8 @@ const ECSArmyRendererInner = ({
 
             // Fill Color + Damage Flash
             _healthColor.set(teamColor);
-            const flash = Date.now() - (uData.lastDamageTime || 0);
+            const timeVal = (simTimeRef.current || 0);
+            const flash = timeVal - (uData.lastDamageTime || 0);
             if (flash < 100) _healthColor.lerp(_whiteColor, 1.0 - flash / 100);
             healthBarRef.current.setColorAt(hIdx, _healthColor);
 
@@ -483,7 +505,7 @@ const ECSArmyRendererInner = ({
         }
       });
     });
-  });
+  }, 2); // Priority 2: Runs after BattleArmy (1) but before Impostor (3)
 
   return <group ref={groupRef} />;
 };

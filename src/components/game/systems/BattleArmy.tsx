@@ -14,6 +14,7 @@ import { InstancedImpostorRenderer } from './armies/InstancedImpostorRenderer';
 import { MageSpellEffect, SpellEntry } from './effects/MageSpellEffect';
 import { MMSpellEffect } from './effects/MMSpellEffect';
 import { InstancedNameTagSystem } from './effects/InstancedNameTagSystem';
+
 interface BattleArmyProps {
   unitRegistry: React.RefObject<UnitRuntimeData[]>;
   towerConfig: TowerConfig;
@@ -31,13 +32,7 @@ interface BattleArmyProps {
   compBuffers: any;
 }
 
-
-
-import { WORLD_UNIT_POOL_SIZE as MAX_UNITS } from '@/src/core/domain/unit.types';
-
 const tempObject = new THREE.Object3D();
-
-// Pre-computed hide matrix — avoids recomputing position+scale+updateMatrix per cleanup slot
 const _hideObj = new THREE.Object3D();
 _hideObj.position.set(0, -100, 0);
 _hideObj.scale.set(0, 0, 0);
@@ -45,12 +40,6 @@ _hideObj.updateMatrix();
 const _hideMatrix = _hideObj.matrix.clone();
 const _frustum = new THREE.Frustum();
 const _projMatrix = new THREE.Matrix4();
-
-
-
-
-
-
 
 const MLHealthBarShader = {
   vertexShader: `
@@ -77,21 +66,18 @@ const MLHealthBarShader = {
       float maxHp = vHealthInfo.y;
       float pct = maxHp > 0.0 ? clamp(hp / maxHp, 0.0, 1.0) : 0.0;
       
-      // Calculate Border
       float borderWidth = 0.015;
       float borderHeight = 0.08;
       bool isBorder = vUv.x < borderWidth || vUv.x > 1.0 - borderWidth || vUv.y < borderHeight || vUv.y > 1.0 - borderHeight;
       if (isBorder) {
-          gl_FragColor = vec4(0.05, 0.05, 0.05, 0.9); // Black border
+          gl_FragColor = vec4(0.05, 0.05, 0.05, 0.9);
           return;
       }
       
-      // Calculate Notches (every 250 HP)
       float totalSmallSegments = maxHp / 250.0;
       float smallNotchStep = 1.0 / totalSmallSegments;
       float smallNotch = mod(vUv.x, smallNotchStep);
       
-      // Thick notches every 1000 HP
       float thickNotchStep = 1.0 / (maxHp / 1000.0);
       float thickNotch = mod(vUv.x, thickNotchStep);
       
@@ -99,19 +85,18 @@ const MLHealthBarShader = {
       bool isSmallNotch = smallNotch < 0.01 && vUv.x > 0.02 && vUv.x < 0.98;
       
       if (isThickNotch) {
-          gl_FragColor = vec4(0.0, 0.0, 0.0, 0.95); // Black thick notch
+          gl_FragColor = vec4(0.0, 0.0, 0.0, 0.95);
           return;
       }
       if (isSmallNotch) {
-          gl_FragColor = vec4(0.0, 0.0, 0.0, 0.6); // Semi-transparent small notch
+          gl_FragColor = vec4(0.0, 0.0, 0.0, 0.6);
           return;
       }
       
-      // Draw Fill vs Background
       if (vUv.x <= pct) {
-          gl_FragColor = vec4(vColor, 1.0); // Health fill area
+          gl_FragColor = vec4(vColor, 1.0);
       } else {
-          gl_FragColor = vec4(0.1, 0.1, 0.1, 0.75); // Missing health background area
+          gl_FragColor = vec4(0.1, 0.1, 0.1, 0.75);
       }
     }
   `
@@ -124,14 +109,9 @@ const BattleArmyComponent = ({
 }: BattleArmyProps) => {
   const shadowRef = useRef<THREE.InstancedMesh>(null!);
   const healthBarRef = useRef<THREE.InstancedMesh>(null!);
-
   const { spawnVFX } = useVFX();
-
-  // Shared ref: each army class adds its rendered unit IDs here each frame.
-  // The InstancedImpostorRenderer reads this to skip already-rendered units.
   const renderedIdsRef = useRef<Set<string>>(new Set());
 
-  // --- VFX BRIDGE: Link the context to the ref ---
   useEffect(() => {
     if (vfxRef && !vfxRef.current) {
       vfxRef.current = { spawnVFX };
@@ -154,8 +134,8 @@ const BattleArmyComponent = ({
 
   const healthGeo = useMemo(() => {
     const geo = new THREE.PlaneGeometry(1.2, 0.18);
-    const healthInfoArray = new Float32Array(MAX_UNITS * 2);
-    for(let i=0; i<MAX_UNITS; i++) {
+    const healthInfoArray = new Float32Array(1500 * 2);
+    for(let i=0; i<1500; i++) {
         healthInfoArray[i*2] = 250;
         healthInfoArray[i*2+1] = 250;
     }
@@ -174,32 +154,29 @@ const BattleArmyComponent = ({
       defines: { USE_INSTANCING: '', USE_INSTANCING_COLOR: '' }
   }), []);
 
-
   const frameCountRef = useRef(0);
+  
   useFrame((state, delta) => {
-    // 0. Update Frustum for class animators
+    // 0. Clear rendering tracking for this frame - RUNS FIRST
+    renderedIdsRef.current.clear();
+
     _projMatrix.multiplyMatrices(state.camera.projectionMatrix, state.camera.matrixWorldInverse);
     _frustum.setFromProjectionMatrix(_projMatrix);
     (state as any).battleFrustum = _frustum;
 
-    // Optimized Simulation Step: Pass raw delta to system which handles sub-stepping internally
     updateSimulation(delta);
 
     const rawMap = unitRegistry.current;
     if (!rawMap) return;
 
-    // battleGrid is already updated by useBattleSystem simulation loop. 
-    // Removing duplicate call here to save CPU cycles.
-
     const camPos = state.camera.position;
     frameCountRef.current++;
 
-    // PERFORMANCE: Throttle sorting and unit filtering to every 5 frames
     if (frameCountRef.current % 5 === 0) {
       const activeUnits: any[] = [];
       const buckets: Record<string, UnitRuntimeData[]> = { fighter: [], tank: [], mage: [], marksman: [], assassin: [] };
       
-      const indices = compBuffers?.activeIndices || [];
+      const indices = compBuffers?.activeIndices?.current || [];
       for (let k = 0; k < indices.length; k++) {
         const i = indices[k];
         const u = rawMap[i];
@@ -216,7 +193,6 @@ const BattleArmyComponent = ({
         return a.dSq - b.dSq;
       });
       
-      // Sort each bucket by distance too, so the armies don't have to
       for (const key in buckets) {
         buckets[key].sort((a, b) => (a.dSq || 0) - (b.dSq || 0));
       }
@@ -236,7 +212,6 @@ const BattleArmyComponent = ({
       }
     }
 
-    // 3. Signal Updates for InstancedMeshes (Positions are updated by individual Armies)
     if (shadowRef.current) shadowRef.current.instanceMatrix.needsUpdate = true;
     if (healthBarRef.current) {
       healthBarRef.current.instanceMatrix.needsUpdate = true;
@@ -244,14 +219,10 @@ const BattleArmyComponent = ({
       const attr = healthBarRef.current.geometry.getAttribute('aHealthInfo');
       if (attr) attr.needsUpdate = true;
     }
-  });
+  }, 1);
 
   return (
     <group>
-      {/* ECSArmyRenderer: Unified renderer replacing FighterArmy/TankArmy/MageArmy/MarksmanArmy/AssassinArmy
-          - LAZY POOL: 0 models at startup, clone only when units actually spawn → no idle FPS drop
-          - SINGLE useFrame: one loop for all 5 classes reading from ECS TypedArrays
-          - Pure data-driven: no OOP, no class instances */}
       <ECSArmyRenderer
         unitRegistry={unitRegistry}
         activeIndicesRef={compBuffers?.activeIndices}
@@ -262,33 +233,21 @@ const BattleArmyComponent = ({
         shadowRef={shadowRef}
         healthBarRef={healthBarRef}
       />
-
-      {/* LOD Impostor Layer: far-away units rendered as InstancedMesh billboards (2 draw calls) */}
       <InstancedImpostorRenderer
         unitRegistry={unitRegistry}
         renderedIdsRef={renderedIdsRef}
         playerColor={towerConfig.player.color}
         enemyColor={towerConfig.enemy.color}
         settingsRef={settingsRef}
-        activeIndices={compBuffers?.activeIndices}
+        activeIndices={compBuffers?.activeIndices?.current}
       />
-
-      {/* Mage GLSL Spell Projectiles */}
       <MageSpellEffect spellsRef={spellsRef} unitRegistry={unitRegistry} simTimeRef={simTimeRef} />
-
-      {/* Marksman GLSL Projectiles */}
       <MMSpellEffect spellsRef={mmSpellsRef} unitRegistry={unitRegistry} simTimeRef={simTimeRef} />
-
-      {/* Melee Combat Effects */}
       <FighterSpellEffect fighterSpellsRef={fighterSpellsRef} simTimeRef={simTimeRef} />
       <TankSpellEffect tankSpellsRef={tankSpellsRef} simTimeRef={simTimeRef} />
       <AssassinSpellEffect assassinSpellsRef={assassinSpellsRef} simTimeRef={simTimeRef} />
-
-      {/* Centralized HUD Layer (Extended pool to support class offsets) */}
       <instancedMesh ref={shadowRef} args={[null as any, null as any, 1500]} geometry={shadowGeo} material={shadowMat} frustumCulled={false} />
       <instancedMesh ref={healthBarRef} args={[null as any, null as any, 1500]} geometry={healthGeo} material={healthBarMat} renderOrder={7} frustumCulled={false} />
-
-      {/* High-Performance Instanced NameTags & Profile Pictures */}
       <InstancedNameTagSystem unitRegistry={unitRegistry} />
     </group>
   );

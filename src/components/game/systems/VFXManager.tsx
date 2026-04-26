@@ -2,14 +2,9 @@ import React, { createContext, useCallback, useContext, useMemo } from 'react';
 
 type Vec3 = [number, number, number];
 
-export type VFXEvent = {
-	position: Vec3;
-	effect: string;
-	color?: string;
-	timestamp: number;
-};
 
-export type VFXContextValue = {
+
+type VFXContextValue = {
 	spawnVFX: (position: Vec3, effect: string, color?: string) => void;
 };
 

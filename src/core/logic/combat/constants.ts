@@ -5,8 +5,6 @@ import { SimulationSettings, ClassConfig } from "@/src/core/domain/unit.types";
 // ============================================================
 
 // --- STATIC WORLD BOUNDARIES (Never Change) ---
-export let PLAYER_BASE_Z = 24;
-export let ENEMY_BASE_Z = -22;
 export let LANE_OFFSETS = [-15, -7.5, 0, 7.5, 15];
 
 export let CLASS_CONFIG: ClassConfig = {

@@ -230,9 +230,6 @@ export function InstancedImpostorRenderer({
     mesh.instanceMatrix.needsUpdate = true;
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     mesh.count = LOD_IMPOSTOR_MAX;
-    
-    // Clear for next frame so armies can repopulate
-    renderedIdsRef.current.clear();
   });
 
   return (

@@ -8,7 +8,7 @@ import { UnitRuntimeData } from "@/src/core/domain/unit.types";
  * Zero-Allocation Spatial Hash Grid for ultra-fast unit lookups.
  * Designed to minimize GC pressure even with hundreds of units.
  */
-export class SpatialHashGrid {
+class SpatialHashGrid {
     private grid: Map<number, UnitRuntimeData[]>;
     private cellSize: number;
     private cellPool: UnitRuntimeData[][];

@@ -189,7 +189,7 @@ const Forest = ({ potatoMode }: { potatoMode?: boolean }) => {
 
 
 // --- 2. GPU Accelerated Rain ---
-const RAIN_COUNT = 500;
+const RAIN_COUNT = 300; // Reduced from 500
 const RainMaterial = new THREE.ShaderMaterial({
   uniforms: {
     time: { value: 0 },
@@ -219,6 +219,7 @@ const RainMaterial = new THREE.ShaderMaterial({
 const Rain = () => {
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const dummy = useMemo(() => new THREE.Object3D(), []);
+  const frameRef = useRef(0);
 
   useEffect(() => {
     if (!meshRef.current) return;
@@ -236,6 +237,8 @@ const Rain = () => {
   }, [dummy]);
 
   useFrame((state) => {
+    frameRef.current++;
+    if (frameRef.current % 2 !== 0) return; // Update every 2 frames
     RainMaterial.uniforms.time.value = state.clock.elapsedTime;
   });
 
@@ -275,7 +278,7 @@ const Lightning = () => {
   return <pointLight ref={lightRef} position={[0, 40, -10]} distance={200} decay={1.5} color="#cce6ff" intensity={0} castShadow={false} />;
 };
 
-const GRASS_COUNT = 800;
+const GRASS_COUNT = 400; // Reduced from 800 to cut GPU overdraw
 const GrassMaterial = new THREE.ShaderMaterial({
   uniforms: {
     time: { value: 0 },
@@ -349,7 +352,10 @@ const Grass = ({ baseDistance }: { baseDistance: number }) => {
     meshRef.current.instanceMatrix.needsUpdate = true;
   }, [dummy, baseDistance]);
 
+  const frameRef = useRef(0);
   useFrame((state) => {
+    frameRef.current++;
+    if (frameRef.current % 3 !== 0) return; // Update every 3 frames — grass animation still smooth
     GrassMaterial.uniforms.time.value = state.clock.elapsedTime;
     const targetWind = (weather === 'STORM' || weather === 'THUNDER') ? 2.5 : 1.0;
     GrassMaterial.uniforms.windStrength.value = THREE.MathUtils.lerp(GrassMaterial.uniforms.windStrength.value, targetWind, 0.05);
@@ -389,8 +395,12 @@ export const StormEnvironment = ({ baseDistance = 24, potatoMode = false }: { ba
 
   const isSetup = gameState === 'SETUP';
 
+  const envFrameRef = useRef(0);
   // 3. Performance Optimized Weather Transition System (Running like a Bitecs System)
   useFrame(() => {
+    envFrameRef.current++;
+    if (envFrameRef.current % 2 !== 0) return; // Throttle to 30fps — lighting lerp doesn't need 60fps
+
     const weather = weatherRef.current;
     
     // Calculate target values based on current weather

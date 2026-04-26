@@ -1,5 +1,5 @@
 'use client';
-import React, { useRef, useMemo, useEffect, useState } from 'react';
+import React, { useRef, useMemo, useEffect } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { UnitRuntimeData, WORLD_UNIT_POOL_SIZE } from '@/src/core/domain/unit.types';
@@ -8,43 +8,39 @@ interface NameTagProps {
     unitRegistry: React.RefObject<UnitRuntimeData[]>;
 }
 
-// Atlas Configuration
-const ATLAS_SIZE = 1024; // Lower resolution to prevent texture upload stalls (from 16MB to 4MB)
-const SLOT_SIZE = 64;
-const SLOTS_PER_ROW = Math.floor(ATLAS_SIZE / SLOT_SIZE);
+// ─── Atlas Config ─────────────────────────────────────────────────────────────
+// 512×512 atlas, 32×32 slots = 256 possible unique users in GPU VRAM = 1MB only
+const ATLAS_SIZE = 512;
+const SLOT_SIZE = 32;
+const SLOTS_PER_ROW = ATLAS_SIZE / SLOT_SIZE; // = 16
 
-const NameTagMaterial = () => new THREE.ShaderMaterial({
-    uniforms: {
-        uAtlas: { value: null },
-    },
+// ─── Billboard Shader: renders texture atlas UV on a flat plane facing camera ──
+const BillboardMaterial = (atlas: THREE.CanvasTexture) => new THREE.ShaderMaterial({
+    uniforms: { uAtlas: { value: atlas } },
     vertexShader: `
-        attribute vec2 aUvOffset;
-        attribute vec3 aColor;
+        attribute vec2 aUv;
         varying vec2 vUv;
-        varying vec3 vColor;
         void main() {
-            vUv = (uv / ${SLOTS_PER_ROW.toFixed(1)}) + aUvOffset;
-            vColor = aColor; 
-
-            // Make it a Billboard
-            vec4 mvPosition = viewMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
-            
-            vec3 scale;
-            scale.x = length(vec3(instanceMatrix[0][0], instanceMatrix[0][1], instanceMatrix[0][2]));
-            scale.y = length(vec3(instanceMatrix[1][0], instanceMatrix[1][1], instanceMatrix[1][2]));
-            
-            mvPosition.xy += position.xy * scale.xy;
-            gl_Position = projectionMatrix * mvPosition;
+            vUv = aUv;
+            // True billboard: extract position from instanceMatrix, then offset local vertices
+            vec3 worldPos = vec3(instanceMatrix[3][0], instanceMatrix[3][1], instanceMatrix[3][2]);
+            float sc = instanceMatrix[0][0]; // uniform scale stored in m00
+            vec4 camPos = viewMatrix * vec4(worldPos, 1.0);
+            camPos.xy += position.xy * sc;
+            gl_Position = projectionMatrix * camPos;
         }
     `,
     fragmentShader: `
         uniform sampler2D uAtlas;
         varying vec2 vUv;
-        varying vec3 vColor;
         void main() {
-            vec4 texColor = texture2D(uAtlas, vUv);
-            if (texColor.a < 0.1) discard;
-            gl_FragColor = texColor;
+            vec4 col = texture2D(uAtlas, vUv);
+            // Discard pixels outside the circle (UV center = 0.5,0.5)
+            vec2 d = vUv - 0.5;
+            // Scale d back to local slot space
+            if (length(d * float(${SLOTS_PER_ROW})) > 0.45) discard;
+            if (col.a < 0.05) discard;
+            gl_FragColor = col;
         }
     `,
     transparent: true,
@@ -52,217 +48,177 @@ const NameTagMaterial = () => new THREE.ShaderMaterial({
     depthTest: true,
 });
 
+// ─── Main Component ───────────────────────────────────────────────────────────
 export function InstancedNameTagSystem({ unitRegistry }: NameTagProps) {
     const meshRef = useRef<THREE.InstancedMesh>(null!);
 
-    const canvasRef = useRef<HTMLCanvasElement>(null!);
-    const ctxRef = useRef<CanvasRenderingContext2D>(null!);
-    const textureRef = useRef<THREE.CanvasTexture>(null!);
+    // Canvas atlas — created once
+    const canvas = useMemo(() => {
+        const c = document.createElement('canvas');
+        c.width = ATLAS_SIZE;
+        c.height = ATLAS_SIZE;
+        return c;
+    }, []);
 
-    const userToSlotMap = useRef<Map<string, { u: number, v: number, ready: boolean }>>(new Map());
-    const nextSlotIdx = useRef(0);
-    const [isReady, setIsReady] = useState(false);
+    const ctx = useMemo(() => canvas.getContext('2d', { alpha: true })!, [canvas]);
 
-    const initResources = () => {
-        if (isReady) return;
-        const canvas = document.createElement('canvas');
-        canvas.width = ATLAS_SIZE;
-        canvas.height = ATLAS_SIZE;
-        const ctx = canvas.getContext('2d', { willReadFrequently: true, alpha: true })!;
-        ctx.clearRect(0, 0, ATLAS_SIZE, ATLAS_SIZE);
+    const texture = useMemo(() => {
+        const t = new THREE.CanvasTexture(canvas);
+        t.minFilter = THREE.LinearFilter;
+        t.magFilter = THREE.LinearFilter;
+        t.generateMipmaps = false;
+        t.flipY = false;
+        return t;
+    }, [canvas]);
 
-        canvasRef.current = canvas;
-        ctxRef.current = ctx;
+    // Slot management (ref-based, zero GC)
+    const userSlots = useRef<Map<string, { u: number; v: number }>>(new Map());
+    const nextSlot = useRef(0);
 
-        const texture = new THREE.CanvasTexture(canvas);
-        texture.minFilter = THREE.LinearFilter;
-        texture.generateMipmaps = false;
-        textureRef.current = texture;
+    // Per-instance UV attribute (u,v of slot bottom-left in atlas 0..1)
+    const uvArray = useMemo(() => new Float32Array(WORLD_UNIT_POOL_SIZE * 2), []);
+    const uvAttr = useMemo(() => {
+        const a = new THREE.InstancedBufferAttribute(uvArray, 2);
+        a.setUsage(THREE.DynamicDrawUsage);
+        return a;
+    }, [uvArray]);
 
-        setIsReady(true);
-    };
+    // Geometry: flat unit quad, UV covers [0,0]→[1,1] (one full slot)
+    const geometry = useMemo(() => {
+        const g = new THREE.PlaneGeometry(1, 1);
+        // Remap UV to [0,0]→[1/SLOTS_PER_ROW, 1/SLOTS_PER_ROW] (one slot)
+        const uv = g.attributes.uv as THREE.BufferAttribute;
+        const slotUV = 1 / SLOTS_PER_ROW;
+        for (let i = 0; i < uv.count; i++) {
+            uv.setXY(i, uv.getX(i) * slotUV, uv.getY(i) * slotUV);
+        }
+        g.setAttribute('aUv', new THREE.InstancedBufferAttribute(uvArray, 2));
+        return g;
+    }, [uvArray]);
 
-    const uvOffsetArray = useMemo(() => new Float32Array(WORLD_UNIT_POOL_SIZE * 2), []);
-    const attrsRef = useRef<{ uvOffset?: THREE.InstancedBufferAttribute }>({});
+    const material = useMemo(() => BillboardMaterial(texture), [texture]);
 
-    useEffect(() => {
-        if (!meshRef.current) return;
-        const uvAttr = new THREE.InstancedBufferAttribute(uvOffsetArray, 2);
-        uvAttr.setUsage(THREE.DynamicDrawUsage);
-        meshRef.current.geometry.setAttribute('aUvOffset', uvAttr);
-        attrsRef.current.uvOffset = uvAttr;
-    }, [uvOffsetArray]);
+    // ─── Draw single user slot to canvas (async non-blocking) ─────────────────
+    const drawSlot = (slot: number, profileUrl?: string) => {
+        const col = slot % SLOTS_PER_ROW;
+        const row = Math.floor(slot / SLOTS_PER_ROW);
+        const px = col * SLOT_SIZE;
+        const py = row * SLOT_SIZE;
+        const cx = px + SLOT_SIZE / 2;
+        const cy = py + SLOT_SIZE / 2;
+        const r = SLOT_SIZE / 2 - 1;
 
-    const drawUserToAtlas = (username: string, slotIdx: number, profileUrl?: string) => {
-        const ctx = ctxRef.current;
-        if (!ctx) return;
-
-        const col = slotIdx % SLOTS_PER_ROW;
-        const row = Math.floor(slotIdx / SLOTS_PER_ROW);
-
-        const pxX = col * SLOT_SIZE;
-        const pxY = row * SLOT_SIZE;
-        ctx.clearRect(pxX, pxY, SLOT_SIZE, SLOT_SIZE);
-
-        const cx = pxX + SLOT_SIZE / 2;
-
-        if (profileUrl) {
-            const img = new Image();
-            img.crossOrigin = 'Anonymous';
-
-            // Proxy image to bypass CORS
-            const proxiedUrl = `https://wsrv.nl/?url=${encodeURIComponent(profileUrl)}&w=64&h=64&fit=cover`;
-            img.src = proxiedUrl;
-
-            img.onload = () => {
-                ctx.save();
-                ctx.beginPath();
-                // Center the image in the 64x64 slot (cx, cy)
-                const cy = pxY + SLOT_SIZE / 2;
-                ctx.arc(cx, cy, 26, 0, Math.PI * 2);
-                ctx.clip();
-                ctx.drawImage(img, cx - 26, cy - 26, 52, 52);
-
-                // Add a cute border
-                ctx.lineWidth = 3;
-                ctx.strokeStyle = '#ffffff';
-                ctx.stroke();
-                ctx.restore();
-
-                textureRef.current.needsUpdate = true;
-            };
-        } else {
-            // Draw default placeholder if no profile URL
+        const drawCircle = (img?: ImageBitmap) => {
+            ctx.clearRect(px, py, SLOT_SIZE, SLOT_SIZE);
             ctx.save();
             ctx.beginPath();
-            const cy = pxY + SLOT_SIZE / 2;
-            ctx.arc(cx, cy, 26, 0, Math.PI * 2);
-            ctx.fillStyle = '#333333';
-            ctx.fill();
-            ctx.lineWidth = 3;
-            ctx.strokeStyle = '#ffffff';
+            ctx.arc(cx, cy, r, 0, Math.PI * 2);
+            ctx.clip();
+            if (img) {
+                ctx.drawImage(img, px, py, SLOT_SIZE, SLOT_SIZE);
+            } else {
+                // Fallback: team-colored circle (drawn in useFrame based on unit.type)
+                const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+                grad.addColorStop(0, '#aaccff');
+                grad.addColorStop(1, '#0044cc');
+                ctx.fillStyle = grad;
+                ctx.fill();
+            }
+            // White border
+            ctx.restore();
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(cx, cy, r - 0.5, 0, Math.PI * 2);
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = 'rgba(255,255,255,0.9)';
             ctx.stroke();
             ctx.restore();
-            textureRef.current.needsUpdate = true;
+            texture.needsUpdate = true;
+        };
+
+        if (!profileUrl) {
+            drawCircle();
+            return;
         }
 
-        const u = col / SLOTS_PER_ROW;
-        const v = 1.0 - ((row + 1) / SLOTS_PER_ROW);
-
-        userToSlotMap.current.set(username, { u, v, ready: true });
+        // Use createImageBitmap — fully async, never blocks main thread
+        const proxied = `https://wsrv.nl/?url=${encodeURIComponent(profileUrl)}&w=${SLOT_SIZE}&h=${SLOT_SIZE}&fit=cover&output=webp`;
+        fetch(proxied)
+            .then(r => r.blob())
+            .then(b => createImageBitmap(b, { resizeWidth: SLOT_SIZE, resizeHeight: SLOT_SIZE }))
+            .then(drawCircle)
+            .catch(() => drawCircle()); // fallback on error
     };
 
-    useFrame((state) => {
-        if (!unitRegistry.current) return;
-        const units = unitRegistry.current;
-
-        // Lazy init on first user detection
-        let hasUsers = false;
-        if (!isReady) {
-            for (let i = 0; i < WORLD_UNIT_POOL_SIZE; i++) {
-                if (units[i]?.isActive && units[i]?.userName) {
-                    hasUsers = true;
-                    break;
-                }
-            }
-            if (hasUsers) initResources();
-            return; // Wait for next frame to start rendering with texture
-        }
-
+    // Sync uvAttr to geometry when mesh mounts
+    useEffect(() => {
         if (!meshRef.current) return;
-        const mesh = meshRef.current;
-        const uvAttr = attrsRef.current.uvOffset;
-        if (!uvAttr) return;
+        meshRef.current.geometry.setAttribute('aUv', uvAttr);
+    }, []); // eslint-disable-line
 
-        let visibleCount = 0;
-        const cameraPos = state.camera.position;
-        const matrixArray = mesh.instanceMatrix.array as Float32Array;
+    // ─── useFrame: pure matrix+UV packing, zero canvas work ──────────────────
+    useFrame((state) => {
+        if (!meshRef.current || !unitRegistry.current) return;
+
+        const units = unitRegistry.current;
+        const mesh = meshRef.current;
+        const mat = mesh.instanceMatrix.array as Float32Array;
+        const cam = state.camera.position;
+        let n = 0;
 
         for (let i = 0; i < WORLD_UNIT_POOL_SIZE; i++) {
-            const unit = units[i];
+            const u = units[i];
+            if (!u || !u.isActive || u.hp <= 0) continue;
 
-            if (!unit || !unit.isActive || !unit.userName || unit.hp <= 0) {
-                continue;
+            const dx = cam.x - u.position[0];
+            const dz = cam.z - u.position[2];
+            if (dx * dx + dz * dz > 40 * 40) continue;
+
+            // Ensure user has a slot (draw async, render immediately with placeholder)
+            let slot = userSlots.current.get(u.userName || i.toString());
+            if (!slot) {
+                const idx = nextSlot.current;
+                if (idx >= SLOTS_PER_ROW * SLOTS_PER_ROW) continue; // atlas full
+                nextSlot.current++;
+                const sc = 1 / SLOTS_PER_ROW;
+                const col = idx % SLOTS_PER_ROW;
+                const rw = Math.floor(idx / SLOTS_PER_ROW);
+                slot = { u: col * sc, v: rw * sc };
+                userSlots.current.set(u.userName || i.toString(), slot);
+                // Fire async draw (non-blocking)
+                drawSlot(idx, u.profileImage);
             }
 
-            // Dist check (Optimized Frustum)
-            const dx = cameraPos.x - unit.position[0];
-            const dz = cameraPos.z - unit.position[2];
-            const dSq = dx * dx + dz * dz;
-            if (dSq > 40 * 40) {
-                continue;
-            }
+            const yOff = u.isBoss ? 8.0 : 3.8;
+            const scale = u.isBoss ? 2.0 : 1.0;
+            const o = n * 16;
 
-            let slotInfo = userToSlotMap.current.get(unit.userName);
+            // Compact scale-only matrix (billboard shader reads worldPos from [3][x])
+            mat[o + 0] = scale; mat[o + 1] = 0; mat[o + 2] = 0; mat[o + 3] = 0;
+            mat[o + 4] = 0; mat[o + 5] = scale; mat[o + 6] = 0; mat[o + 7] = 0;
+            mat[o + 8] = 0; mat[o + 9] = 0; mat[o + 10] = scale; mat[o + 11] = 0;
+            mat[o + 12] = u.position[0];
+            mat[o + 13] = u.position[1] + yOff;
+            mat[o + 14] = u.position[2];
+            mat[o + 15] = 1;
 
-            if (!slotInfo) {
-                if (nextSlotIdx.current < SLOTS_PER_ROW * SLOTS_PER_ROW) {
-                    const slot = nextSlotIdx.current++;
-                    userToSlotMap.current.set(unit.userName, { u: 0, v: 0, ready: false });
-                    drawUserToAtlas(unit.userName, slot, unit.profileImage);
-                    slotInfo = userToSlotMap.current.get(unit.userName);
-                }
-            }
-
-            if (slotInfo && slotInfo.ready) {
-                const yOff = unit.isBoss ? 9.5 : 4.5; // Slightly lower since text is gone
-
-                // Dynamic Index Packing: Write to contiguous buffer layout
-                const offset = visibleCount * 16;
-                const scale = unit.isBoss ? 6.0 : 4.0;
-
-                matrixArray[offset + 0] = scale;
-                matrixArray[offset + 1] = 0;
-                matrixArray[offset + 2] = 0;
-                matrixArray[offset + 3] = 0;
-
-                matrixArray[offset + 4] = 0;
-                matrixArray[offset + 5] = scale;
-                matrixArray[offset + 6] = 0;
-                matrixArray[offset + 7] = 0;
-
-                matrixArray[offset + 8] = 0;
-                matrixArray[offset + 9] = 0;
-                matrixArray[offset + 10] = scale;
-                matrixArray[offset + 11] = 0;
-
-                matrixArray[offset + 12] = unit.position[0];
-                matrixArray[offset + 13] = unit.position[1] + yOff;
-                matrixArray[offset + 14] = unit.position[2];
-                matrixArray[offset + 15] = 1;
-
-                uvOffsetArray[visibleCount * 2] = slotInfo.u;
-                uvOffsetArray[visibleCount * 2 + 1] = slotInfo.v;
-
-                visibleCount++;
-            }
+            // UV: bottom-left corner of slot in atlas space
+            uvArray[n * 2 + 0] = slot.u;
+            uvArray[n * 2 + 1] = slot.v;
+            n++;
         }
 
-        // Extremely low draw call counts due to packing!
-        mesh.count = visibleCount;
+        mesh.count = n;
         mesh.instanceMatrix.needsUpdate = true;
-
-        // Ensure UV arrays are refreshed for the packed indices
-        if (visibleCount > 0) {
-            uvAttr.needsUpdate = true;
-        }
-
-        if (mesh.material instanceof THREE.ShaderMaterial) {
-            mesh.material.uniforms.uAtlas.value = textureRef.current;
-        }
+        if (n > 0) uvAttr.needsUpdate = true;
     });
-
-    const geometry = useMemo(() => new THREE.PlaneGeometry(1, 1), []);
-    const material = useMemo(() => NameTagMaterial(), []);
-
-    if (!isReady) return null;
 
     return (
         <instancedMesh
             ref={meshRef}
             args={[geometry, material, WORLD_UNIT_POOL_SIZE]}
             frustumCulled={false}
-            renderOrder={999}
+            renderOrder={10}
         />
     );
 }
