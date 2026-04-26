@@ -1,9 +1,8 @@
 import { useRef, useMemo, useEffect } from "react";
 import { useFrame } from "@react-three/fiber";
-import { Sky } from "@react-three/drei";
+import { Environment } from "@react-three/drei";
 import * as THREE from "three";
 import { useStore } from "@/src/state/useStore";
-import { useVFX } from "../systems/VFXManager";
 import { applyPainterlyStyle, PainterlyShaderUtils } from "../systems/effects/PainterlyMaterials";
 
 
@@ -367,33 +366,57 @@ const Grass = ({ baseDistance }: { baseDistance: number }) => {
 
 // --- Main Export ---
 export const StormEnvironment = ({ baseDistance = 24, potatoMode = false }: { baseDistance?: number, potatoMode?: boolean }) => {
-  const weather = useStore(s => s.weather);
   const setWeather = useStore(s => s.setWeather);
   const gameState = useStore(s => s.gameState);
-  const isSetup = gameState === 'SETUP';
-  const { spawnVFX } = useVFX();
+  
+  // Refs for smooth lighting transitions (ECS-style direct update)
+  const hemiRef = useRef<THREE.HemisphereLight>(null!);
+  const ambientRef = useRef<THREE.AmbientLight>(null!);
+  const dirRef = useRef<THREE.DirectionalLight>(null!);
+  const fogRef = useRef<THREE.Fog>(null!);
+  
+  const targetColor = useRef(new THREE.Color());
 
-  // Atmospheric Particles Spawning
-  useFrame((state) => {
-    if (isSetup || potatoMode) return;
+  const weatherRef = useRef(useStore.getState().weather);
+
+  useEffect(() => {
+    // Subscribe to weather changes without re-rendering the whole tree
+    const unsub = useStore.subscribe((state: any) => {
+      weatherRef.current = state.weather;
+    });
+    return unsub;
+  }, []);
+
+  const isSetup = gameState === 'SETUP';
+
+  // 3. Performance Optimized Weather Transition System (Running like a Bitecs System)
+  useFrame(() => {
+    const weather = weatherRef.current;
     
-    // Spawn atmospheric particles every ~100-200ms
-    if (state.clock.elapsedTime % 0.2 < 0.02) {
-      if (weather === 'CLEAR') {
-        // Dust motes in sun
-        const x = (Math.random() - 0.5) * 60;
-        const z = (Math.random() - 0.5) * 60;
-        spawnVFX([x, 1 + Math.random() * 5, z], 'dust-mote', '#ffffff');
-      } else if (weather === 'RAIN' || weather === 'STORM' || weather === 'THUNDER') {
-        // Mist during rain
-        const x = (Math.random() - 0.5) * 80;
-        const z = (Math.random() - 0.5) * 80;
-        spawnVFX([x, 0.5, z], 'environment-mist', weather === 'THUNDER' ? '#a855f7' : '#ffffff');
-      }
+    // Calculate target values based on current weather
+    const isClear = weather === 'CLEAR';
+    const isThunder = weather === 'THUNDER';
+    
+    const tHemi = isClear ? 2.2 : (isThunder ? 1.5 : 1.2);
+    const tAmb  = isClear ? 1.2 : 0.8;
+    const tDir  = isClear ? 6.0 : 3.0;
+    
+    // Smooth Lerp Intensities
+    if (hemiRef.current) hemiRef.current.intensity = THREE.MathUtils.smoothstep(hemiRef.current.intensity, tHemi, 0.05);
+    if (ambientRef.current) ambientRef.current.intensity = THREE.MathUtils.smoothstep(ambientRef.current.intensity, tAmb, 0.05);
+    if (dirRef.current) dirRef.current.intensity = THREE.MathUtils.smoothstep(dirRef.current.intensity, tDir, 0.05);
+    
+    // Direct Fog Update
+    if (fogRef.current) {
+        const targetFogCol = isClear ? "#1a1a1a" : "#445566";
+        targetColor.current.set(targetFogCol);
+        fogRef.current.color.lerp(targetColor.current, 0.05);
+        fogRef.current.near = THREE.MathUtils.lerp(fogRef.current.near, isClear ? 80 : 45, 0.05);
+        fogRef.current.far = THREE.MathUtils.lerp(fogRef.current.far, isClear ? 400 : 200, 0.05);
     }
   });
 
-  // Random Weather Cycle
+  // Random Weather Cycle (Logic stays outside the hot loop)
   useEffect(() => {
     if (isSetup) return; // Don't cycle weather during setup
     const cycle = () => {
@@ -410,7 +433,7 @@ export const StormEnvironment = ({ baseDistance = 24, potatoMode = false }: { ba
       return (
         <group>
             <color attach="background" args={["#f0f5ff"]} />
-            <hemisphereLight intensity={1.5} groundColor="#444444" />
+            <hemisphereLight intensity={1.5} groundColor="#d70f0fff" />
             <ambientLight intensity={0.8} />
             <directionalLight position={[20, 100, 20]} intensity={1.5} castShadow={false} />
             <Terrain baseDistance={baseDistance} potatoMode={true} />
@@ -418,40 +441,34 @@ export const StormEnvironment = ({ baseDistance = 24, potatoMode = false }: { ba
       );
   }
 
-  const sunPositions : any = weather === 'CLEAR' ? [0, 100, 0] : [0, -10, 0]
-  const sunVec = new THREE.Vector3(...sunPositions).normalize()
-
+  const initialWeather = weatherRef.current;
 
   return (
     <group>
-      {/* <Sky 
-        sunPosition={weather === 'CLEAR' ? [0, 100, 0] : [0, -10, 0]} 
-        turbidity={weather === 'CLEAR' ? 1.0 : 10} 
-        rayleigh={weather === 'CLEAR' ? 0.5 : 2} 
-        mieCoefficient={0.005} 
-        mieDirectionalG={0.8} 
-      /> */}
-      <Sky
-        sunPosition={sunPositions}
-        turbidity={weather === 'CLEAR' ? 1.0 : 10}
-        rayleigh={weather === 'CLEAR' ? 0.5 : 2}
-        mieCoefficient={0.005}
-        mieDirectionalG={0.8}
+      {/* 
+         Optimization: Use a SINGLE Environment without a 'key' swap.
+         Changing the files property still triggers a reload, but 
+         doesn't destroy the component entirely.
+      */}
+      <Environment 
+        files={initialWeather === 'CLEAR' ? "/qwantani_sunset_1k.exr" : "/qwantani_night_1k.exr"} 
+        background={true} 
+        environmentIntensity={1.5}
       />
+
       <hemisphereLight
-        intensity={weather === 'CLEAR' ? 2.5 : 2.0}
-        color={weather === 'THUNDER' ? "#cfe2ff" : "#ffffff"}
-        groundColor={weather === 'CLEAR' ? "#7a5c3a" : "#666666"}
+        ref={hemiRef}
+        intensity={2.0}
+        color={"#ffffff"}
+        groundColor={"#222222"}
       />
-      <ambientLight intensity={weather === 'CLEAR' ? 1.5 : 1.2} />
+      
+      <ambientLight ref={ambientRef} intensity={1.0} />
+      
       <directionalLight
-        position={sunVec.multiplyScalar(150).toArray()}
-        intensity={weather === 'CLEAR' ? 6.0 : 3.5}
-        color={
-          weather === 'CLEAR' ? "#ffffff" :  
-            weather === 'RAIN' ? "#e6f2ff" :  
-              "#e0ebff"                            
-        }
+        ref={dirRef}
+        position={[100, 15, -100]}
+        intensity={5.0}
         castShadow={!isSetup}
         shadow-mapSize={isSetup ? [512, 512] : [1024, 1024]}
         shadow-camera-far={500}
@@ -463,10 +480,19 @@ export const StormEnvironment = ({ baseDistance = 24, potatoMode = false }: { ba
       <Rock />
       <Forest />
       
-      {(weather === 'RAIN' || weather === 'THUNDER') && <Rain />}
-      {weather === 'THUNDER' && <Lightning />}
+      <RainManager active={weatherRef.current !== 'CLEAR'} />
+      <LightningManager active={weatherRef.current === 'THUNDER'} />
       
-      <fog attach="fog" args={[weather === 'CLEAR' ? "#ffffff" : "#a3b1c6", weather === 'CLEAR' ? 80 : 45, weather === 'CLEAR' ? 350 : 200]} />
+      <fog ref={fogRef} attach="fog" args={["#111111", 80, 400]} />
     </group>
   );
+};
+
+// --- Sub-components for Rain/Lightning to avoid top-level re-renders ---
+const RainManager = ({ active }: { active: boolean }) => {
+    return active ? <Rain /> : null;
+};
+
+const LightningManager = ({ active }: { active: boolean }) => {
+    return active ? <Lightning /> : null;
 };

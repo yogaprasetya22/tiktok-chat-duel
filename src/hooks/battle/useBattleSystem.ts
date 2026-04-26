@@ -1100,9 +1100,9 @@ export const useBattleSystem = () => {
                     v.maxSpeed = baseSpeed;
                     const seek = v.steering.behaviors[0] as any;
                     if (seek?.target) {
-                        // Lane offset + class-specific swagger for natural spread
-                        const swagger = Math.sin(i * 8.0 + (uData.jitterOffset || 0)) * (uData.laneSwaggerAmp || 0.3);
-                        seek.target.set((uData.laneOffset || 0) + swagger, 0, targetBaseZ);
+                        // Focus on the center tower (target x = 0) to avoid getting stuck at lane edges!
+                        const swagger = Math.sin(i * 8.0 + (uData.jitterOffset || 0)) * (uData.laneSwaggerAmp || 1.5); // Add slightly more swagger to prevent stacking
+                        seek.target.set(swagger, 0, targetBaseZ);
                     }
                 }
 

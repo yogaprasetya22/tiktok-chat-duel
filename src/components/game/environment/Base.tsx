@@ -1,6 +1,7 @@
 import { useStore } from "@/src/state/useStore";
 import React, { useMemo, useRef, useEffect } from 'react';
 import { Billboard, Plane, Text, useGLTF } from "@react-three/drei";
+import { useFrame } from "@react-three/fiber";
 import { MeshoptDecoder } from 'meshoptimizer';
 import * as THREE from 'three';
 import { applyPainterlyStyle } from "../systems/effects/PainterlyMaterials";
@@ -147,8 +148,28 @@ interface BaseProps {
  * The 3D model is handled by the InstancedTowers component for performance.
  */
 export const Base = React.memo(({ maxHp, position, type, name, customColor }: BaseProps) => {
-  const gameState = useStore(s => s.gameState);
-  const hp = useStore(s => type === 'player' ? s.playerBaseHp : s.enemyBaseHp);
+  const hpBarRef = useRef<THREE.Mesh>(null!);
+  const textRef = useRef<any>(null!);
+  
+  // Read state once for initial setup without subscribing
+  const initialGameState = useStore.getState().gameState;
+
+  useFrame(() => {
+     const state = useStore.getState();
+     if (state.gameState === 'SETUP') return;
+     
+     const currentHp = type === 'player' ? state.playerBaseHp : state.enemyBaseHp;
+     const ratio = Math.min(1, Math.max(0, currentHp / maxHp));
+
+     if (hpBarRef.current) {
+        hpBarRef.current.scale.x = ratio;
+        hpBarRef.current.position.x = 2.25 * (ratio - 1);
+     }
+     
+     if (textRef.current && textRef.current.text !== undefined) {
+        textRef.current.text = `${Math.ceil(currentHp)} / ${maxHp}`;
+     }
+  });
 
   return (
     <group position={position}>
@@ -156,7 +177,7 @@ export const Base = React.memo(({ maxHp, position, type, name, customColor }: Ba
       <pointLight position={[0, 2.5, 0]} intensity={1.5} color="#ffaa00" distance={25} />
 
       {/* HP BAR - Base Version (GPU Optimized) */}
-      {gameState !== 'SETUP' && (
+      {initialGameState !== 'SETUP' && (
         <Billboard position={[0, 2.8, 0]}>
           <group>
             {/* Background */}
@@ -165,7 +186,7 @@ export const Base = React.memo(({ maxHp, position, type, name, customColor }: Ba
             </Plane>
 
             {/* Main HP Bar */}
-            <mesh position-z={0.01} scale-x={hp / maxHp} position-x={2.25 * (hp / maxHp - 1)}>
+            <mesh ref={hpBarRef} position-z={0.01} scale-x={1} position-x={0}>
               <planeGeometry args={[4.4, 0.3]} />
               <meshBasicMaterial color={customColor} />
             </mesh>
@@ -184,13 +205,14 @@ export const Base = React.memo(({ maxHp, position, type, name, customColor }: Ba
 
             {/* HP Numbers */}
             <Text
+              ref={textRef}
               fontSize={0.3}
               color="white"
               anchorY="top"
               position={[0, -0.25, 0]}
               fillOpacity={0.8}
             >
-              {`${hp} / ${maxHp}`}
+               {`${maxHp} / ${maxHp}`}
             </Text>
           </group>
         </Billboard>
