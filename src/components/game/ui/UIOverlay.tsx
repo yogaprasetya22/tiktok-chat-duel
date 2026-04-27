@@ -238,30 +238,34 @@ const ChatOverlay = React.memo(({ messages, onClose }: { messages: any[], onClos
           <X className="w-3 h-3 text-white/40" />
         </button>
       </div>
-      <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
-        {messages.length === 0 ? (
-          <div className="h-full flex items-center justify-center">
-            <p className="text-[9px] text-zinc-600 font-bold italic">Waiting for messages...</p>
-          </div>
-        ) : (
-          messages.map((msg) => (
-            <div key={msg.id} className="bg-black/30 p-2 rounded-lg flex gap-2 animate-slide-up">
-              <div className="w-5 h-5 rounded-full bg-zinc-800 flex-shrink-0 flex items-center justify-center overflow-hidden border border-white/10">
-                {msg.profileImage ? (
-                  <img src={msg.profileImage} alt="" className="w-full h-full object-cover" />
-                ) : (
-                  <span className="text-[7px] font-bold text-zinc-600">{msg.username[0].toUpperCase()}</span>
-                )}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-[8px] font-black text-indigo-400 uppercase truncate">{msg.username}</p>
-                <p className={`text-[10px] font-medium break-words ${msg.type === 'gift' ? 'text-pink-400' : 'text-zinc-400'}`}>
-                  {msg.comment}
-                </p>
-              </div>
+      <div className="flex-1 overflow-y-auto p-2 scroll-smooth flex flex-col justify-end">
+        <div className="space-y-1.5 flex flex-col">
+          {messages.length === 0 ? (
+            <div className="h-full flex items-center justify-center py-20">
+              <p className="text-[9px] text-zinc-600 font-bold italic">Waiting for messages...</p>
             </div>
-          ))
-        )}
+          ) : (
+            messages.slice(-15).map((msg) => (
+              <div key={msg.id} className="bg-black/30 p-2 rounded-lg flex gap-2 animate-slide-up border border-white/5 backdrop-blur-md">
+                <div className="w-5 h-5 rounded-full bg-zinc-800 flex-shrink-0 flex items-center justify-center overflow-hidden border border-white/10">
+                  {msg.profileImage ? (
+                    <img src={msg.profileImage} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-[7px] font-bold text-zinc-600">{msg.username[0].toUpperCase()}</span>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1 text-left">
+                  <p className="text-[8px] font-black text-indigo-400 uppercase truncate">{msg.username}</p>
+                  <p className={`text-[10px] font-medium break-words leading-tight ${msg.type === 'gift' ? 'text-pink-400 font-black' : 'text-zinc-300'}`}>
+                    {msg.comment}
+                  </p>
+                </div>
+              </div>
+            ))
+          )}
+          {/* Intersection anchor for bottom anchoring */}
+          <div className="h-0" />
+        </div>
       </div>
     </div>
   </div>

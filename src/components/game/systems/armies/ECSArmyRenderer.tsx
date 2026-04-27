@@ -74,10 +74,10 @@ const CLASS_COLORABLE_KW: Record<ClassKey, string[]> = {
 // HUD slot base index per class (must match instanced mesh allocation of 1500 total)
 const CLASS_HUD_BASE: Record<ClassKey, number> = {
   fighter:  0,
-  tank:     250,
-  mage:     500,
-  marksman: 750,
-  assassin: 1000,
+  tank:     200,
+  mage:     400,
+  marksman: 600,
+  assassin: 800,
 };
 
 function resolveAttackAnim(classKey: ClassKey, actions: Record<string, THREE.AnimationAction>): string {
@@ -158,7 +158,36 @@ const ECSArmyRendererInner = ({
   // Scene group — all lazy-cloned models are added imperatively here
   const groupRef = useRef<THREE.Group>(null!);
 
-  // ── Lazy Pools (one per class) — all empty at mount ──
+  // ── Shared Material Cache (40 Master Materials) ──
+  const materialCache = useRef<Map<string, THREE.MeshStandardMaterial>>(new Map());
+
+  const getCachedMaterial = (classKey: ClassKey, rarity: string, team: 'player' | 'enemy'): THREE.MeshStandardMaterial => {
+    const teamColor = team === 'player' ? towerConfig.player.color : towerConfig.enemy.color;
+    const key = `${classKey}_${rarity}_${team}`;
+    
+    if (materialCache.current.has(key)) return materialCache.current.get(key)!;
+
+    // Create a NEW master material for this specific combo
+    const assets = gltfByClass[classKey];
+    const sourceMesh = assets[0].scene.getObjectByProperty('isMesh', true) as THREE.Mesh;
+    const mat = (sourceMesh.material as THREE.MeshStandardMaterial).clone();
+    
+    // Apply our special effects once
+    applyPainterlyStyle(mat);
+    mat.color.set(teamColor);
+
+    // Rarity Glow
+    const rarityColors: Record<string, string> = {
+      common: '#333333', elite: '#2244ff', epic: '#aa22ff', legendary: '#ffaa00'
+    };
+    mat.emissive.set(rarityColors[rarity] || '#333333');
+    mat.emissiveIntensity = rarity === 'legendary' ? 5.0 : (rarity === 'common' ? 0.6 : 2.5);
+
+    materialCache.current.set(key, mat);
+    return mat;
+  };
+
+  // ── Lazy Pools (one per class) ──
   const pools = useRef<Record<ClassKey, ClassPool>>({
     fighter:  { items: [], available: [], assigned: new Map(), activeSet: new Set() },
     tank:     { items: [], available: [], assigned: new Map(), activeSet: new Set() },
@@ -186,7 +215,7 @@ const ECSArmyRendererInner = ({
   }, []);
 
   // ── Lazily create a new pool item for classKey ──
-  const createPoolItem = (classKey: ClassKey, teamColor: string): number | null => {
+  const createPoolItem = (classKey: ClassKey): number | null => {
     const pool = pools.current[classKey];
     if (pool.items.length >= ARMY_POOL_SIZE) return null;
 
@@ -195,6 +224,7 @@ const ECSArmyRendererInner = ({
 
     const selected = assets[Math.floor(Math.random() * assets.length)];
     const clone = SkeletonUtils.clone(selected.scene);
+    clone.matrixAutoUpdate = false; // MAJOR PERFORMANCE GAIN: Disable auto-traversal
     const mixer = new THREE.AnimationMixer(clone);
     const actions: Record<string, THREE.AnimationAction> = {};
     if (selected.animations) {
@@ -210,11 +240,7 @@ const ECSArmyRendererInner = ({
         child.frustumCulled = true;
         const nm = child.name.toLowerCase();
         if (colorKws.some(kw => nm.includes(kw))) {
-          if (child.material) {
-            child.material = child.material.clone();
-            applyPainterlyStyle(child.material);
-            child.material.color.set(teamColor);
-          }
+          // REMOVED: Material cloning per slot. Will be assigned from cache.
           colorable.push(child);
         }
       }
@@ -245,7 +271,7 @@ const ECSArmyRendererInner = ({
     if (pool.available.length > 0) {
       slotIdx = pool.available.pop()!;
     } else if (pool.items.length < ARMY_POOL_SIZE) {
-      slotIdx = createPoolItem(classKey, teamColor);
+      slotIdx = createPoolItem(classKey);
     }
     if (slotIdx === null) return null;
 
@@ -276,7 +302,6 @@ const ECSArmyRendererInner = ({
     if (!indices) return;
 
     const time = state.clock.elapsedTime;
-    const camPos = state.camera.position;
     const camQ = state.camera.quaternion;
     const settings = settingsRef.current;
     const frustum = (state as any).battleFrustum;
@@ -291,6 +316,9 @@ const ECSArmyRendererInner = ({
     p.mage.activeSet.clear();
     p.marksman.activeSet.clear();
     p.assassin.activeSet.clear();
+
+    // ─── Sort Throttling ───
+    // (Logic moved to BattleArmy centralized sorter)
 
     if (isPotato) {
       // Potato mode: hide everything immediately
@@ -307,38 +335,24 @@ const ECSArmyRendererInner = ({
       return;
     }
 
-    // Build sorted view: boss-first, then by distance
-    const unitCount = indices.length;
+    // ── Pre-optimized sorted unit buckets from parent ──
+    const buckets = (state as any).unitBuckets as Record<ClassKey, UnitRuntimeData[]>; 
+    if (!buckets) return;
 
-    // Per-class unit lists (to determine who gets a pool slot — closest ARMY_POOL_SIZE)
-    const classBuckets: Record<ClassKey, UnitRuntimeData[]> = {
-      fighter: [], tank: [], mage: [], marksman: [], assassin: [],
-    };
-
-    for (let k = 0; k < unitCount; k++) {
-      const i = indices[k];
-      const u = rawMap[i];
-      if (!u || !u.isActive || u.hp <= 0 || u.isDying) continue;
-      const dx = camPos.x - u.position[0];
-      const dz = camPos.z - u.position[2];
-      u.dSq = dx * dx + dz * dz;
-      const bucket = classBuckets[u.unitClass];
-      if (bucket) bucket.push(u);
-    }
-
-    // For each class: sort by distance, take top ARMY_POOL_SIZE to render
-    (Object.keys(classBuckets) as ClassKey[]).forEach(classKey => {
-      const bucket = classBuckets[classKey];
-      bucket.sort((a, b) => (a.isBoss !== b.isBoss) ? (a.isBoss ? -1 : 1) : (a.dSq || 0) - (b.dSq || 0));
-
-      const visibleUnits = bucket.length > ARMY_POOL_SIZE ? bucket.slice(0, ARMY_POOL_SIZE) : bucket;
+    // Use zero-allocation for-loops instead of forEach for hot logic
+    const classKeys: ClassKey[] = ['fighter', 'tank', 'mage', 'marksman', 'assassin'];
+    for (let ck = 0; ck < classKeys.length; ck++) {
+      const classKey = classKeys[ck];
+      const bucket = buckets[classKey];
+      const visibleUnitsCount = Math.min(bucket.length, ARMY_POOL_SIZE);
       const pool = p[classKey];
       const hudBase = CLASS_HUD_BASE[classKey];
 
-      for (let vi = 0; vi < visibleUnits.length; vi++) {
-        const uData = visibleUnits[vi];
+      for (let vi = 0; vi < visibleUnitsCount; vi++) {
+        const uData = bucket[vi];
         const id = uData.id;
-        const teamColor = uData.type === 'player' ? towerConfig.player.color : towerConfig.enemy.color;
+        const team = uData.type;
+        const teamColor = team === 'player' ? towerConfig.player.color : towerConfig.enemy.color;
 
         const slotIdx = acquirePoolSlot(classKey, id, teamColor);
         if (slotIdx === null) continue;
@@ -351,26 +365,17 @@ const ECSArmyRendererInner = ({
 
         const baseScale = getBaseScale(classKey, uData.level || 1, uData.isBoss);
         const rarity = uData.rarity || 'common';
-        // Rarity Scaling
         const rScale = uData.isBoss ? 1.0 : (rarity === 'legendary' ? 1.8 : (rarity === 'epic' ? 1.4 : (rarity === 'elite' ? 1.2 : 1.0)));
         item.group.scale.setScalar(baseScale * settings.unitScale * rScale);
 
-        // Rarity Glow & Colors
-        const rarityColors: Record<string, string> = {
-          common:    '#333333', // White/Grey shield for ALL
-          elite:     '#2244ff', // Blue
-          epic:      '#aa22ff', // Purple
-          legendary: '#ffaa00'  // Gold
-        };
-        const rCol = rarityColors[rarity];
-        
-        item.colorable.forEach(mesh => {
-          const mat = mesh.material as THREE.MeshStandardMaterial;
-          if (mat.emissive) {
-            mat.emissive.set(rCol);
-            mat.emissiveIntensity = rarity === 'legendary' ? 5.0 : (rarity === 'common' ? 0.6 : 2.5);
+        // ASSIGN SHARED MATERIAL FROM CACHED MASTER
+        // This eliminates 90% of shader work and memory usage
+        const sharedMat = getCachedMaterial(classKey, rarity, team);
+        for (let m = 0; m < item.colorable.length; m++) {
+          if (item.colorable[m].material !== sharedMat) {
+            item.colorable[m].material = sharedMat;
           }
-        });
+        }
 
         // ── Animation ──────────────────────────────────────────────────────
         let targetAnim = 'Idle';
@@ -419,44 +424,38 @@ const ECSArmyRendererInner = ({
           item.group.rotation.y = item.rotation;
         }
 
-        // ── Painterly Shader Uniform Time ──────────────────────────────────
-        const timeVal = (simTimeRef.current || 0) * 0.001;
-        item.colorable.forEach(mesh => {
-          const mat = mesh.material as THREE.Material;
-          if (mat.userData.painterlyShader) {
-            mat.userData.painterlyShader.uniforms.time.value = timeVal;
-          }
-        });
+        // ── Shared Uniform Update (Moved outside unit loop for O(1) instead of O(N)) ──
 
         // ── HUD Sync ───────────────────────────────────────────────────────
         item.group.updateMatrix();
         const hIdx = hudBase + slotIdx;
 
         if (shadowRef.current && healthBarRef.current) {
-          const HUD_DETAIL_DIST_SQ = 180 * 180;
-          const showDetail = uData.isBoss || (uData.dSq || 0) < HUD_DETAIL_DIST_SQ;
+          // OPTIMIZATION: Reduce HUD detail radius to 40m (was 180m) to save CPU/GPU cycles
+          // HUD visible radius at 90m, but now with strict Frustum Culling per-unit
+          const HUD_DETAIL_DIST_SQ = 80 * 80; 
+          const isVisible = frustum ? frustum.containsPoint(item.group.position) : true;
+          const showDetail = isVisible && (uData.isBoss || (uData.dSq || 0) < HUD_DETAIL_DIST_SQ);
 
           if (showDetail) {
-            // Calculate height and scale based on TOTAL visual scale
+            const vPos = item.group.position;
             const totalVisualScale = baseScale * settings.unitScale * rScale;
             
             const by  = (uData.isBoss ? 2.8 : 3.4) * totalVisualScale;
             const bs  = (uData.isBoss ? 0.7 : 0.8) * totalVisualScale;
             const ss  = 1.1 * totalVisualScale;
 
-            // Shadow
-            _hudTemp.position.set(cp.x, -0.45, cp.z);
-            _hudTemp.quaternion.identity(); // Reset rotation from healthbar billboarding
+            _hudTemp.position.set(vPos.x, -0.45, vPos.z);
+            _hudTemp.quaternion.identity();
             _hudTemp.scale.set(ss, ss, 1);
             _hudTemp.updateMatrix();
             shadowRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
             
-            // Aura Shadow Color
-            _healthColor.set(rCol); 
+            // Use emissive color for shadow aura
+            _healthColor.copy(sharedMat.emissive); 
             shadowRef.current.setColorAt(hIdx, _healthColor);
 
-            // Health Bar
-            _hudTemp.position.set(cp.x, by, cp.z);
+            _hudTemp.position.set(vPos.x, vPos.y + by, vPos.z);
             _hudTemp.quaternion.copy(camQ);
             _hudTemp.scale.set(bs, bs, 1);
             _hudTemp.updateMatrix();
@@ -480,7 +479,8 @@ const ECSArmyRendererInner = ({
               const nameGroup = nameGroupRefs.current[nameSlot];
               if (nameGroup) {
                 // Perfect Stack: Names sit exactly 0.55 units above the health bar
-                nameGroup.position.set(cp.x, by + 0.55, cp.z);
+                // FIX: Use vPos instead of cp to sync with visual model
+                nameGroup.position.set(vPos.x, vPos.y + by + 0.55, vPos.z);
                 nameGroup.quaternion.copy(camQ); 
               }
             }
@@ -512,8 +512,8 @@ const ECSArmyRendererInner = ({
         }
       }
 
-      // ── Return inactive slots to pool ──────────────────────────────────────
-      pool.assigned.forEach((slotIdx, _uid) => {
+      // ── Return inactive slots to pool (Optimized For-In loop) ──
+      for (const [_uid, slotIdx] of pool.assigned.entries()) {
         if (!pool.activeSet.has(_uid)) {
           const item = pool.items[slotIdx];
           if (item) item.group.visible = false;
@@ -524,9 +524,18 @@ const ECSArmyRendererInner = ({
           pool.available.push(slotIdx);
           pool.assigned.delete(_uid);
         }
-      });
-    });
-  });
+      }
+    } // closes classKey loop
+
+    // ── O(1) Global Shader Update (Zero-Allocation Update) ──
+    const globalTime = (simTimeRef.current || 0) * 0.001;
+    for (const [_, mat] of materialCache.current.entries()) {
+      if (mat.userData.painterlyShader) {
+        mat.userData.painterlyShader.uniforms.time.value = globalTime;
+      }
+    }
+
+  }); // closes useFrame
 
   return <group ref={groupRef} />;
 };

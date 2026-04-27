@@ -71,7 +71,7 @@ export let CLASS_CONFIG: ClassConfig = {
         lifesteal: 0.0,
         spell_vamp: 0.25,
         move_speed_mult: 0.95, // Nerfed from 1.0
-        attack_speed_mult: 0.11,
+        attack_speed_mult: 0.31,
         crit_chance: 0.05,
         crit_damage: 1.5,
         range: 9.5, // Nerfed from 15.0
@@ -204,7 +204,7 @@ export const LOD_IMPOSTOR_SCALE = 1.8;
 export const LOD_IMPOSTOR_BOSS_SCALE = 5.0; 
 
 // --- CENTRALIZED PERFORMANCE CONFIG ---
-export const ARMY_POOL_SIZE = 40; // Number of high-detail 3D models per class
+export const ARMY_POOL_SIZE = 30; // Number of high-detail 3D models per class
 export const ANIM_CULL_DIST_SQ = 150 * 150; // Distance where bone animations stop (150m)
 
 // --- WEATHER SYSTEM CONFIG ---

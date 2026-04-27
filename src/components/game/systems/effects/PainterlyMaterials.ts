@@ -224,9 +224,10 @@ export const PainterlyGrassMaterial = new THREE.ShaderMaterial({
     ${PainterlyShaderUtils.toonMix}
 
     void main() {
-      float strokes = brushstrokes(vec2(vUv.x, vY) * 5.0 + time * 0.1, 1.0);
-      float t = (vY + 0.5) * 0.8 + strokes * 0.2;
-      vec3 color = toonMix(color1, color2, t);
+      // OPTIMIZATION: Use a simple gradient + time-based flicker instead of expensive brushstrokes
+      vec3 color = mix(color1, color2, vY + 0.5);
+      // Subtle light variation based on UV
+      color *= (0.9 + 0.1 * sin(vUv.x * 10.0 + time));
       gl_FragColor = vec4(color, 1.0);
     }
   `,

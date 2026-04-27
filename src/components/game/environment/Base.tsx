@@ -13,21 +13,14 @@ const _obj = new THREE.Object3D();
 // Ini mencegah 640k-triangle clone + shader recompile yang jadi penyebab frame drop.
 const geoCache = new Map<string, THREE.BufferGeometry>();
 const matCache = new Map<string, THREE.Material>();
+const modelPartsCache = new Map<string, { geometry: THREE.BufferGeometry; material: THREE.Material }[]>();
 
 function getOrBuildMeshData(
-  scene: THREE.Object3D
+  scene: THREE.Object3D,
+  fileName: string
 ): { geometry: THREE.BufferGeometry; material: THREE.Material }[] {
-  const cacheKey = scene.uuid;
-
-  // Cek apakah sudah diproses sebelumnya
-  const existingGeos = Array.from(geoCache.entries())
-    .filter(([k]) => k.startsWith(cacheKey))
-    .map(([k]) => ({
-      geometry: geoCache.get(k)!,
-      material: matCache.get(k)!,
-    }));
-
-  if (existingGeos.length > 0) return existingGeos;
+  const cached = modelPartsCache.get(fileName);
+  if (cached) return cached;
 
   const list: { geometry: THREE.BufferGeometry; material: THREE.Material }[] = [];
   scene.updateMatrixWorld();
@@ -35,38 +28,46 @@ function getOrBuildMeshData(
 
   scene.traverse((child: any) => {
     if (!child.isMesh) return;
-    const key = `${cacheKey}_${idx++}`;
+    const key = `${fileName}_${idx++}`;
 
-    // Geometry: clone + bake matrix (hanya 1x seumur hidup app)
-    const geom = child.geometry.clone();
-    geom.applyMatrix4(child.matrixWorld);
-    geom.computeBoundingBox();
-    geom.computeBoundingSphere();
-    geoCache.set(key, geom);
-
-    // Material: clone + painterly + shader injection (hanya 1x)
-    const mat = child.material.clone() as THREE.MeshStandardMaterial;
-    applyPainterlyStyle(mat);
-
-    const prevCompile = mat.onBeforeCompile?.bind(mat);
-    mat.onBeforeCompile = (shader: any, renderer: any) => {
-      prevCompile?.(shader, renderer);
-      // Tambah warm toon glow sekali saja
-      if (!shader.fragmentShader.includes('toonGlow')) {
-        shader.fragmentShader = shader.fragmentShader.replace(
-          '#include <color_fragment>',
-          `#include <color_fragment>
-           // toonGlow
-           diffuseColor.rgb += vec3(0.15, 0.08, 0.0) * sin(vWorldPos.y * 2.0);`
-        );
+    let geom = geoCache.get(key);
+    if (!geom) {
+      geom = child.geometry.clone();
+      if (geom) {
+        geom.applyMatrix4(child.matrixWorld);
+        geom.computeBoundingBox();
+        geom.computeBoundingSphere();
+        geoCache.set(key, geom);
       }
-    };
-    mat.needsUpdate = true;
-    matCache.set(key, mat);
+    }
 
-    list.push({ geometry: geom, material: mat });
+    let mat = matCache.get(key);
+    if (!mat) {
+      mat = child.material.clone() as THREE.MeshStandardMaterial;
+      applyPainterlyStyle(mat);
+
+      const prevCompile = mat.onBeforeCompile?.bind(mat);
+      mat.onBeforeCompile = (shader: any, renderer: any) => {
+        prevCompile?.(shader, renderer);
+        if (!shader.fragmentShader.includes('toonGlow')) {
+          shader.fragmentShader = shader.fragmentShader.replace(
+            '#include <color_fragment>',
+            `#include <color_fragment>
+             // toonGlow
+             diffuseColor.rgb += vec3(0.18, 0.12, 0.02) * (1.0 + sin(vWorldPos.y * 3.0 + 1.5)) * 0.5;`
+          );
+        }
+      };
+      mat.needsUpdate = true;
+      matCache.set(key, mat);
+    }
+
+    if (geom && mat) {
+      list.push({ geometry: geom, material: mat });
+    }
   });
 
+  modelPartsCache.set(fileName, list);
   return list;
 }
 
@@ -97,22 +98,52 @@ const ProceduralLowPolyTower = React.memo(({ distance }: { distance: number }) =
 ));
 
 // ─── GLB renderer (dipisah agar hooks selalu dipanggil) ────────────────────────
+// ─── Majestic Kingdom Tower Configuration ─────────────────────────────────────
+const TOWER_LAYOUT = [
+  { file: '/kingdom/tower-square-arch.glb', y: 0.0, s: 3.2, rot: 0 },
+  { file: '/kingdom/tower-hexagon-mid.glb', y: 3.2, s: 3.2, rot: Math.PI / 6 },
+  { file: '/kingdom/tower-hexagon-top-wood.glb', y: 4.6, s: 3.2, rot: 0 },
+  { file: '/kingdom/tower-hexagon-top.glb', y: 6.1, s: 3.2, rot: 0 },
+  { file: '/kingdom/tower-hexagon-roof.glb', y: 6.6, s: 3.2, rot: 0 },
+];
+
 const GLBTowers = React.memo(({ distance }: { distance: number }) => {
-  const { scene } = useGLTF('/assets-model/tower.glb', true, true, (loader) => {
-    loader.setMeshoptDecoder(MeshoptDecoder);
-  }) as any;
+  // Load ALL models in parallel
+  const g1 = useGLTF(TOWER_LAYOUT[0].file, true, true, (l) => l.setMeshoptDecoder(MeshoptDecoder)) as any;
+  const g2 = useGLTF(TOWER_LAYOUT[1].file, true, true, (l) => l.setMeshoptDecoder(MeshoptDecoder)) as any;
+  const g3 = useGLTF(TOWER_LAYOUT[2].file, true, true, (l) => l.setMeshoptDecoder(MeshoptDecoder)) as any;
+  const g4 = useGLTF(TOWER_LAYOUT[3].file, true, true, (l) => l.setMeshoptDecoder(MeshoptDecoder)) as any;
+  const g5 = useGLTF(TOWER_LAYOUT[4].file, true, true, (l) => l.setMeshoptDecoder(MeshoptDecoder)) as any;
 
-  const meshData = useMemo(() => {
-    if (!scene) return [];
-    return getOrBuildMeshData(scene);
-  }, [scene]);
+  const scenes = [g1, g2, g3, g4, g5];
 
-  if (meshData.length === 0) return null;
+  const fullMeshData = useMemo(() => {
+    return TOWER_LAYOUT.map((config, i) => {
+      const scene = scenes[i]?.scene;
+      if (!scene) return [];
+      return getOrBuildMeshData(scene, config.file).map(m => ({
+        ...m,
+        yOffset: config.y,
+        scale: config.s,
+        rotation: config.rot
+      }));
+    }).flat();
+  }, [g1, g2, g3, g4, g5]);
+
+  if (fullMeshData.length === 0) return null;
 
   return (
     <group>
-      {meshData.map((m, i) => (
-        <TowerPart key={i} geometry={m.geometry} material={m.material} distance={distance} />
+      {fullMeshData.map((m, i) => (
+        <TowerPart
+          key={i}
+          geometry={m.geometry}
+          material={m.material}
+          distance={distance}
+          yOffset={m.yOffset}
+          scale={m.scale}
+          rotation={m.rotation}
+        />
       ))}
     </group>
   );
@@ -135,62 +166,45 @@ export const InstancedTowers = React.memo(({
   return <GLBTowers distance={distance} />;
 });
 
-// ─── TowerPart: 2 InstancedMesh TERPISAH per tower ────────────────────────────
-// FIX KRITIS: Memisahkan player dan enemy ke InstancedMesh sendiri-sendiri
-// agar frustum culling bekerja per-tower, bukan per-pasang.
-// Sebelumnya: 1 sphere besar di (0,0,0) → GPU gambar keduanya meski salah satu off-screen.
-// Sekarang: tiap tower punya sphere kecil yang tepat → GPU skip yg off-screen.
 const TowerPart = React.memo(({
   geometry,
   material,
   distance,
+  yOffset,
+  scale,
+  rotation,
 }: {
   geometry: THREE.BufferGeometry;
   material: THREE.Material;
   distance: number;
+  yOffset: number;
+  scale: number;
+  rotation: number;
 }) => {
-  const playerRef = useRef<THREE.InstancedMesh>(null!);
-  const enemyRef = useRef<THREE.InstancedMesh>(null!);
+  const meshRef = useRef<THREE.InstancedMesh>(null!);
 
   useEffect(() => {
-    // Player tower (instance 0 dari mesh tunggal)
-    _obj.position.set(0, -0.4, distance);
-    _obj.rotation.set(0, Math.PI, 0);
-    _obj.scale.setScalar(2.5);
+    if (!meshRef.current) return;
+
+    // Instance 0: Player tower
+    _obj.position.set(0, -0.4 + yOffset, distance);
+    _obj.rotation.set(0, Math.PI + rotation, 0);
+    _obj.scale.setScalar(scale);
     _obj.updateMatrix();
+    meshRef.current.setMatrixAt(0, _obj.matrix);
 
-    if (playerRef.current) {
-      playerRef.current.setMatrixAt(0, _obj.matrix);
-      playerRef.current.instanceMatrix.needsUpdate = true;
-    }
-
-    // Enemy tower
-    _obj.position.set(0, -0.4, -distance);
-    _obj.rotation.set(0, 0, 0);
-    _obj.scale.setScalar(2.5);
+    // Instance 1: Enemy tower
+    _obj.position.set(0, -0.4 + yOffset, -distance);
+    _obj.rotation.set(0, rotation, 0);
+    _obj.scale.setScalar(scale);
     _obj.updateMatrix();
+    meshRef.current.setMatrixAt(1, _obj.matrix);
 
-    if (enemyRef.current) {
-      enemyRef.current.setMatrixAt(0, _obj.matrix);
-      enemyRef.current.instanceMatrix.needsUpdate = true;
-    }
-  }, [distance]);
-
-  // Dispose saat unmount untuk mencegah GPU memory leak
-  useEffect(() => {
-    return () => {
-      // Jangan dispose geometry/material dari cache global —
-      // hanya lepas referensi InstancedMesh
-    };
-  }, []);
+    meshRef.current.instanceMatrix.needsUpdate = true;
+  }, [distance, yOffset, scale, rotation]);
 
   return (
-    <>
-      {/* count=1: hanya 1 posisi per mesh, bounding sphere presisi */}
-      {/* frustumCulled={false}: Memastikan base tidak hilang karena bug shared bounding sphere */}
-      <instancedMesh ref={playerRef} args={[geometry, material, 1]} receiveShadow frustumCulled={false} />
-      <instancedMesh ref={enemyRef} args={[geometry, material, 1]} receiveShadow frustumCulled={false} />
-    </>
+    <instancedMesh ref={meshRef} args={[geometry, material, 2]} receiveShadow frustumCulled={false} />
   );
 });
 
@@ -233,10 +247,10 @@ export const Base = React.memo(({ maxHp, position, type, name, customColor }: Ba
 
   return (
     <group position={position}>
-      <pointLight position={[0, 2.5, 0]} intensity={1.5} color="#ffaa00" distance={25} />
+      <pointLight position={[0, 4.5, 0]} intensity={2.5} color="#ffaa00" distance={30} />
 
       {gameState !== 'SETUP' && (
-        <Billboard position={[0, 2.8, 0]}>
+        <Billboard position={[0, 10.5, 0]}>
           <group>
             <Plane args={[4.5, 0.4]}>
               <meshBasicMaterial color="#000000" transparent opacity={0.6} />
@@ -275,7 +289,7 @@ export const Base = React.memo(({ maxHp, position, type, name, customColor }: Ba
   );
 });
 
-// Preload tetap di luar komponen
-useGLTF.preload('/assets-model/tower.glb', true, true, (loader) => {
-  loader.setMeshoptDecoder(MeshoptDecoder);
+// Preload all parts
+TOWER_LAYOUT.forEach(config => {
+  useGLTF.preload(config.file, true, true, (l: any) => l.setMeshoptDecoder(MeshoptDecoder));
 });

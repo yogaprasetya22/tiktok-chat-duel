@@ -93,7 +93,7 @@ const Terrain = ({ baseDistance, potatoMode }: { baseDistance: number; potatoMod
   });
 
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.6, 0]} receiveShadow={!potatoMode && gameState !== 'SETUP'}>
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.6, 0]} receiveShadow={!potatoMode && gameState !== 'SETUP'} frustumCulled={false}>
       <planeGeometry args={[400, 400, (potatoMode || gameState === 'SETUP') ? 1 : 40, (potatoMode || gameState === 'SETUP') ? 1 : 40]} />
       <primitive object={TerrainMaterial} attach="material" />
     </mesh>
@@ -127,7 +127,7 @@ const Rock = () => {
   }, []);
 
   return (
-    <instancedMesh ref={meshRef} args={[null as any, null as any, ROCK_COUNT]} castShadow receiveShadow frustumCulled={true}>
+    <instancedMesh ref={meshRef} args={[null as any, null as any, ROCK_COUNT]} castShadow receiveShadow frustumCulled={false}>
       <icosahedronGeometry args={[1, 0]} />
       <meshStandardMaterial 
         color="#666666" 
@@ -177,11 +177,11 @@ const Forest = ({ potatoMode }: { potatoMode?: boolean }) => {
 
     return (
         <group>
-            <instancedMesh ref={trunkRef} args={[null as any, null as any, TREE_COUNT]} castShadow frustumCulled={true}>
+            <instancedMesh ref={trunkRef} args={[null as any, null as any, TREE_COUNT]} castShadow frustumCulled={false}>
                 <cylinderGeometry args={[0.2, 0.4, 4, 6]} />
                 <meshStandardMaterial color="#4d2915" onBeforeCompile={(s: any) => applyPainterlyStyle(s as any)} />
             </instancedMesh>
-            <instancedMesh ref={topRef} args={[null as any, null as any, TREE_COUNT]} castShadow frustumCulled={true}>
+            <instancedMesh ref={topRef} args={[null as any, null as any, TREE_COUNT]} castShadow frustumCulled={false}>
                 <coneGeometry args={[1, 2, 6]} />
                 <meshStandardMaterial color="#1a3d1a" onBeforeCompile={(s: any) => applyPainterlyStyle(s as any)} />
             </instancedMesh>
@@ -244,7 +244,7 @@ const Rain = () => {
   });
 
   return (
-    <instancedMesh ref={meshRef} args={[undefined, undefined, RAIN_COUNT]}>
+    <instancedMesh ref={meshRef} args={[undefined, undefined, RAIN_COUNT]} frustumCulled={false}>
       <cylinderGeometry args={[0.015, 0.015, 1.2, 3]} />
       <primitive object={RainMaterial} attach="material" />
     </instancedMesh>
@@ -401,9 +401,9 @@ export const StormEnvironment = ({ baseDistance = 36, potatoMode = false }: { ba
     const isClear = weather === 'CLEAR';
     const isThunder = weather === 'THUNDER';
     
-    const tHemi = isClear ? 2.2 : (isThunder ? 1.5 : 1.2);
-    const tAmb  = isClear ? 1.2 : 0.8;
-    const tDir  = isClear ? 6.0 : 3.0;
+    const tHemi = isClear ? 3.5 : (isThunder ? 3.0 : 2.8);
+    const tAmb  = isClear ? 2.2 : 2.0;
+    const tDir  = isClear ? 12.0 : 8.0;
     
     // Smooth Lerp Intensities
     if (hemiRef.current) hemiRef.current.intensity = THREE.MathUtils.smoothstep(hemiRef.current.intensity, tHemi, 0.05);
@@ -412,11 +412,11 @@ export const StormEnvironment = ({ baseDistance = 36, potatoMode = false }: { ba
     
     // Direct Fog Update
     if (fogRef.current) {
-        const targetFogCol = isClear ? "#1a1a1a" : "#445566";
+        const targetFogCol = isClear ? "#333333" : "#8899aa";
         targetColor.current.set(targetFogCol);
         fogRef.current.color.lerp(targetColor.current, 0.05);
-        fogRef.current.near = THREE.MathUtils.lerp(fogRef.current.near, isClear ? 80 : 45, 0.05);
-        fogRef.current.far = THREE.MathUtils.lerp(fogRef.current.far, isClear ? 400 : 200, 0.05);
+        fogRef.current.near = THREE.MathUtils.lerp(fogRef.current.near, isClear ? 180 : 100, 0.05);
+        fogRef.current.far = THREE.MathUtils.lerp(fogRef.current.far, isClear ? 800 : 500, 0.05);
     }
   });
 
@@ -437,9 +437,9 @@ export const StormEnvironment = ({ baseDistance = 36, potatoMode = false }: { ba
       return (
         <group>
             <color attach="background" args={["#f0f5ff"]} />
-            <hemisphereLight intensity={1.5} groundColor="#d70f0fff" />
-            <ambientLight intensity={0.8} />
-            <directionalLight position={[20, 100, 20]} intensity={1.5} castShadow={false} />
+            <hemisphereLight intensity={2.0} groundColor="#d70f0fff" />
+            <ambientLight intensity={1.5} />
+            <directionalLight position={[20, 100, 20]} intensity={3.0} castShadow={false} />
             <Terrain baseDistance={baseDistance} potatoMode={true} />
         </group>
       );
@@ -457,7 +457,7 @@ export const StormEnvironment = ({ baseDistance = 36, potatoMode = false }: { ba
       <Environment 
         files={initialWeather === 'CLEAR' ? "/qwantani_sunset_1k.exr" : "/qwantani_night_1k.exr"} 
         background={true} 
-        environmentIntensity={1.5}
+        environmentIntensity={2.5}
       />
 
       <hemisphereLight
@@ -475,8 +475,12 @@ export const StormEnvironment = ({ baseDistance = 36, potatoMode = false }: { ba
         intensity={5.0}
         castShadow={!isSetup}
         shadow-mapSize={isSetup ? [512, 512] : [1024, 1024]}
-        shadow-camera-far={500}
-        shadow-camera-near={0.5}
+        shadow-camera-far={120}
+        shadow-camera-near={1}
+        shadow-camera-left={-45}
+        shadow-camera-right={45}
+        shadow-camera-top={45}
+        shadow-camera-bottom={-45}
       />
       
       <Terrain baseDistance={baseDistance} />

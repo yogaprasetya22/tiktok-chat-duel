@@ -301,8 +301,10 @@ const BattleArmyComponent = ({
     const camPos = state.camera.position;
     frameCountRef.current++;
 
-    // PERFORMANCE: Throttle sorting and unit filtering to every 5 frames
-    if (frameCountRef.current % 5 === 0 || cachedActiveUnits.current.length === 0) {
+    // PERFORMANCE: Throttle sorting and unit filtering to every 5-10 frames
+    const shouldSort = frameCountRef.current % 10 === 0 || cachedActiveUnits.current.length === 0;
+    
+    if (shouldSort) {
       const activeUnits: any[] = [];
       const buckets: Record<string, UnitRuntimeData[]> = { fighter: [], tank: [], mage: [], marksman: [], assassin: [] };
       
@@ -320,11 +322,14 @@ const BattleArmyComponent = ({
 
       activeUnits.sort((a, b) => {
         if (a.isBoss !== b.isBoss) return a.isBoss ? -1 : 1;
-        return a.dSq - b.dSq;
+        return (a.dSq || 0) - (b.dSq || 0);
       });
       
       for (const key in buckets) {
-        buckets[key].sort((a, b) => (a.dSq || 0) - (b.dSq || 0));
+        buckets[key].sort((a, b) => {
+           if (a.isBoss !== b.isBoss) return a.isBoss ? -1 : 1;
+           return (a.dSq || 0) - (b.dSq || 0);
+        });
       }
 
       cachedActiveUnits.current = activeUnits;
@@ -332,6 +337,7 @@ const BattleArmyComponent = ({
     }
 
     const activeUnits = cachedActiveUnits.current;
+    (state as any).sortedActiveUnits = activeUnits;
     // EXTENDED Visibility: Names visible up to 90m (was 45m)
     const HUD_DETAIL_DIST_SQ = 90 * 90; 
     const isPotato = !!settingsRef.current.potatoMode;

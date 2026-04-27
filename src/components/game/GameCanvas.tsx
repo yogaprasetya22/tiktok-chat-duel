@@ -16,6 +16,7 @@ import { BattleArmy } from "./systems/BattleArmy";
 import { WhimsicalDiorama } from "./environment/WhimsicalDiorama";
 import { StormEnvironment } from "./environment/StormEnvironment";
 import { DamageHUDBatcher } from "./systems/DamageHUDBatcher";
+import { Perf } from "r3f-perf";
 
 import { EffectComposer, Bloom, ToneMapping } from "@react-three/postprocessing";
 
@@ -169,6 +170,7 @@ export const GameCanvas = React.memo(({
       value: !!settingsRef.current.potatoMode, label: "Potato Mode (Extreme FPS)",
       onChange: (v) => { settingsRef.current.potatoMode = v; }
     },
+    showPerf: { value: false, label: "Show Perf Monitor" },
     mapType: {
       value: environment,
       options: ["DIORAMA", "STORM"],
@@ -176,6 +178,10 @@ export const GameCanvas = React.memo(({
       onChange: (v) => setEnvironment(v)
     }
   }, { collapsed: true });
+
+  const { showPerf } = useControls("World Tuning", {
+    showPerf: { value: false, label: "Show Perf Monitor" },
+  });
 
   // ---- Diagnostics Bridge ----
   const DiagnosticsBridge = () => {
@@ -229,6 +235,8 @@ export const GameCanvas = React.memo(({
         minPolarAngle={0}
         makeDefault
       />
+
+      {showPerf && <Perf position="bottom-left" />}
 
       <VFXProvider>
         {environment === 'DIORAMA' ? (
