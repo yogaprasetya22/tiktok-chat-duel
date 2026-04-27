@@ -90,7 +90,7 @@ export function MMSpellEffect({ spellsRef, unitRegistry, simTimeRef, bulletSpeed
 
       // Homing
       if (s.targetId && unitRegistry.current) {
-        const tIdx = parseInt(s.targetId.split('-')[1]);
+        const tIdx = parseInt(s.targetId.match(/\d+/)?.toString() || '0');
         const tar = unitRegistry.current[tIdx];
         if (tar && tar.isActive && tar.id === s.targetId) {
           s.toX = tar.position[0]; s.toY = tar.position[1] + 1.2; s.toZ = tar.position[2];

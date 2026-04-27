@@ -151,7 +151,7 @@ export const GameCanvas = React.memo(({
       onChange: (v) => { if (setTowerConfig) setTowerConfig(prev => ({ ...prev, baseHp: v })); }
     },
     baseDist: {
-      value: towerConfig.baseDistance || 24, min: 10, max: 80, step: 2, label: "Jarak Base",
+      value: towerConfig.baseDistance || 36, min: 10, max: 80, step: 2, label: "Jarak Base",
       onChange: (v) => { if (setTowerConfig) setTowerConfig(prev => ({ ...prev, baseDistance: v })); }
     }
   }, { collapsed: false });
@@ -232,10 +232,10 @@ export const GameCanvas = React.memo(({
 
       <VFXProvider>
         {environment === 'DIORAMA' ? (
-          <WhimsicalDiorama baseDistance={towerConfig.baseDistance || 24} />
+          <WhimsicalDiorama baseDistance={towerConfig.baseDistance || 36} />
         ) : (
           <StormEnvironment
-            baseDistance={towerConfig.baseDistance || 24}
+            baseDistance={towerConfig.baseDistance || 36}
             potatoMode={settingsRef.current.potatoMode}
           />
         )}
@@ -261,20 +261,20 @@ export const GameCanvas = React.memo(({
         />
 
         <InstancedTowers
-          distance={towerConfig.baseDistance || 24}
+          distance={towerConfig.baseDistance || 36}
           settingsRef={settingsRef}
         />
 
         <Base
           maxHp={towerConfig.baseHp}
-          position={[0, 0, towerConfig.baseDistance || 24]}
+          position={[0, 0, towerConfig.baseDistance || 36]}
           type="player"
           name={towerConfig.player.name}
           customColor={towerConfig.player.color}
         />
         <Base
           maxHp={towerConfig.baseHp}
-          position={[0, 0, -(towerConfig.baseDistance || 24)]}
+          position={[0, 0, -(towerConfig.baseDistance || 36)]}
           type="enemy"
           name={towerConfig.enemy.name}
           customColor={towerConfig.enemy.color}

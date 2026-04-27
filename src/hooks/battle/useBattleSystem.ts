@@ -15,17 +15,26 @@ import {
     addEntity, 
     addComponent, 
 } from 'bitecs';
-
-import type {
-    ActiveUnit,
+import { 
+    RARITY_WEIGHTS, 
+    RARITY_BONUS_MATRIX, 
+    applyClassSpecialization 
+} from "../../core/logic/battle/combatSpecs";
+import { 
+    calculateProcessedDamage, 
+    applySustain 
+} from "../../core/logic/battle/combatProcessor";
+import { 
+    UnitRarity, 
+    ActiveUnit, 
+    UnitRuntimeData, 
+    ClassKey,
     TowerConfig,
-    MapObstacle,
-    KillEvent,
     BattleStats,
-    SimulationSettings,
-    UnitRuntimeData,
-    UnitRarity,
-} from "@/src/core/domain/unit.types";
+    KillEvent,
+    MapObstacle,
+    SimulationSettings
+} from "../../core/domain/unit.types";
 export type { TowerConfig };
 
 import {
@@ -321,7 +330,7 @@ export const useBattleSystem = () => {
             giftKeyword: "coffee",
         },
         baseHp: 1000,
-        baseDistance: 24,
+        baseDistance: 34,
         maxUnits: 20,
         unitConfig: {
             hpMultiplier: 1.0,
@@ -423,31 +432,19 @@ export const useBattleSystem = () => {
                 forcedClass ||
                 pickWeightedRandom(
                     ["fighter", "tank", "assassin", "marksman", "mage"],
-                    [30, 30, 20, 10, 10],
+                    [35, 35, 7, 11, 12],
                 );
             
-            // --- GACHA COMBAT DESIGN MATRIX (v1.0) ---
+            // --- MODULAR GACHA SYSTEM ---
             const rarity = pickWeightedRandom(
                 ["common", "elite", "epic", "legendary"],
-                [75, 15, 8, 2]
+                [RARITY_WEIGHTS.common, RARITY_WEIGHTS.elite, RARITY_WEIGHTS.epic, RARITY_WEIGHTS.legendary]
             ) as UnitRarity;
 
-            // Base Rarity Weights
-            const rarityBonus = {
-                common:    { hp: 0,    atk: 0,    as: 0,    crit: 0,    ls: 0,    def: 0 },
-                elite:     { hp: 0.3,  atk: 0.2,  as: 0.1,  crit: 0.05, ls: 0.05, def: 10 },
-                epic:      { hp: 0.7,  atk: 0.5,  as: 0.25, crit: 0.15, ls: 0.1,  def: 25 },
-                legendary: { hp: 1.5,  atk: 1.2,  as: 0.5,  crit: 0.35, ls: 0.2,  def: 50 }
-            }[rarity];
+            const rarityBonus = RARITY_BONUS_MATRIX[rarity];
 
-            const stats = getUnitStats(
-                level,
-                towerConfigRef.current.unitConfig,
-                settingsRef.current,
-            );
-            const c =
-                CLASS_CONFIG[unitClass as keyof typeof CLASS_CONFIG] ||
-                CLASS_CONFIG.fighter;
+            const stats = getUnitStats(level, towerConfigRef.current.unitConfig, settingsRef.current);
+            const c = CLASS_CONFIG[unitClass as keyof typeof CLASS_CONFIG] || CLASS_CONFIG.fighter;
 
             const u = unitPoolRef.current[poolIdx];
             const uData = unitDataPoolRef.current[poolIdx];
@@ -460,39 +457,12 @@ export const useBattleSystem = () => {
             u.unitClass = unitClass;
             u.rarity = rarity;
             
-            // --- CLASS-SPECIFIC SCALING ---
-            // Base starting point
+            // --- MODULAR STAT SCALING ---
             u.hp = stats.hp * c.hp;
             u.attack = stats.attack * c.atk;
-            const baseAS = c.attack_speed_mult || 1.0;
-            let asMult = 1.0;
-
-            if (unitClass === 'marksman') {
-                u.hp *= (1 + rarityBonus.hp * 0.6);      // Squishy
-                u.attack *= (1 + rarityBonus.atk * 1.8); // High DMG
-                asMult = (1 + rarityBonus.as * 2.0);      // Ultra Fast
-                u.critChance = 0.05 + rarityBonus.crit * 0.8;
-            } else if (unitClass === 'assassin') {
-                u.hp *= (1 + rarityBonus.hp * 1.2);      // Survivalist
-                u.attack *= (1 + rarityBonus.atk * 1.0);
-                asMult = (1 + rarityBonus.as * 0.8);
-                u.critChance = 0.10 + rarityBonus.crit * 1.5; // Crit King
-                u.lifesteal = rarityBonus.ls * 1.2;
-            } else if (unitClass === 'tank') {
-                u.hp *= (1 + rarityBonus.hp * 2.5);      // Wall
-                u.attack *= (1 + rarityBonus.atk * 0.4); // Low DMG
-                u.physicalDefense = 20 + rarityBonus.def * 2.0;
-                u.magicDefense = 10 + rarityBonus.def * 1.5;
-            } else if (unitClass === 'fighter') {
-                u.hp *= (1 + rarityBonus.hp * 1.5);
-                u.attack *= (1 + rarityBonus.atk * 1.2);
-                u.lifesteal = rarityBonus.ls * 0.8;
-            } else if (unitClass === 'mage') {
-                u.hp *= (1 + rarityBonus.hp * 0.8);
-                u.attack *= (1 + rarityBonus.atk * 2.2); // Magic Power
-                asMult = (1 + rarityBonus.as * 1.2);
-                u.spellVamp = rarityBonus.ls || 0;
-            }
+            
+            // Apply specialized scaling from modular logic
+            applyClassSpecialization(u, unitClass as ClassKey, rarityBonus, c, settingsRef.current);
 
             u.maxHp = u.hp;
             u.range = c.range;
@@ -500,7 +470,6 @@ export const useBattleSystem = () => {
             u.isDying = false;
             u.isBoss = isBoss;
             u.hpRegen = c.hp_regen;
-            u.attackCooldown = settingsRef.current.globalAttackCooldown / (baseAS * asMult);
 
             const dist = towerConfigRef.current.baseDistance ?? 24;
             const spawnZ = type === "player" ? dist - 2 : -dist + 2;
@@ -523,9 +492,6 @@ export const useBattleSystem = () => {
                 ),
             );
 
-            // OPTIMIZATION: We no longer add SeparationBehavior here because it's O(N^2).
-            // We will handle separation in the main loop using our Spatial Grid.
-
             entityManager.add(v);
 
             uData.isActive = true;
@@ -538,14 +504,13 @@ export const useBattleSystem = () => {
             uData.rotation = [0, 0, 0];
             uData.unitClass = unitClass;
             uData.isBoss = isBoss;
-            uData.lastAttackTime = 0;
+            uData.spawnTime = simulationTimeRef.current;
             uData.status = "marching";
             uData.isDying = false;
             uData.range = u.range;
             uData.speed = u.speed;
             uData.profileImage = profileImage;
             uData.rarity = rarity;
-            // ECS fields used by ECSArmyRenderer for steering/visual
             uData.laneOffset = laneOffset;
             uData.jitterOffset = Math.random() * Math.PI * 2;
             uData.encirclementRadius = (c.ai_behavior?.encirclement || 1.2) * 1.25;
@@ -556,7 +521,6 @@ export const useBattleSystem = () => {
             }
             statsRef.current.unitsSpawned[name] = (statsRef.current.unitsSpawned[name] || 0) + 1;
 
-            // Sync to bitecs ECS
             let eid = eidMap.current[poolIdx];
             if (eid === -1) {
                 eid = addEntity(world);
@@ -573,7 +537,7 @@ export const useBattleSystem = () => {
             _vmh[eid] = u.maxHp;
             _vType[eid] = type === "player" ? 0 : 1;
             _vActive[eid] = 1;
-            _vState[eid] = 1; // marching
+            _vState[eid] = 1;
 
             if (!activeIndicesRef.current.includes(poolIdx)) {
                 activeIndicesRef.current.push(poolIdx);
@@ -586,16 +550,14 @@ export const useBattleSystem = () => {
 
     const freezeTimeRef = useRef(0);
 
-
     const updateSimulation = useCallback(
         (delta: number) => {
             frameCountRef.current++;
             const now = performance.now();
 
-            // Handle Freeze Time (Hit-stop effect)
             if (freezeTimeRef.current > 0) {
                 freezeTimeRef.current -= delta * 1000;
-                return; // Early exit simulation logic
+                return;
             }
 
             const simDelta = delta * (settingsRef.current.timeScale || 1.0);
@@ -606,7 +568,6 @@ export const useBattleSystem = () => {
             const weatherCfg = (WEATHER_CONFIG as any)[weather] || {};
             const weatherMults = weatherCfg.multipliers || {};
 
-            // PERFORMANCE: Skip intensive loops if no units are active
             let activeCount = 0;
             const eidArr = eidMap.current;
             const activeArr = _vActive;
@@ -616,17 +577,13 @@ export const useBattleSystem = () => {
             }
             if (activeCount === 0 && gameStateRef.current !== "PLAYING") return;
 
-            // --- 2D GRID BUCKET UPDATE (Zero-Allocation Global Grid) ---
-            // Optimization: Update grid every 2 frames to save CPU
             if (frameCountRef.current % 2 === 0) {
                 battleGrid.update(unitDataPoolRef.current, activeIndicesRef.current);
             }
 
-            // --- 2. ENTITY SIMULATION (Fixed Accumulator with Spiral Protection) ---
             const PHYSICS_STEP = 0.016; 
             physicsAccumulatorRef.current += simDelta;
 
-            // Spiral of Death Protection: If we fall behind by more than 0.2s, drop time
             if (physicsAccumulatorRef.current > 0.2) {
                 physicsAccumulatorRef.current = 0.2; 
             }
@@ -640,7 +597,6 @@ export const useBattleSystem = () => {
             }
             flushDamageBuffer(now);
 
-            // --- MAIN SIMULATION LOOP (BITECS VECTORIZED) ---
             const eids = eidMap.current;
             const activeStates = _vActive;
             const uPool = unitPoolRef.current;
@@ -648,7 +604,6 @@ export const useBattleSystem = () => {
             const vPool = vehiclePoolRef.current;
             const activeIdxArray = activeIndicesRef.current;
 
-            // Cleanup dead indices from tracking array
             if (frameCountRef.current % 30 === 0) {
               activeIndicesRef.current = activeIdxArray.filter(idx => uPool[idx].isActive);
             }
@@ -696,7 +651,6 @@ export const useBattleSystem = () => {
                     continue;
                 }
 
-                // --- AI THINKING (Throttled & Time-Sliced) ---
                 const thinkThrottle = u.unitClass === "fighter" ? 90 : 140; 
                 const phaseOffset = i % 8; 
                 const frameCheck = (Math.floor(simNow / 16) + phaseOffset) % 8 === 0;
@@ -709,18 +663,16 @@ export const useBattleSystem = () => {
                     let bestScore = -1;
                     let bestTargetId: string | undefined = undefined;
 
-                    // --- SCORE TOWER ---
                     const dist = towerConfig.baseDistance ?? 24;
                     const targetBaseZ = u.type === "player" ? -dist : dist;
                     const dxB = uData.position[0];
                     const dzB = uData.position[2] - targetBaseZ;
                     const distToBaseSq = dxB * dxB + dzB * dzB;
 
-                    const towerWeight = 0.01; // EXTREMELY low weight: units will ONLY attack towers if no enemies are visible in perception
+                    const towerWeight = 0.01;
                     bestScore = towerWeight / (distToBaseSq + 0.1);
                     const targetedBaseId = u.type === "player" ? "enemy-base" : "player-base";
 
-                    // Optimized Global Targeting via battleGrid
                     const neighbors = battleGrid.queryRadius(uData.position[0], uData.position[2], (isFighter || isAssassin) ? 32 : 12);
                     for (let j = 0; j < neighbors.length; j++) {
                         const potential = neighbors[j];
@@ -734,11 +686,10 @@ export const useBattleSystem = () => {
 
                         let weight = 1.0;
                         if (isAssassin) {
-                            // Assassins prioritize Mage and MM heavily
                             if (potential.unitClass === 'mage' || potential.unitClass === 'marksman') {
-                                weight = 15.0; // Extremely high priority
+                                weight = 15.0;
                             } else {
-                                weight = 0.05; // Ignore frontline (tank/fighter)
+                                weight = 0.05;
                             }
                         } else if (isFighter) {
                             weight = 3.0;
@@ -762,7 +713,6 @@ export const useBattleSystem = () => {
                     }
                 }
 
-                // --- OPTIMIZED MOVEMENT & SEPARATION (Manual Grid-Based) ---
                 const simFrame = Math.floor(simNow * 60); 
                 const moveCheck = (simFrame + i) % 2 === 0;
 
@@ -785,13 +735,11 @@ export const useBattleSystem = () => {
                     }
                 }
 
-                // --- COMBAT RESOLUTION ---
                 const dist = towerConfig.baseDistance ?? 24;
                 const targetBaseZ = u.type === "player" ? -dist : dist;
                 const isBaseTarget =
                     u.targetId === "player-base" || u.targetId === "enemy-base";
 
-                // SPECIAL: Mages/Marksmen move closer to Towers (Range Mult 0.82)
                 const isRanged =
                     u.unitClass === "mage" || u.unitClass === "marksman";
                 const rangeMult = isBaseTarget && isRanged ? 0.82 : 1.0;
@@ -801,7 +749,7 @@ export const useBattleSystem = () => {
                 const dxB = _px[i];
                 const dzB = _pz[i] - targetBaseZ;
                 const distToBaseSq = dxB * dxB + dzB * dzB;
-                const baseInRange = distToBaseSq < rangeSq; // Use adjusted range
+                const baseInRange = distToBaseSq < rangeSq;
 
                 let currentTarget: ActiveUnit | undefined =
                     u.targetId && !isBaseTarget
@@ -829,36 +777,12 @@ export const useBattleSystem = () => {
                             simNow - (uData.lastAttackTime || 0) >
                             u.attackCooldown
                         ) {
-                            // --- ADVANCED DAMAGE CALCULATION ---
-                            let dmg = u.attack;
-                            const isCrit = Math.random() < (u.critChance || 0) || uData.pendingCrit;
-                            if (isCrit) {
-                                dmg *= 2.5; 
-                                uData.pendingCrit = false;
-                            }
+                            const { dmg, isCrit } = calculateProcessedDamage(u, currentTarget, !!uData.pendingCrit);
+                            if (isCrit) uData.pendingCrit = false;
 
-                            // Defense calculation
-                            const targetDefense = u.unitClass === 'mage' ? (currentTarget.magicDefense || 0) : (currentTarget.physicalDefense || 0);
-                            const armorPierce = u.unitClass === 'marksman' ? 0.4 : 0; // MM ignores 40% defense
-                            const effectiveDefense = targetDefense * (1 - armorPierce);
-                            dmg = Math.max(dmg * 0.1, dmg - effectiveDefense); // Never less than 10% base dmg
-
-                            // Weather damage modifiers
-                            const classDmgMult = weatherMults[u.unitClass]?.atk || 1.0;
-                            const globalDmgMult = weatherMults.globalDamageMultiplier || 1.0;
-                            dmg *= classDmgMult * globalDmgMult;
-
-                            // Apply Lifesteal / Spell Vamp
-                            const healPerc = u.unitClass === 'mage' ? (u.spellVamp || 0) : (u.lifesteal || 0);
-                            if (healPerc > 0 && u.hp < u.maxHp) {
-                                const healAmount = dmg * healPerc;
-                                u.hp = Math.min(u.maxHp, u.hp + healAmount);
-                                uData.hp = u.hp;
-                                _vh[i] = u.hp;
-                            }
+                            applySustain(u, uData, dmg, _vh, i);
 
                             if (u.unitClass === "mage") {
-                                // --- MAGE AOE LOGIC ---
                                 let hits = 0;
                                 _vh[tIdx] -= dmg;
                                 tData.hp = _vh[tIdx];
@@ -881,7 +805,6 @@ export const useBattleSystem = () => {
                                 );
                                 hits++;
 
-                                // AOE Damage Logic using battleGrid
                                 const searchRadius = u.unitClass === "mage" ? 3.5 : 2.5;
                                 const neighbors = battleGrid.queryRadius(tData.position[0], tData.position[2], searchRadius);
                                 for (let j = 0; j < neighbors.length; j++) {
@@ -919,7 +842,6 @@ export const useBattleSystem = () => {
                                     }
                                 }
                             } else if (u.unitClass === "fighter" && (u.rarity === 'epic' || u.rarity === 'legendary')) {
-                                // --- FIGHTER CLEAVE LOGIC ---
                                 const cleavePerc = u.rarity === 'legendary' ? 0.5 : 0.3;
                                 _vh[tIdx] -= dmg;
                                 tData.hp = _vh[tIdx];
@@ -936,7 +858,6 @@ export const useBattleSystem = () => {
                                 updateStats(u.userName, u.type, dmg);
                                 accumulateDamage(currentTarget.id, dmg, tData.position, isCrit ? "#FFDD00" : (u.type === "player" ? "#0066FF" : "#FF0033"));
 
-                                // Secondary Cleave
                                 const cleaveNearby = battleGrid.queryRadius(tData.position[0], tData.position[2], 2.0);
                                 let cleaveCount = 0;
                                 for (let cj = 0; cj < cleaveNearby.length && cleaveCount < 4; cj++) {
@@ -967,7 +888,6 @@ export const useBattleSystem = () => {
                                     }
                                 }
                             } else {
-                                // Standard Single Target
                                 _vh[tIdx] -= dmg;
                                 tData.hp = _vh[tIdx];
                                 currentTarget.hp = _vh[tIdx];
@@ -990,8 +910,6 @@ export const useBattleSystem = () => {
                             }
                             uData.lastAttackTime = simNow;
 
-                            // --- VFX TRIGGER: Class-specific spell effects ---
-                            // (Previously triggered from Army components; now centralized here)
                             const teamColor = u.type === 'player'
                                 ? towerConfigRef.current.player.color
                                 : towerConfigRef.current.enemy.color;
@@ -1035,7 +953,6 @@ export const useBattleSystem = () => {
                                 }
                                 case 'mage': {
                                     const spells = spellsRef.current;
-                                    // Primary target
                                     for (let si = 0; si < spells.length; si++) {
                                         if (!spells[si].active) {
                                             spells[si].fromX = uData.position[0];
@@ -1052,7 +969,6 @@ export const useBattleSystem = () => {
                                             break;
                                         }
                                     }
-                                    // AOE secondary targets
                                     const aoeNearby = battleGrid.queryRadius(tData.position[0], tData.position[2], 3.5);
                                     let aoeCount = 0;
                                     for (let aj = 0; aj < aoeNearby.length && aoeCount < 3; aj++) {
@@ -1125,7 +1041,6 @@ export const useBattleSystem = () => {
                         const seek = v.steering.behaviors[0] as any;
                         if (seek?.target && tData) {
                             if (u.unitClass === 'mage') {
-                                // Mage: maintain range, retreat if too close
                                 const ddx = _px[i] - tData.position[0];
                                 const ddz = _pz[i] - tData.position[2];
                                 if (ddx*ddx + ddz*ddz < 49) {
@@ -1135,13 +1050,11 @@ export const useBattleSystem = () => {
                                     seek.target.set(tData.position[0], 0, tData.position[2]);
                                 }
                             } else if (u.unitClass === 'marksman') {
-                                // Marksman: orbit at range
                                 const angleHash = ((i * 2654435761) >>> 0) % 360;
                                 const angle = angleHash * (Math.PI / 180);
                                 const orbitR = uData.encirclementRadius || 1.25;
                                 const ddx = _px[i] - tData.position[0];
                                 const ddz = _pz[i] - tData.position[2];
-                                // Only orbit if within comfortable range, else approach
                                 if (ddx*ddx + ddz*ddz < 80 * 80) {
                                     seek.target.set(
                                         tData.position[0] + Math.cos(angle) * orbitR,
@@ -1152,8 +1065,6 @@ export const useBattleSystem = () => {
                                     seek.target.set(tData.position[0], 0, tData.position[2]);
                                 }
                             } else {
-                                // Fighter / Tank / Assassin: charge directly at enemy
-                                // Tiny offset so multiple melee units don't stack on exact same point
                                 const offsetX = ((i * 127) % 7 - 3) * 0.25;
                                 const offsetZ = ((i * 53)  % 7 - 3) * 0.25;
                                 seek.target.set(
@@ -1177,14 +1088,14 @@ export const useBattleSystem = () => {
                             if (enemyBaseHpRef.current <= 0) {
                                 addKillEvent(u.userName, "ENEMY BASE", "base", u.profileImage);
                                 updateStats(u.userName, u.type, 0, true);
-                                freezeTimeRef.current = 100; // Hit-stop
+                                freezeTimeRef.current = 100;
                             }
                         } else {
                             playerBaseHpRef.current -= dmg;
                             if (playerBaseHpRef.current <= 0) {
                                 addKillEvent(u.userName, "PLAYER BASE", "base", u.profileImage);
                                 updateStats(u.userName, u.type, 0, true);
-                                freezeTimeRef.current = 100; // Hit-stop
+                                freezeTimeRef.current = 100;
                             }
                         }
                         accumulateDamage(
@@ -1194,20 +1105,14 @@ export const useBattleSystem = () => {
                             u.type === "player" ? "#0066FF" : "#FF0033",
                         );
 
-                        // Optimize: Base impact effect
                         if (simNow - (uData.lastEffectTime || 0) > 400) {
                             uData.lastEffectTime = simNow;
-                            // Trigger base explosion/impact if damage is high
-                            if (dmg > 50) {
-                                // We'll add this to VFXManager later
-                            }
                         }
 
                         uData.lastAttackTime = simNow;
                     }
                 } else {
                     uData.status = "marching";
-                    // Unified Speed Calculation + Weather Modifiers
                     const classWeatherMult =
                         weatherMults[u.unitClass]?.move_speed_mult || 1.0;
                     const globalWeatherMult =
@@ -1221,27 +1126,23 @@ export const useBattleSystem = () => {
                     v.maxSpeed = baseSpeed;
                     const seek = v.steering.behaviors[0] as any;
                     if (seek?.target) {
-                        // Focus on the center tower (target x = 0) to avoid getting stuck at lane edges!
                         const swagger =
                             Math.sin(i * 8.0 + (uData.jitterOffset || 0)) *
-                            (uData.laneSwaggerAmp || 1.5); // Add slightly more swagger to prevent stacking
+                            (uData.laneSwaggerAmp || 1.5);
                         seek.target.set(swagger, 0, targetBaseZ);
                     }
                 }
 
-                // --- ROTATION LERP (visual, runs with physics delta) ---
                 {
                     const rotSmooth = settings.rotationSmoothing || 0.12;
                     const velSq = v.velocity.x ** 2 + v.velocity.z ** 2;
                     if ((uData.status === 'marching' || uData.status === 'chasing') && velSq > 0.05) {
-                        // Velocity-based rotation: face the direction of movement
                         const targetRot = Math.atan2(v.velocity.x, v.velocity.z);
                         let diff = targetRot - uData.rotation[1];
                         while (diff < -Math.PI) diff += Math.PI * 2;
                         while (diff >  Math.PI) diff -= Math.PI * 2;
                         uData.rotation[1] += diff * Math.min(rotSmooth * 2, 1.0);
                     } else if (uData.status === 'attacking') {
-                        // Face the target when attacking
                         const tIdx2 = u.targetId && !isBaseTarget ? parseInt(u.targetId.split('-')[1]) : -1;
                         const td2 = tIdx2 !== -1 ? uiPool[tIdx2] : null;
                         const tx2 = (td2 && td2.isActive && td2.id === u.targetId) ? td2.position[0] : 0;
@@ -1254,9 +1155,8 @@ export const useBattleSystem = () => {
                     }
                 }
 
-                // --- ASSASSIN BLINK (Tactical Backline Teleport) ---
                 if (u.unitClass === 'assassin' && u.targetId && !isBaseTarget) {
-                    const blinkCooldownS = 4000; // Faster blink (4s) for more dynamic behavior
+                    const blinkCooldownS = 4000;
                     const lastBlink = uData.lastBlinkTime || 0;
                     
                     if (simNow - lastBlink > blinkCooldownS) {
@@ -1270,10 +1170,7 @@ export const useBattleSystem = () => {
                             const ddz = _pz[i] - td3.position[2];
                             const dSq2 = ddx*ddx + ddz*ddz;
                             
-                            // Trigger when approaching (around 6 meters radius)
                             if (dSq2 < 36 && dSq2 > 4) {
-                                // Calculate teleport position BEHIND the target
-                                // We use target's relative direction or team movement
                                 const targetForward = u.type === 'player' ? -1.8 : 1.8;
                                 const bx = td3.position[0];
                                 const bz = td3.position[2] + targetForward;
@@ -1283,10 +1180,9 @@ export const useBattleSystem = () => {
                                 uData.position[0] = bx; uData.position[2] = bz;
                                 
                                 uData.lastBlinkTime = simNow;
-                                uData.pendingCrit = true; // Assassin deals heavy damage after blink
+                                uData.pendingCrit = true;
                                 uData.status = 'attacking';
                                 
-                                // Flash VFX color
                                 const spells = assassinSpellsRef.current;
                                 for (let si = 0; si < spells.length; si++) {
                                     if (!spells[si].active) {
@@ -1294,7 +1190,7 @@ export const useBattleSystem = () => {
                                         spells[si].y = 1.3;
                                         spells[si].z = bz;
                                         spells[si].startTime = simNow;
-                                        spells[si].color = '#ff00ff'; // Purple flash for teleport
+                                        spells[si].color = '#ff00ff';
                                         spells[si].active = true;
                                         spells[si].progress = 0;
                                         break;
@@ -1305,16 +1201,12 @@ export const useBattleSystem = () => {
                     }
                 }
 
-
-                // --- 2. PHYSICS DAMPING (Balanced for responsiveness) ---
-                // Gentler damping: velocity drops to ~10% over 1 second if no force is applied
                 v.velocity.multiplyScalar(Math.pow(0.1, simDelta));
                 
                 if (uData.status === "attacking" || u.isDying) {
                     v.velocity.set(0, 0, 0); 
                 }
 
-                // --- 3. POSITION GUARD & BUFFER SYNC ---
                 const oldX = _px[i];
                 const oldZ = _pz[i];
                 const newX = v.position.x;
@@ -1337,7 +1229,6 @@ export const useBattleSystem = () => {
                     _pz[i] = newZ;
                 }
                 
-                // Final Sync to unitData for renderer
                 uData.position[0] = _px[i];
                 uData.position[2] = _pz[i];
             }

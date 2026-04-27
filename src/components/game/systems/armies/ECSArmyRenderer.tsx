@@ -58,7 +58,7 @@ interface ECSArmyRendererProps {
   shadowRef: React.RefObject<THREE.InstancedMesh>;
   healthBarRef: React.RefObject<THREE.InstancedMesh>;
   namePoolMap: React.MutableRefObject<Map<string, number>>;
-  nameTextRefs: React.RefObject<any[]>;
+  nameGroupRefs: React.RefObject<(THREE.Group | null)[]>;
 }
 
 // ─── Per-class config (static) ───────────────────────────────────────────────
@@ -131,7 +131,7 @@ const _whiteColor = new THREE.Color('#ffffff');
 const ECSArmyRendererInner = ({
   unitRegistry, activeIndicesRef, towerConfig, settingsRef, simTimeRef,
   renderedIdsRef, shadowRef, healthBarRef,
-  namePoolMap, nameTextRefs,
+  namePoolMap, nameGroupRefs,
 }: ECSArmyRendererProps) => {
 
   // ── Load all GLTF assets (preload happens at bottom of file) ──
@@ -280,6 +280,7 @@ const ECSArmyRendererInner = ({
     const camQ = state.camera.quaternion;
     const settings = settingsRef.current;
     const frustum = (state as any).battleFrustum;
+    const nowMs = Date.now();
 
     const isPotato = settings.potatoMode;
 
@@ -445,7 +446,7 @@ const ECSArmyRendererInner = ({
 
             // Shadow
             _hudTemp.position.set(cp.x, -0.45, cp.z);
-            _hudTemp.rotation.set(-Math.PI / 2, 0, 0);
+            _hudTemp.quaternion.identity(); // Reset rotation from healthbar billboarding
             _hudTemp.scale.set(ss, ss, 1);
             _hudTemp.updateMatrix();
             shadowRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
@@ -453,7 +454,6 @@ const ECSArmyRendererInner = ({
             // Aura Shadow Color
             _healthColor.set(rCol); 
             shadowRef.current.setColorAt(hIdx, _healthColor);
-            shadowRef.current.instanceColor!.needsUpdate = true;
 
             // Health Bar
             _hudTemp.position.set(cp.x, by, cp.z);
@@ -470,18 +470,18 @@ const ECSArmyRendererInner = ({
 
             // Fill Color + Damage Flash
             _healthColor.set(teamColor);
-            const flash = Date.now() - (uData.lastDamageTime || 0);
+            const flash = nowMs - (uData.lastDamageTime || 0);
             if (flash < 100) _healthColor.lerp(_whiteColor, 1.0 - flash / 100);
             healthBarRef.current.setColorAt(hIdx, _healthColor);
 
-            // Name label sync
-            if (namePoolMap.current.has(id) && nameTextRefs.current) {
+            // Billboard position & rotation sync
+            if (namePoolMap.current.has(id)) {
               const nameSlot = namePoolMap.current.get(id)!;
-              const nameMesh = nameTextRefs.current[nameSlot];
-              if (nameMesh) {
-                const hover = Math.sin(state.clock.elapsedTime * 3 + id.length) * 0.1;
-                nameMesh.position.set(cp.x, (uData.isBoss ? 3.2 : 4.1) * totalVisualScale + hover, cp.z);
-                nameMesh.quaternion.copy(camQ);
+              const nameGroup = nameGroupRefs.current[nameSlot];
+              if (nameGroup) {
+                // Perfect Stack: Names sit exactly 0.55 units above the health bar
+                nameGroup.position.set(cp.x, by + 0.55, cp.z);
+                nameGroup.quaternion.copy(camQ); 
               }
             }
           } else {
@@ -498,9 +498,12 @@ const ECSArmyRendererInner = ({
           }
         }
 
-        // ── Animation Mixer Update (with culling) ──────────────────────────
-        const isVisible = frustum ? frustum.containsPoint(cp) : true;
-        const sf = (uData.dSq || 0) > 3600 ? 5 : (uData.dSq || 0) > 400 ? 2 : 1;
+        // ── Animation Mixer Update (with optimization) ──────────────────────
+        const isVisible = (uData.isBoss) || (frustum ? frustum.containsPoint(cp) : true);
+        
+        // Skip frames logic: further units update less frequently to save CPU
+        // Full (0-50m): 60f | Mid (50-100m): 30f | Far (100m+): 12f
+        const sf = (uData.isBoss) ? 1 : ((uData.dSq || 0) > 10000 ? 5 : ((uData.dSq || 0) > 2500 ? 2 : 1));
         const tooFar = (uData.dSq || 0) > ANIM_CULL_DIST_SQ;
 
         if (!tooFar && isVisible && time - item.lastUpdate >= 0.016 * sf) {

@@ -369,7 +369,7 @@ const Grass = ({ baseDistance }: { baseDistance: number }) => {
 
 
 // --- Main Export ---
-export const StormEnvironment = ({ baseDistance = 24, potatoMode = false }: { baseDistance?: number, potatoMode?: boolean }) => {
+export const StormEnvironment = ({ baseDistance = 36, potatoMode = false }: { baseDistance?: number, potatoMode?: boolean }) => {
   const setWeather = useStore(s => s.setWeather);
   const gameState = useStore(s => s.gameState);
   

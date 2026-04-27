@@ -5,8 +5,8 @@ import { SimulationSettings, ClassConfig } from "@/src/core/domain/unit.types";
 // ============================================================
 
 // --- STATIC WORLD BOUNDARIES (Never Change) ---
-export let PLAYER_BASE_Z = 24;
-export let ENEMY_BASE_Z = -22;
+export let PLAYER_BASE_Z = 36;
+export let ENEMY_BASE_Z = -36;
 export let LANE_OFFSETS = [-15, -7.5, 0, 7.5, 15];
 
 export let CLASS_CONFIG: ClassConfig = {
@@ -204,8 +204,8 @@ export const LOD_IMPOSTOR_SCALE = 1.8;
 export const LOD_IMPOSTOR_BOSS_SCALE = 5.0; 
 
 // --- CENTRALIZED PERFORMANCE CONFIG ---
-export const ARMY_POOL_SIZE = 20; // Number of high-detail 3D models per class (Reduced from 25)
-export const ANIM_CULL_DIST_SQ = 60 * 60; // Distance where bone animations stop (60m)
+export const ARMY_POOL_SIZE = 40; // Number of high-detail 3D models per class
+export const ANIM_CULL_DIST_SQ = 150 * 150; // Distance where bone animations stop (150m)
 
 // --- WEATHER SYSTEM CONFIG ---
 export const WEATHER_CONFIG = {

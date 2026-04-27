@@ -122,8 +122,10 @@ export function MageSpellEffect({ spellsRef, unitRegistry, simTimeRef }: Props) 
       if (!s || !s.active || s.isBullet) continue;
 
       // Homing: update target position
+      // Homing: update target position
       if (s.targetId && unitRegistry.current) {
-        const tIdx = parseInt(s.targetId.split('-')[1]);
+        // Fast numeric extraction via custom property if available, or simpler logic
+        const tIdx = parseInt(s.targetId.match(/\d+/)?.toString() || '0');
         const tar = unitRegistry.current[tIdx];
         if (tar && tar.isActive && tar.id === s.targetId) {
           s.toX = tar.position[0]; s.toY = tar.position[1] + 1.0; s.toZ = tar.position[2];
@@ -174,7 +176,7 @@ export function MageSpellEffect({ spellsRef, unitRegistry, simTimeRef }: Props) 
       if (ii >= MAX_IMPACTS) break;
 
       _obj.position.set(e.x, e.y, e.z);
-      _obj.rotation.set(-Math.PI / 2, 0, 0);
+      _obj.quaternion.identity(); // Geometry is pre-rotated
       _obj.scale.setScalar(1 + t * 3.5);
       _obj.updateMatrix();
       imp.setMatrixAt(ii, _obj.matrix);
@@ -188,8 +190,12 @@ export function MageSpellEffect({ spellsRef, unitRegistry, simTimeRef }: Props) 
     if (imp.instanceColor) imp.instanceColor.needsUpdate = true;
   });
 
-  const orbGeo    = useMemo(() => new THREE.SphereGeometry(1, 10, 10), []);
-  const impactGeo = useMemo(() => new THREE.CircleGeometry(1, 16), []);
+  const orbGeo    = useMemo(() => new THREE.SphereGeometry(1, 8, 8), []);
+  const impactGeo = useMemo(() => {
+    const geo = new THREE.CircleGeometry(1, 10);
+    geo.rotateX(-Math.PI / 2);
+    return geo;
+  }, []);
   const orbMat    = useMemo(() => OrbMat(), []);
   const impactMat = useMemo(() => ImpactMat(), []);
 

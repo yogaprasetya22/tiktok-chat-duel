@@ -156,30 +156,23 @@ const TowerPart = React.memo(({
     // Player tower (instance 0 dari mesh tunggal)
     _obj.position.set(0, -0.4, distance);
     _obj.rotation.set(0, Math.PI, 0);
-    _obj.scale.setScalar(0.5);
+    _obj.scale.setScalar(2.5);
     _obj.updateMatrix();
 
     if (playerRef.current) {
       playerRef.current.setMatrixAt(0, _obj.matrix);
       playerRef.current.instanceMatrix.needsUpdate = true;
-      // Bounding sphere kecil dan presisi untuk 1 tower
-      playerRef.current.geometry.boundingSphere = new THREE.Sphere(
-        new THREE.Vector3(0, 3, distance), 8
-      );
     }
 
     // Enemy tower
     _obj.position.set(0, -0.4, -distance);
     _obj.rotation.set(0, 0, 0);
-    _obj.scale.setScalar(0.5);
+    _obj.scale.setScalar(2.5);
     _obj.updateMatrix();
 
     if (enemyRef.current) {
       enemyRef.current.setMatrixAt(0, _obj.matrix);
       enemyRef.current.instanceMatrix.needsUpdate = true;
-      enemyRef.current.geometry.boundingSphere = new THREE.Sphere(
-        new THREE.Vector3(0, 3, -distance), 8
-      );
     }
   }, [distance]);
 
@@ -194,8 +187,9 @@ const TowerPart = React.memo(({
   return (
     <>
       {/* count=1: hanya 1 posisi per mesh, bounding sphere presisi */}
-      <instancedMesh ref={playerRef} args={[geometry, material, 1]} receiveShadow />
-      <instancedMesh ref={enemyRef} args={[geometry, material, 1]} receiveShadow />
+      {/* frustumCulled={false}: Memastikan base tidak hilang karena bug shared bounding sphere */}
+      <instancedMesh ref={playerRef} args={[geometry, material, 1]} receiveShadow frustumCulled={false} />
+      <instancedMesh ref={enemyRef} args={[geometry, material, 1]} receiveShadow frustumCulled={false} />
     </>
   );
 });
@@ -214,26 +208,25 @@ export const Base = React.memo(({ maxHp, position, type, name, customColor }: Ba
   const textRef = useRef<any>(null!);
   const gameState = useStore(s => s.gameState);
 
-  useFrame(() => {
-    // useFrame tetap dipanggil tapi cost-nya nol saat SETUP
-    const state = useStore.getState();
-    if (state.gameState === 'SETUP') return;
+  const currentHp = useStore(s => type === 'player' ? s.playerBaseHp : s.enemyBaseHp);
+  const hpRef = useRef(currentHp);
+  hpRef.current = currentHp;
 
-    const currentHp = type === 'player' ? state.playerBaseHp : state.enemyBaseHp;
-    const ratio = Math.min(1, Math.max(0, currentHp / maxHp));
+  useFrame(() => {
+    if (gameState === 'SETUP') return;
+
+    const hp = hpRef.current;
+    const ratio = Math.min(1, Math.max(0, hp / maxHp));
 
     if (hpBarRef.current) {
       hpBarRef.current.scale.x = ratio;
-      // FIX: gunakan set() bukan assignment langsung untuk menghindari object alloc
       hpBarRef.current.position.x = 2.25 * (ratio - 1);
     }
 
     if (textRef.current) {
-      const hp = Math.ceil(currentHp);
-      // FIX: hanya update string jika nilainya berubah
-      const next = `${hp} / ${maxHp}`;
-      if (textRef.current.text !== next) {
-        textRef.current.text = next;
+      const nextText = `${Math.ceil(hp)} / ${maxHp}`;
+      if (textRef.current.text !== nextText) {
+        textRef.current.text = nextText;
       }
     }
   });

@@ -1,7 +1,7 @@
 // ============================================================
-// BATTLE SYSTEM - TYPE DEFINITIONS
-// ============================================================
-// All interfaces and types for the battle simulation system.
+export type TeamType = 'player' | 'enemy';
+export type ClassKey = 'fighter' | 'tank' | 'mage' | 'marksman' | 'assassin';
+
 export const WORLD_UNIT_POOL_SIZE = 1500;
 // This module has NO side effects and NO React dependencies.
 // ============================================================
@@ -188,6 +188,7 @@ export interface UnitRuntimeData {
     lastEffectTime?: number;
     profileImage?: string;
     rarity?: UnitRarity;
+    spawnTime: number;
 }
 
 
