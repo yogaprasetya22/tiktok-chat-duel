@@ -24,6 +24,7 @@ import type {
     BattleStats,
     SimulationSettings,
     UnitRuntimeData,
+    UnitRarity,
 } from "@/src/core/domain/unit.types";
 export type { TowerConfig };
 
@@ -424,6 +425,21 @@ export const useBattleSystem = () => {
                     ["fighter", "tank", "assassin", "marksman", "mage"],
                     [30, 30, 20, 10, 10],
                 );
+            
+            // --- GACHA COMBAT DESIGN MATRIX (v1.0) ---
+            const rarity = pickWeightedRandom(
+                ["common", "elite", "epic", "legendary"],
+                [75, 15, 8, 2]
+            ) as UnitRarity;
+
+            // Base Rarity Weights
+            const rarityBonus = {
+                common:    { hp: 0,    atk: 0,    as: 0,    crit: 0,    ls: 0,    def: 0 },
+                elite:     { hp: 0.3,  atk: 0.2,  as: 0.1,  crit: 0.05, ls: 0.05, def: 10 },
+                epic:      { hp: 0.7,  atk: 0.5,  as: 0.25, crit: 0.15, ls: 0.1,  def: 25 },
+                legendary: { hp: 1.5,  atk: 1.2,  as: 0.5,  crit: 0.35, ls: 0.2,  def: 50 }
+            }[rarity];
+
             const stats = getUnitStats(
                 level,
                 towerConfigRef.current.unitConfig,
@@ -442,18 +458,49 @@ export const useBattleSystem = () => {
             u.type = type;
             u.userName = name;
             u.unitClass = unitClass;
+            u.rarity = rarity;
+            
+            // --- CLASS-SPECIFIC SCALING ---
+            // Base starting point
             u.hp = stats.hp * c.hp;
-            u.maxHp = stats.maxHp * c.hp;
             u.attack = stats.attack * c.atk;
+            const baseAS = c.attack_speed_mult || 1.0;
+            let asMult = 1.0;
+
+            if (unitClass === 'marksman') {
+                u.hp *= (1 + rarityBonus.hp * 0.6);      // Squishy
+                u.attack *= (1 + rarityBonus.atk * 1.8); // High DMG
+                asMult = (1 + rarityBonus.as * 2.0);      // Ultra Fast
+                u.critChance = 0.05 + rarityBonus.crit * 0.8;
+            } else if (unitClass === 'assassin') {
+                u.hp *= (1 + rarityBonus.hp * 1.2);      // Survivalist
+                u.attack *= (1 + rarityBonus.atk * 1.0);
+                asMult = (1 + rarityBonus.as * 0.8);
+                u.critChance = 0.10 + rarityBonus.crit * 1.5; // Crit King
+                u.lifesteal = rarityBonus.ls * 1.2;
+            } else if (unitClass === 'tank') {
+                u.hp *= (1 + rarityBonus.hp * 2.5);      // Wall
+                u.attack *= (1 + rarityBonus.atk * 0.4); // Low DMG
+                u.physicalDefense = 20 + rarityBonus.def * 2.0;
+                u.magicDefense = 10 + rarityBonus.def * 1.5;
+            } else if (unitClass === 'fighter') {
+                u.hp *= (1 + rarityBonus.hp * 1.5);
+                u.attack *= (1 + rarityBonus.atk * 1.2);
+                u.lifesteal = rarityBonus.ls * 0.8;
+            } else if (unitClass === 'mage') {
+                u.hp *= (1 + rarityBonus.hp * 0.8);
+                u.attack *= (1 + rarityBonus.atk * 2.2); // Magic Power
+                asMult = (1 + rarityBonus.as * 1.2);
+                u.spellVamp = rarityBonus.ls || 0;
+            }
+
+            u.maxHp = u.hp;
             u.range = c.range;
-            u.speed =
-                stats.speed * c.move_speed_mult * (0.9 + Math.random() * 0.2);
+            u.speed = stats.speed * c.move_speed_mult * (1 + rarityBonus.as * 0.2) * (0.9 + Math.random() * 0.2);
             u.isDying = false;
             u.isBoss = isBoss;
             u.hpRegen = c.hp_regen;
-            u.attackCooldown =
-                settingsRef.current.globalAttackCooldown /
-                (c.attack_speed_mult || 1.0);
+            u.attackCooldown = settingsRef.current.globalAttackCooldown / (baseAS * asMult);
 
             const dist = towerConfigRef.current.baseDistance ?? 24;
             const spawnZ = type === "player" ? dist - 2 : -dist + 2;
@@ -497,6 +544,7 @@ export const useBattleSystem = () => {
             uData.range = u.range;
             uData.speed = u.speed;
             uData.profileImage = profileImage;
+            uData.rarity = rarity;
             // ECS fields used by ECSArmyRenderer for steering/visual
             uData.laneOffset = laneOffset;
             uData.jitterOffset = Math.random() * Math.PI * 2;
@@ -781,25 +829,37 @@ export const useBattleSystem = () => {
                             simNow - (uData.lastAttackTime || 0) >
                             u.attackCooldown
                         ) {
+                            // --- ADVANCED DAMAGE CALCULATION ---
                             let dmg = u.attack;
+                            const isCrit = Math.random() < (u.critChance || 0) || uData.pendingCrit;
+                            if (isCrit) {
+                                dmg *= 2.5; 
+                                uData.pendingCrit = false;
+                            }
+
+                            // Defense calculation
+                            const targetDefense = u.unitClass === 'mage' ? (currentTarget.magicDefense || 0) : (currentTarget.physicalDefense || 0);
+                            const armorPierce = u.unitClass === 'marksman' ? 0.4 : 0; // MM ignores 40% defense
+                            const effectiveDefense = targetDefense * (1 - armorPierce);
+                            dmg = Math.max(dmg * 0.1, dmg - effectiveDefense); // Never less than 10% base dmg
 
                             // Weather damage modifiers
-                            const classDmgMult =
-                                weatherMults[u.unitClass]?.atk || 1.0;
-                            const globalDmgMult =
-                                weatherMults.globalDamageMultiplier || 1.0;
+                            const classDmgMult = weatherMults[u.unitClass]?.atk || 1.0;
+                            const globalDmgMult = weatherMults.globalDamageMultiplier || 1.0;
                             dmg *= classDmgMult * globalDmgMult;
 
-                            if (uData.pendingCrit) {
-                                dmg *= 2.5;
-                                uData.pendingCrit = false;
+                            // Apply Lifesteal / Spell Vamp
+                            const healPerc = u.unitClass === 'mage' ? (u.spellVamp || 0) : (u.lifesteal || 0);
+                            if (healPerc > 0 && u.hp < u.maxHp) {
+                                const healAmount = dmg * healPerc;
+                                u.hp = Math.min(u.maxHp, u.hp + healAmount);
+                                uData.hp = u.hp;
+                                _vh[i] = u.hp;
                             }
 
                             if (u.unitClass === "mage") {
                                 // --- MAGE AOE LOGIC ---
                                 let hits = 0;
-
-                                // Main target logic inside AOE
                                 _vh[tIdx] -= dmg;
                                 tData.hp = _vh[tIdx];
                                 currentTarget.hp = _vh[tIdx];
@@ -817,7 +877,7 @@ export const useBattleSystem = () => {
                                     currentTarget.id,
                                     dmg,
                                     tData.position,
-                                    u.type === "player" ? "#0066FF" : "#FF0033",
+                                    isCrit ? "#FFDD00" : (u.type === "player" ? "#0066FF" : "#FF0033"),
                                 );
                                 hits++;
 
@@ -858,6 +918,54 @@ export const useBattleSystem = () => {
                                         }
                                     }
                                 }
+                            } else if (u.unitClass === "fighter" && (u.rarity === 'epic' || u.rarity === 'legendary')) {
+                                // --- FIGHTER CLEAVE LOGIC ---
+                                const cleavePerc = u.rarity === 'legendary' ? 0.5 : 0.3;
+                                _vh[tIdx] -= dmg;
+                                tData.hp = _vh[tIdx];
+                                currentTarget.hp = _vh[tIdx];
+                                if (_vh[tIdx] <= 0) {
+                                    _vActive[tIdx] = 0;
+                                    currentTarget.isActive = false;
+                                    tData.isActive = false;
+                                    tData.position[1] = -100;
+                                    _py[tIdx] = -100;
+                                    addKillEvent(u.userName, currentTarget.userName, "unit", u.profileImage);
+                                    updateStats(u.userName, u.type, 0, true);
+                                }
+                                updateStats(u.userName, u.type, dmg);
+                                accumulateDamage(currentTarget.id, dmg, tData.position, isCrit ? "#FFDD00" : (u.type === "player" ? "#0066FF" : "#FF0033"));
+
+                                // Secondary Cleave
+                                const cleaveNearby = battleGrid.queryRadius(tData.position[0], tData.position[2], 2.0);
+                                let cleaveCount = 0;
+                                for (let cj = 0; cj < cleaveNearby.length && cleaveCount < 4; cj++) {
+                                    const cp = cleaveNearby[cj];
+                                    if (!cp.isActive || cp.type === u.type || cp.id === currentTarget!.id) continue;
+                                    const cIdx = parseInt(cp.id.split('-')[1]);
+                                    if (cIdx >= 0) {
+                                        const cDmg = dmg * cleavePerc;
+                                        _vh[cIdx] -= cDmg;
+                                        const cpData = unitDataPoolRef.current[cIdx];
+                                        const cpUnit = unitIndexRef.current.get(cp.id);
+                                        if (cpData && cpUnit) {
+                                            cpData.hp = _vh[cIdx];
+                                            cpUnit.hp = _vh[cIdx];
+                                            if (_vh[cIdx] <= 0) {
+                                                _vActive[cIdx] = 0;
+                                                cpUnit.isActive = false;
+                                                cpData.isActive = false;
+                                                cpData.position[1] = -100;
+                                                _py[cIdx] = -100;
+                                                addKillEvent(u.userName, cp.userName, "unit", u.profileImage);
+                                                updateStats(u.userName, u.type, 0, true);
+                                            }
+                                            updateStats(u.userName, u.type, cDmg);
+                                            accumulateDamage(cp.id, cDmg, cpData.position, u.type === "player" ? "#0066FF" : "#FF0033");
+                                            cleaveCount++;
+                                        }
+                                    }
+                                }
                             } else {
                                 // Standard Single Target
                                 _vh[tIdx] -= dmg;
@@ -877,7 +985,7 @@ export const useBattleSystem = () => {
                                     currentTarget.id,
                                     dmg,
                                     tData.position,
-                                    u.type === "player" ? "#0066FF" : "#FF0033",
+                                    isCrit ? "#FFDD00" : (u.type === "player" ? "#0066FF" : "#FF0033"),
                                 );
                             }
                             uData.lastAttackTime = simNow;

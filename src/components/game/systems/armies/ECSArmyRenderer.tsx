@@ -349,7 +349,27 @@ const ECSArmyRendererInner = ({
         item.group.visible = true;
 
         const baseScale = getBaseScale(classKey, uData.level || 1, uData.isBoss);
-        item.group.scale.setScalar(baseScale * settings.unitScale);
+        const rarity = uData.rarity || 'common';
+        // Rarity Scaling
+        const rScale = uData.isBoss ? 1.0 : (rarity === 'legendary' ? 1.8 : (rarity === 'epic' ? 1.4 : (rarity === 'elite' ? 1.2 : 1.0)));
+        item.group.scale.setScalar(baseScale * settings.unitScale * rScale);
+
+        // Rarity Glow & Colors
+        const rarityColors: Record<string, string> = {
+          common:    '#333333', // White/Grey shield for ALL
+          elite:     '#2244ff', // Blue
+          epic:      '#aa22ff', // Purple
+          legendary: '#ffaa00'  // Gold
+        };
+        const rCol = rarityColors[rarity];
+        
+        item.colorable.forEach(mesh => {
+          const mat = mesh.material as THREE.MeshStandardMaterial;
+          if (mat.emissive) {
+            mat.emissive.set(rCol);
+            mat.emissiveIntensity = rarity === 'legendary' ? 5.0 : (rarity === 'common' ? 0.6 : 2.5);
+          }
+        });
 
         // ── Animation ──────────────────────────────────────────────────────
         let targetAnim = 'Idle';
@@ -416,9 +436,12 @@ const ECSArmyRendererInner = ({
           const showDetail = uData.isBoss || (uData.dSq || 0) < HUD_DETAIL_DIST_SQ;
 
           if (showDetail) {
-            const by  = uData.isBoss ? 7.0 : 3.2;
-            const bs  = uData.isBoss ? 2.5 : 1.0;
-            const ss  = uData.isBoss ? 4.5 : 1.6;
+            // Calculate height and scale based on TOTAL visual scale
+            const totalVisualScale = baseScale * settings.unitScale * rScale;
+            
+            const by  = (uData.isBoss ? 2.8 : 3.4) * totalVisualScale;
+            const bs  = (uData.isBoss ? 0.7 : 0.8) * totalVisualScale;
+            const ss  = 1.1 * totalVisualScale;
 
             // Shadow
             _hudTemp.position.set(cp.x, -0.45, cp.z);
@@ -426,6 +449,11 @@ const ECSArmyRendererInner = ({
             _hudTemp.scale.set(ss, ss, 1);
             _hudTemp.updateMatrix();
             shadowRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
+            
+            // Aura Shadow Color
+            _healthColor.set(rCol); 
+            shadowRef.current.setColorAt(hIdx, _healthColor);
+            shadowRef.current.instanceColor!.needsUpdate = true;
 
             // Health Bar
             _hudTemp.position.set(cp.x, by, cp.z);
@@ -452,7 +480,7 @@ const ECSArmyRendererInner = ({
               const nameMesh = nameTextRefs.current[nameSlot];
               if (nameMesh) {
                 const hover = Math.sin(state.clock.elapsedTime * 3 + id.length) * 0.1;
-                nameMesh.position.set(cp.x, (uData.isBoss ? 9.0 : 4.1) + hover, cp.z);
+                nameMesh.position.set(cp.x, (uData.isBoss ? 3.2 : 4.1) * totalVisualScale + hover, cp.z);
                 nameMesh.quaternion.copy(camQ);
               }
             }

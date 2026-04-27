@@ -268,10 +268,21 @@ export const applyPainterlyStyle = (material: THREE.Material) => {
             '#include <opaque_fragment>',
             `
             #include <opaque_fragment>
-            // Subtle rim light / saturator for readability
-            // In MeshStandardMaterial, vNormal is already available
+            // Subtle rim light / saturator for readability + Shield Aura
             float rim = 1.0 - max(0.0, dot(normalize(vNormal), vec3(0.0, 0.0, 1.0)));
-            gl_FragColor.rgb += pow(rim, 4.0) * gl_FragColor.rgb * 0.4;
+            
+            // Pulse effect for shield
+            float pulse = (0.8 + 0.2 * sin(time * 4.0));
+            
+            // Apply color from emissive (which we use for rarity)
+            vec3 shieldCol = emissive; 
+            float shieldLower = pow(rim, 4.0);
+            float shieldUpper = pow(rim, 1.5) * 0.6;
+            
+            gl_FragColor.rgb += shieldCol * (shieldLower + shieldUpper) * pulse * 3.5;
+            
+            // Standard readability rim
+            gl_FragColor.rgb += pow(rim, 4.0) * gl_FragColor.rgb * 0.2;
             `
         );
         

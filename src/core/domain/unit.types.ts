@@ -79,6 +79,7 @@ export interface TowerConfig {
 }
 
 
+export type UnitRarity = 'common' | 'elite' | 'epic' | 'legendary';
 
 export interface ActiveUnit extends UnitStats {
     id: string;
@@ -102,6 +103,7 @@ export interface ActiveUnit extends UnitStats {
     isCriticalReady?: boolean;
     untargetableUntil?: number;
     profileImage?: string;
+    rarity?: UnitRarity;
 }
 
 export interface MapObstacle {
@@ -185,6 +187,7 @@ export interface UnitRuntimeData {
     pendingCrit?: boolean;
     lastEffectTime?: number;
     profileImage?: string;
+    rarity?: UnitRarity;
 }
 
 

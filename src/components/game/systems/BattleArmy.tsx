@@ -64,6 +64,46 @@ const getLevelBadge = (level: number): string => {
 
 
 
+const AuraShadowShader = {
+  vertexShader: `
+    #ifndef USE_INSTANCING_COLOR
+      attribute vec3 instanceColor;
+    #endif
+    #ifndef USE_INSTANCING
+      attribute mat4 instanceMatrix;
+    #endif
+
+    varying vec2 vUv;
+    varying vec3 vColor;
+    void main() {
+      vUv = uv;
+      vColor = instanceColor;
+      gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: `
+    varying vec2 vUv;
+    varying vec3 vColor;
+    void main() {
+      float d = length(vUv - 0.5) * 2.0;
+      float alpha = smoothstep(1.0, 0.4, d) * 0.4;
+      
+      // Black core for the real shadow
+      vec3 shadowCol = vec3(0.0);
+      float shadowMask = smoothstep(0.7, 0.3, d);
+      
+      // Aura glow based on instanceColor
+      vec3 auraCol = vColor;
+      float auraAlpha = smoothstep(1.0, 0.6, d) * 1.5;
+      
+      vec3 finalCol = mix(auraCol, shadowCol, shadowMask);
+      float finalAlpha = max(alpha, auraAlpha * length(vColor));
+      
+      gl_FragColor = vec4(finalCol, finalAlpha * 0.5);
+    }
+  `
+};
+
 const MLHealthBarShader = {
   vertexShader: `
     attribute vec2 aHealthInfo; // x = hp, y = maxHp
@@ -177,7 +217,12 @@ const BattleArmyComponent = ({
     return geo;
   }, []);
   const shadowGeo = useMemo(() => new THREE.CircleGeometry(0.6, 12), []);
-  const shadowMat = useMemo(() => new THREE.MeshBasicMaterial({ color: '#000000', transparent: true, opacity: 0.3, depthWrite: false }), []);
+  const shadowMat = useMemo(() => new THREE.ShaderMaterial({
+      ...AuraShadowShader,
+      transparent: true,
+      depthWrite: false,
+      vertexColors: true,
+  }), []);
   const healthBarMat = useMemo(() => new THREE.ShaderMaterial({ 
       ...MLHealthBarShader, 
       transparent: true, 
