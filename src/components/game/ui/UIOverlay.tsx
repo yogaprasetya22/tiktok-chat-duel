@@ -173,6 +173,11 @@ const TowerHPBars = React.memo(({ towerConfig }: { towerConfig: TowerConfig }) =
                 <span className="text-[7px] md:text-[8px] uppercase tracking-widest text-white/50 font-black truncate max-w-[70px] md:max-w-none">
                   {towerConfig?.player.name}
                 </span>
+                {towerConfig?.player.score !== undefined && towerConfig.player.score > 0 && (
+                  <span className="px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 text-[6px] font-black border border-indigo-500/30 ml-1">
+                    ★ {towerConfig.player.score}
+                  </span>
+                )}
               </div>
               <span className="text-base md:text-xl font-black italic text-white tabular-nums leading-none">
                 {playerBaseHp.toLocaleString()}
@@ -201,6 +206,11 @@ const TowerHPBars = React.memo(({ towerConfig }: { towerConfig: TowerConfig }) =
             </div>
             <div className="text-right">
               <div className="flex items-center justify-end gap-1 mb-0.5">
+                {towerConfig?.enemy.score !== undefined && towerConfig.enemy.score > 0 && (
+                  <span className="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 text-[6px] font-black border border-rose-500/30 mr-1">
+                    ★ {towerConfig.enemy.score}
+                  </span>
+                )}
                 <span className="text-[7px] md:text-[8px] uppercase tracking-widest text-white/50 font-black truncate max-w-[70px] md:max-w-none">
                   {towerConfig?.enemy.name}
                 </span>

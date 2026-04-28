@@ -6,7 +6,6 @@ import { useBattleSystem } from "@/src/hooks/battle/useBattleSystem";
 import { useStore } from "@/src/state/useStore";
 import { GameCanvas } from "@/src/components/game/GameCanvas";
 import { UIOverlay } from "@/src/components/game/ui/UIOverlay";
-import { Zap, Radio } from "lucide-react";
 import { useControls, button, folder, Leva } from "leva";
 
 export default function GamePage() {
@@ -21,7 +20,7 @@ export default function GamePage() {
 
   useEffect(() => { setMounted(true); }, []);
 
-  const { messages, connected, error, loading, disconnect } = useTikTokLive(activeUsername);
+  const { messages, connected, error, loading } = useTikTokLive(activeUsername);
 
   const {
     towerConfig, setTowerConfig,
@@ -36,7 +35,6 @@ export default function GamePage() {
 
   const gameState = useStore(s => s.gameState);
   const gameMode = useStore(s => s.gameMode);
-  const setGameMode = useStore(s => s.setGameMode);
 
   // --- Leva Deployment Controls (Training Mode) ---
   useControls("deployment", {
@@ -206,28 +204,6 @@ export default function GamePage() {
         </div>
       )}
 
-      {/* ===== Training Mode Toggle (Header-level) ===== */}
-      {connected && (
-        <div className="fixed top-3 right-16 z-[60] flex items-center gap-2 pointer-events-auto">
-          <button
-            onClick={() => { setGameMode(gameMode === 'BATTLE' ? 'TRAINING' : 'BATTLE'); resetBattle(); }}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all hud-glass ${
-              gameMode === 'TRAINING'
-                ? 'border-amber-500/50 text-amber-400'
-                : 'border-indigo-500/30 text-indigo-400'
-            }`}
-          >
-            <Zap className={`w-3 h-3 ${gameMode === 'TRAINING' ? 'animate-pulse' : ''}`} />
-            {gameMode === 'TRAINING' ? 'Exit Training' : 'Training'}
-          </button>
-          <button
-            onClick={disconnect}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest text-rose-400 hud-glass border-rose-500/30 transition-all"
-          >
-            <Radio className="w-3 h-3" /> DC
-          </button>
-        </div>
-      )}
     </div>
   );
 }

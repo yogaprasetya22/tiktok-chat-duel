@@ -11,8 +11,18 @@ const nextConfig: NextConfig = {
     },
     // Ensure that heavy three.js imports are optimized
     transpilePackages: ["three", "@react-three/fiber", "@react-three/drei", "r3f-perf"],
+    images: {
+        remotePatterns: [
+            { protocol: 'https', hostname: '**.tiktokcdn.com' },
+            { protocol: 'http', hostname: '**.tiktokcdn.com' },
+            { protocol: 'https', hostname: '**.byteimg.com' },
+            { protocol: 'https', hostname: '**.tiktokcdn-us.com' },
+            { protocol: 'http', hostname: '**.tiktokcdn-us.com' },
+            { protocol: 'https', hostname: '**.ftcdn.net' },
+        ],
+    },
     experimental: {
-        optimizePackageImports: ["three", "lucide-react"],
+        optimizePackageImports: ["three", "lucide-react", "@react-three/drei"],
     },
 };
 

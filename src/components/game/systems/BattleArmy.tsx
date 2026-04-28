@@ -42,7 +42,9 @@ const NAME_POOL_SIZE = 40;
 const TEST_IMAGE_URL = 'https://t3.ftcdn.net/jpg/13/11/22/86/360_F_1311228699_YoiLc5aJ3RWz3uRfdEtlV0UYSQjqf7RW.jpg';
 
 const textureLoader = new THREE.TextureLoader();
-const textureCache = new Map<string, THREE.Texture>();
+textureLoader.setCrossOrigin('anonymous');
+const textureCache = new Map<string, { tex: THREE.Texture, lastUsed: number }>();
+const textureLoading = new Set<string>();
 
 const tempObject = new THREE.Object3D();
 
@@ -177,9 +179,6 @@ const MLHealthBarShader = {
 };
 
 const ProfileImageShader = {
-  uniforms: {
-    tDiffuse: { value: null },
-  },
   vertexShader: `
     varying vec2 vUv;
     void main() {
@@ -269,7 +268,7 @@ const BattleArmyComponent = ({
       defines: { USE_INSTANCING: '', USE_INSTANCING_COLOR: '' }
   }), []);
 
-  const nameGroupRef = useRef<THREE.Group>(null!);
+
   const namePoolMap = useRef<Map<string, number>>(new Map());
   const nameAvailableSlots = useRef<number[]>(Array.from({ length: NAME_POOL_SIZE }, (_, i) => i));
   const nameGroupRefs = useRef<(THREE.Group | null)[]>(Array(NAME_POOL_SIZE).fill(null));
@@ -300,6 +299,10 @@ const BattleArmyComponent = ({
     const time = state.clock.elapsedTime;
     const camPos = state.camera.position;
     frameCountRef.current++;
+    
+    // PERFORMANCE: Use consistent constants at the top
+    const HUD_DETAIL_DIST_SQ = 70 * 70; 
+    const HUD_MAX_RANGE_SQ = HUD_DETAIL_DIST_SQ * 1.5;
 
     // PERFORMANCE: Throttle sorting and unit filtering to every 5-10 frames
     const shouldSort = frameCountRef.current % 10 === 0 || cachedActiveUnits.current.length === 0;
@@ -320,26 +323,20 @@ const BattleArmyComponent = ({
         if (buckets[u.unitClass]) buckets[u.unitClass].push(u);
       }
 
-      activeUnits.sort((a, b) => {
+      // Optimized sorting: only sort units that are roughly within range to save CPU
+      const nearUnits = activeUnits.filter(u => (u.dSq || 0) < HUD_MAX_RANGE_SQ);
+      
+      nearUnits.sort((a, b) => {
         if (a.isBoss !== b.isBoss) return a.isBoss ? -1 : 1;
         return (a.dSq || 0) - (b.dSq || 0);
       });
       
-      for (const key in buckets) {
-        buckets[key].sort((a, b) => {
-           if (a.isBoss !== b.isBoss) return a.isBoss ? -1 : 1;
-           return (a.dSq || 0) - (b.dSq || 0);
-        });
-      }
-
-      cachedActiveUnits.current = activeUnits;
+      cachedActiveUnits.current = nearUnits; // We only need the near ones for the HUD
       (state as any).unitBuckets = buckets;
     }
 
     const activeUnits = cachedActiveUnits.current;
     (state as any).sortedActiveUnits = activeUnits;
-    // EXTENDED Visibility: Names visible up to 90m (was 45m)
-    const HUD_DETAIL_DIST_SQ = 90 * 90; 
     const isPotato = !!settingsRef.current.potatoMode;
     const gameMode = useStore.getState().gameMode;
     const frustum = (state as any).battleFrustum as THREE.Frustum;
@@ -381,8 +378,10 @@ const BattleArmyComponent = ({
 
       // Assign slots to new near units (starting from closest)
       if (!isPotato) {
-        // We only check the closest 120 units to find candidates for the 60 slots
-        const assignCount = Math.min(activeUnits.length, 120); 
+        let updatesThisFrame = 0;
+        const MAX_UPDATES_PER_FRAME = 2; // Strict budget to prevent frame drops from mesh.sync()
+
+        const assignCount = Math.min(activeUnits.length, 60); 
         for (let i = 0; i < assignCount; i++) {
           const u = activeUnits[i];
           const id = u.id;
@@ -412,10 +411,20 @@ const BattleArmyComponent = ({
               needsSync = true;
             }
 
-            const col = getRarityColor(u.rarity);
-            if (nameSlotColor.current[slot] !== col) { 
-              mesh.color = col; 
-              nameSlotColor.current[slot] = col; 
+            const rawCol = u.type === 'player' ? towerConfig.player.color : towerConfig.enemy.color;
+            const teamCol = new THREE.Color(rawCol).offsetHSL(0, 0, 0.2); // Boost brightness
+            
+            if (nameSlotColor.current[slot] !== teamCol.getHexString()) { 
+              mesh.color = teamCol; 
+              nameSlotColor.current[slot] = teamCol.getHexString(); 
+              
+              // Update border color too with high-intensity versions
+              const borderMesh = nameBorderRefs.current[slot];
+              if (borderMesh) {
+                (borderMesh.material as THREE.MeshBasicMaterial).color.copy(teamCol);
+                (borderMesh.material as THREE.MeshBasicMaterial).opacity = 1.0;
+              }
+              
               needsSync = true;
             }
 
@@ -428,25 +437,54 @@ const BattleArmyComponent = ({
             mesh.outlineWidth = 0.08;
             mesh.outlineColor = "#000000";
             
-            if (needsSync) mesh.sync();
+            if (needsSync && updatesThisFrame < MAX_UPDATES_PER_FRAME) {
+              mesh.sync();
+              updatesThisFrame++;
+            }
             mesh.visible = true;
 
             // Handle Profile Image
             const imgMesh = nameImageRefs.current[slot];
             if (imgMesh) {
-              const imgUrl = (gameMode === "TRAINING" || !u.profileImage) ? TEST_IMAGE_URL : u.profileImage;
+              const imgUrl = (gameMode === "TRAINING" || !u.profileImage) 
+                ? TEST_IMAGE_URL 
+                : `/api/proxy-image?url=${encodeURIComponent(u.profileImage)}`;
               if (nameSlotImage.current[slot] !== imgUrl) {
                 nameSlotImage.current[slot] = imgUrl;
                 const mat = nameImageMaterials.current[slot];
+                const now = Date.now();
                 if (textureCache.has(imgUrl)) {
-                  if (mat) mat.uniforms.tDiffuse.value = textureCache.get(imgUrl)!;
-                } else {
+                  const entry = textureCache.get(imgUrl)!;
+                  entry.lastUsed = now;
+                  if (mat) mat.uniforms.tDiffuse.value = entry.tex;
+                } else if (!textureLoading.has(imgUrl)) {
+                  textureLoading.add(imgUrl);
                   textureLoader.load(imgUrl, (tex) => {
                     tex.colorSpace = THREE.SRGBColorSpace;
-                    textureCache.set(imgUrl, tex);
+                    textureCache.set(imgUrl, { tex, lastUsed: Date.now() });
+                    textureLoading.delete(imgUrl);
                     if (namePoolMap.current.get(id) === slot && mat) {
                       mat.uniforms.tDiffuse.value = tex;
                     }
+                    
+                    // Cache Cleanup: prevent memory leak if thousands of users join
+                    if (textureCache.size > 200) {
+                      let oldestKey = "";
+                      let oldestTime = Infinity;
+                      for (const [key, val] of textureCache.entries()) {
+                        if (val.lastUsed < oldestTime) {
+                          oldestTime = val.lastUsed;
+                          oldestKey = key;
+                        }
+                      }
+                      if (oldestKey) {
+                        const old = textureCache.get(oldestKey);
+                        old?.tex.dispose();
+                        textureCache.delete(oldestKey);
+                      }
+                    }
+                  }, undefined, () => {
+                    textureLoading.delete(imgUrl);
                   });
                 }
               }
@@ -471,13 +509,15 @@ const BattleArmyComponent = ({
 
             if (group) {
               group.visible = true;
-              // Set initial position to prevent 1-frame jitter
-              group.position.set(u.position[0], 2, u.position[2]);
+              group.position.set(u.position[0], 2.2, u.position[2]);
+              group.quaternion.copy(state.camera.quaternion);
             }
           }
         }
       }
     }
+
+
 
     // 3. Signal Updates
     if (shadowRef.current) {
@@ -544,7 +584,7 @@ const BattleArmyComponent = ({
       <instancedMesh ref={shadowRef} args={[null as any, null as any, 1500]} geometry={shadowGeo} material={shadowMat} frustumCulled={false} />
       <instancedMesh ref={healthBarRef} args={[null as any, null as any, 1500]} geometry={healthGeo} material={healthBarMat} renderOrder={7} frustumCulled={false} />
 
-      <group ref={nameGroupRef}>
+      <group>
         {useMemo(() => Array.from({ length: NAME_POOL_SIZE }, (_, i) => (
           <group
             key={"name-slot-" + i}
@@ -554,7 +594,7 @@ const BattleArmyComponent = ({
             <Text
               ref={(el) => { nameTextRefs.current[i] = el; }}
               visible={false}
-              fontSize={0.35}
+              fontSize={0.4}
               color="#ffffff"
               outlineWidth={0.06}
               outlineColor="#000000"
@@ -568,13 +608,17 @@ const BattleArmyComponent = ({
             <mesh
               ref={(el) => { nameImageRefs.current[i] = el; }}
               visible={false}
-              position={[0, 1.15, 0]}
+              position={[0, 1.25, 0]}
               renderOrder={102}
             >
-              <planeGeometry args={[0.6, 0.6]} />
+              <planeGeometry args={[0.7, 0.7]} />
               <shaderMaterial
                 ref={(el) => { nameImageMaterials.current[i] = el; }}
-                args={[ProfileImageShader]}
+                vertexShader={ProfileImageShader.vertexShader}
+                fragmentShader={ProfileImageShader.fragmentShader}
+                uniforms={{
+                  tDiffuse: { value: null }
+                }}
                 transparent={true}
                 depthWrite={false}
               />
@@ -582,11 +626,11 @@ const BattleArmyComponent = ({
             <mesh
               ref={(el) => { nameBorderRefs.current[i] = el; }}
               visible={false}
-              position={[0, 1.15, -0.01]}
+              position={[0, 1.25, -0.01]}
               renderOrder={101}
             >
-              <circleGeometry args={[0.32, 16]} />
-              <meshBasicMaterial color="#ffffff" />
+              <circleGeometry args={[0.38, 32]} />
+              <meshBasicMaterial color="#ffffff" transparent opacity={0.8} />
             </mesh>
           </group>
         )), [])}

@@ -329,8 +329,8 @@ export const useBattleSystem = () => {
             commentType: "contains",
             giftKeyword: "coffee",
         },
-        baseHp: 1000,
-        baseDistance: 34,
+        baseHp: 100000,
+        baseDistance: 32,
         maxUnits: 20,
         unitConfig: {
             hpMultiplier: 1.0,
@@ -1105,11 +1105,109 @@ export const useBattleSystem = () => {
                             u.type === "player" ? "#0066FF" : "#FF0033",
                         );
 
-                        if (simNow - (uData.lastEffectTime || 0) > 400) {
-                            uData.lastEffectTime = simNow;
-                        }
-
                         uData.lastAttackTime = simNow;
+
+                        // COMBAT EFFECTS FOR TOWER ATTACK
+                        const teamColor = u.type === 'player'
+                            ? towerConfigRef.current.player.color
+                            : towerConfigRef.current.enemy.color;
+                        const fwdX = Math.sin(uData.rotation[1] || 0);
+                        const fwdZ = Math.cos(uData.rotation[1] || 0);
+                        const launchY = uData.position[1] + 1.8;
+                        const tPos = [0, 1.0, targetBaseZ]; // Tower target point
+
+                        switch (u.unitClass) {
+                            case 'fighter': {
+                                const spells = fighterSpellsRef.current;
+                                for (let si = 0; si < spells.length; si++) {
+                                    if (!spells[si].active) {
+                                        spells[si].x = uData.position[0] + fwdX * 0.8;
+                                        spells[si].y = 1.2;
+                                        spells[si].z = uData.position[2] + fwdZ * 0.8;
+                                        spells[si].rotation = uData.rotation[1] || 0;
+                                        spells[si].startTime = simNow;
+                                        spells[si].color = teamColor;
+                                        spells[si].active = true;
+                                        spells[si].progress = 0;
+                                        break;
+                                    }
+                                }
+                                break;
+                            }
+                            case 'tank': {
+                                const spells = tankSpellsRef.current;
+                                for (let si = 0; si < spells.length; si++) {
+                                    if (!spells[si].active) {
+                                        spells[si].x = tPos[0];
+                                        spells[si].y = 0.2;
+                                        spells[si].z = tPos[2];
+                                        spells[si].startTime = simNow;
+                                        spells[si].color = teamColor;
+                                        spells[si].active = true;
+                                        spells[si].progress = 0;
+                                        break;
+                                    }
+                                }
+                                break;
+                            }
+                            case 'mage': {
+                                const spells = spellsRef.current;
+                                for (let si = 0; si < spells.length; si++) {
+                                    if (!spells[si].active) {
+                                        spells[si].fromX = uData.position[0];
+                                        spells[si].fromY = launchY;
+                                        spells[si].fromZ = uData.position[2];
+                                        spells[si].toX = tPos[0];
+                                        spells[si].toY = tPos[1] + 2.0;
+                                        spells[si].toZ = tPos[2];
+                                        spells[si].targetId = u.type === 'player' ? 'enemy-base' : 'player-base';
+                                        spells[si].startTime = simNow;
+                                        spells[si].color = teamColor;
+                                        spells[si].active = true;
+                                        spells[si].progress = 0;
+                                        break;
+                                    }
+                                }
+                                break;
+                            }
+                            case 'marksman': {
+                                const spells = mmSpellsRef.current;
+                                for (let si = 0; si < spells.length; si++) {
+                                    if (!spells[si].active) {
+                                        spells[si].fromX = uData.position[0] + fwdX * 2.5;
+                                        spells[si].fromY = launchY;
+                                        spells[si].fromZ = uData.position[2] + fwdZ * 2.5;
+                                        spells[si].toX = tPos[0];
+                                        spells[si].toY = tPos[1] + 2.0;
+                                        spells[si].toZ = tPos[2];
+                                        spells[si].targetId = u.type === 'player' ? 'enemy-base' : 'player-base';
+                                        spells[si].startTime = simNow;
+                                        spells[si].color = teamColor;
+                                        spells[si].active = true;
+                                        spells[si].progress = 0;
+                                        spells[si].isBullet = true;
+                                        break;
+                                    }
+                                }
+                                break;
+                            }
+                            case 'assassin': {
+                                const spells = assassinSpellsRef.current;
+                                for (let si = 0; si < spells.length; si++) {
+                                    if (!spells[si].active) {
+                                        spells[si].x = tPos[0];
+                                        spells[si].y = 1.3;
+                                        spells[si].z = tPos[2];
+                                        spells[si].startTime = simNow;
+                                        spells[si].color = '#FFFF00';
+                                        spells[si].active = true;
+                                        spells[si].progress = 0;
+                                        break;
+                                    }
+                                }
+                                break;
+                            }
+                        }
                     }
                 } else {
                     uData.status = "marching";
@@ -1238,6 +1336,10 @@ export const useBattleSystem = () => {
                 gameStateRef.current === "PLAYING"
             ) {
                 gameStateRef.current = "LOST";
+                setTowerConfig(prev => ({
+                    ...prev,
+                    enemy: { ...prev.enemy, score: (prev.enemy.score || 0) + 1 }
+                }));
                 useStore.getState().setGameState("LOST");
             }
             if (
@@ -1245,6 +1347,10 @@ export const useBattleSystem = () => {
                 gameStateRef.current === "PLAYING"
             ) {
                 gameStateRef.current = "WON";
+                setTowerConfig(prev => ({
+                    ...prev,
+                    player: { ...prev.player, score: (prev.player.score || 0) + 1 }
+                }));
                 useStore.getState().setGameState("WON");
             }
 

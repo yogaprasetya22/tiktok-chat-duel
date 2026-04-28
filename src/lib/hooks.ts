@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 interface ChatMessage {
-  type: "chat" | "gift" | "like" | "follow" | "error" | "status";
+  type: "chat" | "gift" | "like" | "follow" | "error" | "status" | "heartbeat";
   username?: string;
   comment?: string;
   profileImage?: string;
@@ -58,7 +58,8 @@ export const useTikTokLive = (username: string) => {
           throw new Error(errorData.error || "Connection failed");
         }
 
-        // console.log("✅ Connected to TikTok Live");
+        // We successfully connected to the backend TikTok instance
+         setConnected(true);
         setError(null);
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : "Connection error";
@@ -85,6 +86,7 @@ export const useTikTokLive = (username: string) => {
             setMessages([]);
           }
         } else if (data.type === "chat") {
+          setConnected(true); setError(null);
           setMessages((prev) => [
             ...prev,
             {
@@ -97,6 +99,7 @@ export const useTikTokLive = (username: string) => {
             },
           ].slice(-100));
         } else if (data.type === "gift") {
+          setConnected(true); setError(null);
           setMessages((prev) => [
             ...prev,
             {
@@ -112,6 +115,7 @@ export const useTikTokLive = (username: string) => {
             },
           ].slice(-100));
         } else if (data.type === "like") {
+          setConnected(true); setError(null);
           setMessages((prev) => [
             ...prev,
             {
@@ -124,6 +128,7 @@ export const useTikTokLive = (username: string) => {
             },
           ].slice(-100));
         } else if (data.type === "follow") {
+          setConnected(true); setError(null);
           setMessages((prev) => [
             ...prev,
             {
@@ -135,9 +140,13 @@ export const useTikTokLive = (username: string) => {
               timestamp: data.timestamp || new Date().toISOString(),
             },
           ].slice(-100));
+        } else if (data.type === "heartbeat") {
+          // Heatbeat from SSE guarantees we are still hooked to the stream
+          setConnected(true);
         } else if (data.type === "error") {
+          // Warning only, don't sever display state if stream is still pushing
+          console.warn("TikTok Stream Warning:", data.message);
           setError(data.message || "Backend error");
-          setConnected(false);
         }
       } catch (err) {
         // console.error("❌ Event parsing error:", err);
@@ -145,10 +154,8 @@ export const useTikTokLive = (username: string) => {
     };
 
     eventSource.onerror = (_error) => {
-      // console.error("🚨 EventSource error:", error);
-      setError("Connection lost. Reconnecting...");
-      eventSource.close();
-      setConnected(false);
+      // Reconnect automatically, do NOT close the transport natively.
+      console.warn("SSE Connection issue. Reconnecting...");
     };
 
     return () => {

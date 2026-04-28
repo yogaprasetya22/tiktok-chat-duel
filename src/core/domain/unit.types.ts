@@ -61,6 +61,7 @@ export interface TeamConfig {
     commentKeyword: string;
     commentType: "contains" | "exact";
     giftKeyword: string;
+    score?: number;
 }
 
 export interface TowerConfig {

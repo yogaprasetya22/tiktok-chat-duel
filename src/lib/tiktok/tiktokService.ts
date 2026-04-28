@@ -97,14 +97,20 @@ class TikTokLiveService {
     }
 
     this.client = new WebcastPushConnection(cleanUsername, {
-      enableWebsocketUpgrade: true,
+      enableWebsocketUpgrade: false,
       processInitialData: false,
       enableExtendedGiftInfo: true,
       fetchRoomInfoOnConnect: true,
-      // Use the provided EulerStream API Key to bypass rate limits
-      apiKey: process.env.TIKTOK_API_KEY,
+      requestOptions: {
+        timeout: 10000,
+      },
+      clientParams: {
+        app_language: 'en-US',
+        device_platform: 'web',
+      },
       webClientHeaders: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Referer": "https://www.tiktok.com/",
       }
     });
 
@@ -141,7 +147,7 @@ class TikTokLiveService {
         type: "chat",
         username: user,
         comment: event.comment,
-        profileImage: event.user?.profilePictureUrl,
+        profileImage: (event as any).profilePictureUrl || event.user?.profilePictureUrl,
         timestamp: new Date().toISOString()
       });
     });
@@ -154,7 +160,7 @@ class TikTokLiveService {
         giftName: event.giftName,
         giftCount: event.repeatCount || 1,
         diamondCount: (event.diamondCount || 0) * (event.repeatCount || 1),
-        profileImage: event.user?.profilePictureUrl,
+        profileImage: (event as any).profilePictureUrl || event.user?.profilePictureUrl,
         timestamp: new Date().toISOString()
       });
     });
@@ -168,7 +174,7 @@ class TikTokLiveService {
         type: "like",
         username: user,
         likeCount: event.likeCount || 1,
-        profileImage: event.user?.profilePictureUrl,
+        profileImage: (event as any).profilePictureUrl || event.user?.profilePictureUrl,
         timestamp: new Date().toISOString()
       });
     });
@@ -177,7 +183,7 @@ class TikTokLiveService {
       this.broadcast({
         type: "follow",
         username: event.uniqueId,
-        profileImage: event.user?.profilePictureUrl,
+        profileImage: (event as any).profilePictureUrl || event.user?.profilePictureUrl,
         timestamp: new Date().toISOString()
       });
     });
