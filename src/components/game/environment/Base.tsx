@@ -221,13 +221,18 @@ export const Base = React.memo(({ maxHp, position, type, name, customColor }: Ba
   const hpBarRef = useRef<THREE.Mesh>(null!);
   const textRef = useRef<any>(null!);
   const gameState = useStore(s => s.gameState);
+  const hpRef = useRef(maxHp);
 
-  const currentHp = useStore(s => type === 'player' ? s.playerBaseHp : s.enemyBaseHp);
-  const hpRef = useRef(currentHp);
-  hpRef.current = currentHp;
+  useEffect(() => {
+    // Direct subscription to avoid React re-renders when HP changes
+    const unsub = useStore.subscribe((state: any) => {
+      hpRef.current = type === 'player' ? state.playerBaseHp : state.enemyBaseHp;
+    });
+    return unsub;
+  }, [type]);
 
   useFrame(() => {
-    if (gameState === 'SETUP') return;
+    if (useStore.getState().gameState === 'SETUP') return;
 
     const hp = hpRef.current;
     const ratio = Math.min(1, Math.max(0, hp / maxHp));

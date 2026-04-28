@@ -128,6 +128,46 @@ const _whiteColor = new THREE.Color('#ffffff');
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 
+// ─── Shared Material Cache (Numeric Key) ──────────────────────────────────
+const _materialCache = new Map<number, THREE.MeshStandardMaterial>();
+
+const getCachedMaterial = (
+  classKey: ClassKey, 
+  rarity: string, 
+  team: 'player' | 'enemy', 
+  towerConfig: TowerConfig,
+  gltfByClass: any
+): THREE.MeshStandardMaterial => {
+  const teamIdx = team === 'player' ? 0 : 1;
+  const teamColor = teamIdx === 0 ? towerConfig.player.color : towerConfig.enemy.color;
+  
+  const rarityIdx = rarity === 'common' ? 0 : (rarity === 'elite' ? 1 : (rarity === 'epic' ? 2 : 3));
+  const classIdx = classKey === 'fighter' ? 0 : (classKey === 'tank' ? 1 : (classKey === 'mage' ? 2 : (classKey === 'marksman' ? 3 : 4)));
+  
+  // BITMASK KEY: [Class: 4 bits][Rarity: 2 bits][Team: 1 bit]
+  const key = (classIdx << 3) | (rarityIdx << 1) | teamIdx;
+  
+  if (_materialCache.has(key)) return _materialCache.get(key)!;
+
+  const assets = gltfByClass[classKey];
+  const sourceMesh = assets[0].scene.getObjectByProperty('isMesh', true) as THREE.Mesh;
+  const mat = (sourceMesh.material as THREE.MeshStandardMaterial).clone();
+  
+  applyPainterlyStyle(mat);
+  mat.color.set(teamColor);
+
+  const rarityColors: Record<string, string> = {
+    common: '#333333', elite: '#2244ff', epic: '#aa22ff', legendary: '#ffaa00'
+  };
+  mat.emissive.set(rarityColors[rarity] || '#333333');
+  mat.emissiveIntensity = rarity === 'legendary' ? 5.0 : (rarity === 'common' ? 0.6 : 2.5);
+
+  _materialCache.set(key, mat);
+  return mat;
+};
+
+// ─── Main Component ──────────────────────────────────────────────────────────
+
 const ECSArmyRendererInner = ({
   unitRegistry, activeIndicesRef, towerConfig, settingsRef, simTimeRef,
   renderedIdsRef, shadowRef, healthBarRef,
@@ -157,35 +197,6 @@ const ECSArmyRendererInner = ({
 
   // Scene group — all lazy-cloned models are added imperatively here
   const groupRef = useRef<THREE.Group>(null!);
-
-  // ── Shared Material Cache (40 Master Materials) ──
-  const materialCache = useRef<Map<string, THREE.MeshStandardMaterial>>(new Map());
-
-  const getCachedMaterial = (classKey: ClassKey, rarity: string, team: 'player' | 'enemy'): THREE.MeshStandardMaterial => {
-    const teamColor = team === 'player' ? towerConfig.player.color : towerConfig.enemy.color;
-    const key = `${classKey}_${rarity}_${team}`;
-    
-    if (materialCache.current.has(key)) return materialCache.current.get(key)!;
-
-    // Create a NEW master material for this specific combo
-    const assets = gltfByClass[classKey];
-    const sourceMesh = assets[0].scene.getObjectByProperty('isMesh', true) as THREE.Mesh;
-    const mat = (sourceMesh.material as THREE.MeshStandardMaterial).clone();
-    
-    // Apply our special effects once
-    applyPainterlyStyle(mat);
-    mat.color.set(teamColor);
-
-    // Rarity Glow
-    const rarityColors: Record<string, string> = {
-      common: '#333333', elite: '#2244ff', epic: '#aa22ff', legendary: '#ffaa00'
-    };
-    mat.emissive.set(rarityColors[rarity] || '#333333');
-    mat.emissiveIntensity = rarity === 'legendary' ? 5.0 : (rarity === 'common' ? 0.6 : 2.5);
-
-    materialCache.current.set(key, mat);
-    return mat;
-  };
 
   // ── Lazy Pools (one per class) ──
   const pools = useRef<Record<ClassKey, ClassPool>>({
@@ -293,7 +304,10 @@ const ECSArmyRendererInner = ({
     healthBarRef.current?.setMatrixAt(hIdx, _hudTemp.matrix);
   };
 
-  // ── Main render loop ──────────────────────────────────────────────────────
+// ─── Constants ──────────────────────────────────────────────────────────────
+const CLASS_KEYS: ClassKey[] = ['fighter', 'tank', 'mage', 'marksman', 'assassin'];
+
+// ── Main render loop ──────────────────────────────────────────────────────
   useFrame((state, delta) => {
     const rawMap = unitRegistry.current;
     if (!rawMap) return;
@@ -340,13 +354,13 @@ const ECSArmyRendererInner = ({
     if (!buckets) return;
 
     // Use zero-allocation for-loops instead of forEach for hot logic
-    const classKeys: ClassKey[] = ['fighter', 'tank', 'mage', 'marksman', 'assassin'];
-    for (let ck = 0; ck < classKeys.length; ck++) {
-      const classKey = classKeys[ck];
+    for (let ck = 0; ck < CLASS_KEYS.length; ck++) {
+      const classKey = CLASS_KEYS[ck];
       const bucket = buckets[classKey];
       const visibleUnitsCount = Math.min(bucket.length, ARMY_POOL_SIZE);
       const pool = p[classKey];
       const hudBase = CLASS_HUD_BASE[classKey];
+      const healthAttr = healthBarRef.current?.geometry.getAttribute('aHealthInfo') as THREE.InstancedBufferAttribute | undefined;
 
       for (let vi = 0; vi < visibleUnitsCount; vi++) {
         const uData = bucket[vi];
@@ -368,7 +382,7 @@ const ECSArmyRendererInner = ({
         const rScale = uData.isBoss ? 1.0 : (rarity === 'legendary' ? 1.8 : (rarity === 'epic' ? 1.4 : (rarity === 'elite' ? 1.2 : 1.0)));
         
         // UNIQUE VARIATION: Subtle height variation based on ID for an 'Organic Army' feel
-        const idNum = parseInt(id.replace(/\D/g, '')) || 0;
+        const idNum = uData.poolIdx;
         const hVar = 1.0 + ((idNum % 7) - 3) * 0.015; // +/- 4.5% height variation
         item.group.scale.set(
             baseScale * settings.unitScale * rScale,
@@ -378,7 +392,7 @@ const ECSArmyRendererInner = ({
 
         // ASSIGN SHARED MATERIAL FROM CACHED MASTER
         // This eliminates 90% of shader work and memory usage
-        const sharedMat = getCachedMaterial(classKey, rarity, team);
+        const sharedMat = getCachedMaterial(classKey, rarity, team, towerConfig, gltfByClass);
         for (let m = 0; m < item.colorable.length; m++) {
           if (item.colorable[m].material !== sharedMat) {
             item.colorable[m].material = sharedMat;
@@ -470,7 +484,6 @@ const ECSArmyRendererInner = ({
             healthBarRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
 
             // Update custom shader attribute for health percentage & ticks
-            const healthAttr = healthBarRef.current.geometry.getAttribute('aHealthInfo') as THREE.InstancedBufferAttribute | undefined;
             if (healthAttr) {
                 healthAttr.setXY(hIdx, uData.hp, uData.maxHp || 100);
             }
@@ -537,7 +550,7 @@ const ECSArmyRendererInner = ({
 
     // ── O(1) Global Shader Update (Zero-Allocation Update) ──
     const globalTime = (simTimeRef.current || 0) * 0.001;
-    for (const [_, mat] of materialCache.current.entries()) {
+    for (const [_, mat] of _materialCache.entries()) {
       if (mat.userData.painterlyShader) {
         mat.userData.painterlyShader.uniforms.time.value = globalTime;
       }

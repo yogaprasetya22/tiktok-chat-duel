@@ -19,18 +19,22 @@ export const calculateProcessedDamage = (
     }
 
     // Defense logic
-    const targetDefense = attacker.unitClass === 'mage' 
+    let targetDefense = attacker.unitClass === 'mage' 
         ? (target.magicDefense || 0) 
         : (target.physicalDefense || 0);
+
+    if (target.isArmorBroken && attacker.unitClass !== 'mage') {
+        targetDefense = 0;
+    }
         
     const armorPierce = attacker.unitClass === 'marksman' ? 0.4 : 0;
     const effectiveDefense = targetDefense * (1 - armorPierce);
     
     dmg = Math.max(dmg * 0.1, dmg - effectiveDefense);
 
-    // Fortress Shield (70% Damage Reduction)
+    // Fortress Shield (Immunity - 100% Damage Reduction)
     if (target.isShield) {
-        dmg *= 0.3;
+        dmg = 0;
     }
 
     return { dmg, isCrit };

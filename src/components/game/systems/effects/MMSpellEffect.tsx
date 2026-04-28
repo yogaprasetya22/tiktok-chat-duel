@@ -174,14 +174,23 @@ export function MMSpellEffect({ spellsRef, unitRegistry, simTimeRef }: Props) {
                 an++;
             }
         }
-        // Spawn Dust for rolling units
+        // Spawn Dust & Flash for rolling (blinking) units
         if (u.isActive && u.unitClass === 'marksman' && u.isRolling) {
-            if (Math.random() > 0.6) {
+            if (Math.random() > 0.4) { // Increased density
                 const vIdx = ringIdx.current;
                 const v = vfxPool.current[vIdx];
                 if (!v.active) activeVfx.current.push(vIdx);
                 ringIdx.current = (ringIdx.current + 1) % vfxPool.current.length;
-                v.x = u.position[0]; v.y = 0.2; v.z = u.position[2]; v.startTime = simNow; v.color = '#fff'; v.active = true; v.scale = 1.2; v.type = 'dust'; v.rot = Math.random()*7;
+                v.x = u.position[0] + (Math.random()-0.5); v.y = 0.2; v.z = u.position[2] + (Math.random()-0.5); 
+                v.startTime = simNow; v.color = '#fff'; v.active = true; v.scale = 1.8; v.type = 'dust'; v.rot = Math.random()*7;
+            }
+            // Add a periodic flash while rolling/blinking
+            if (Math.random() > 0.92) {
+                const fIdx = ringIdx.current;
+                const f = vfxPool.current[fIdx];
+                if (!f.active) activeVfx.current.push(fIdx);
+                ringIdx.current = (ringIdx.current + 1) % vfxPool.current.length;
+                f.x = u.position[0]; f.y = 1.2; f.z = u.position[2]; f.startTime = simNow; f.color = '#fff'; f.active = true; f.scale = 3.0; f.type = 'flash'; f.rot = 0;
             }
         }
     }

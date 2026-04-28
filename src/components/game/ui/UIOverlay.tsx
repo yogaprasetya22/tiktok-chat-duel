@@ -107,10 +107,11 @@ const KillFeed = React.memo(({ killEvents, towerConfig }: { killEvents: any[], t
   </div>
 ));
 
-const Leaderboard = React.memo(({ stats, team, color, name }: { stats: any, team: 'player' | 'enemy', color: string, name: string }) => {
+const Leaderboard = React.memo(({ team, color, name }: { team: 'player' | 'enemy', color: string, name: string }) => {
   const isPlayer = team === 'player';
-  const kills = isPlayer ? stats.playerKills : stats.enemyKills;
-  const profileImages = stats.profileImages || {};
+  const liveStats = useStore(s => s.liveStats);
+  const kills = isPlayer ? liveStats.playerKills : liveStats.enemyKills;
+  const profileImages = liveStats.profileImages || {};
 
   return (
     <div className={`absolute top-44 ${isPlayer ? 'left-3' : 'right-3'} w-32 md:w-44 select-none`}>
@@ -154,9 +155,18 @@ const Leaderboard = React.memo(({ stats, team, color, name }: { stats: any, team
 });
 
 const TowerHPBars = React.memo(({ towerConfig }: { towerConfig: TowerConfig }) => {
-  const playerBaseHp = useStore(s => s.playerBaseHp);
-  const enemyBaseHp = useStore(s => s.enemyBaseHp);
-  const armyCounts = useStore(s => s.armyCounts);
+  const [playerBaseHp, setPlayerHp] = useState(useStore.getState().playerBaseHp);
+  const [enemyBaseHp, setEnemyHp] = useState(useStore.getState().enemyBaseHp);
+  const [armyCounts, setArmyCounts] = useState(useStore.getState().armyCounts);
+
+  useEffect(() => {
+    const unsub = useStore.subscribe((state) => {
+      setPlayerHp(state.playerBaseHp);
+      setEnemyHp(state.enemyBaseHp);
+      setArmyCounts(state.armyCounts);
+    });
+    return unsub;
+  }, []);
 
   const pWidth = (playerBaseHp / (towerConfig?.baseHp || 1000)) * 100;
   const eWidth = (enemyBaseHp / (towerConfig?.baseHp || 1000)) * 100;
@@ -297,7 +307,6 @@ export const UIOverlay = ({
 
   const gameState = useStore(s => s.gameState);
   const killEvents = useStore(s => s.killEvents);
-  const liveStats = useStore(s => s.liveStats);
   const isSettingsOpen = useStore(s => s.isSettingsOpen);
   const setIsSettingsOpen = useStore(s => s.setIsSettingsOpen);
   const settings = useStore(s => s.settings);
@@ -597,8 +606,8 @@ export const UIOverlay = ({
           {/* Leaderboards — Sides */}
           {gameState === 'PLAYING' && !settings.potatoMode && (
             <>
-              <Leaderboard stats={liveStats} team="player" color={towerConfig.player.color} name={towerConfig.player.name} />
-              <Leaderboard stats={liveStats} team="enemy" color={towerConfig.enemy.color} name={towerConfig.enemy.name} />
+              <Leaderboard team="player" color={towerConfig.player.color} name={towerConfig.player.name} />
+              <Leaderboard team="enemy" color={towerConfig.enemy.color} name={towerConfig.enemy.name} />
             </>
           )}
 

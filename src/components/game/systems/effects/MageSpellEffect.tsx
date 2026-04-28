@@ -178,12 +178,42 @@ export function MageSpellEffect({ spellsRef, unitRegistry, simTimeRef }: { spell
 
       if (oi < MAX_ORB_INSTANCES) {
         _obj.position.set(px, py, pz);
-        _obj.scale.setScalar(0.8 * (1.1 - t * 0.3) * rScale);
+        // Cinematic Meteor Head (Reduced Size)
+        const headScale = s.isMeteor ? (1.0 * rScale) : (0.8 * rScale);
+        _obj.scale.setScalar(headScale * (1.1 - t * 0.3));
         _obj.updateMatrix();
         mesh.setMatrixAt(oi, _obj.matrix);
-        _c.set(s.color || '#44aaff').multiplyScalar(rGlow);
+        // Team Color + Subtle Gold Gradient
+        const teamCol = new THREE.Color(s.color || '#44aaff');
+        if (s.isMeteor) {
+          // Less gold (0.25 lerp), more team color
+          _c.copy(teamCol).lerp(new THREE.Color('#FFD700'), 0.25).multiplyScalar(rGlow * 1.5);
+        } else {
+          _c.copy(teamCol).multiplyScalar(rGlow);
+        }
         mesh.setColorAt(oi, _c);
         oi++;
+
+        // Meteor Trail Particles (Embers)
+        if (s.isMeteor && t > 0.1 && t < 0.9) {
+          for (let k = 0; k < 2; k++) {
+            const eIdx = impactIdx.current;
+            const e = impacts.current[eIdx];
+            if (!e.active) activeImpacts.current.push(eIdx);
+            impactIdx.current = (impactIdx.current + 1) % impacts.current.length;
+            e.x = px + (Math.random() - 0.5) * 0.5;
+            e.y = py + (Math.random() - 0.5) * 0.5;
+            e.z = pz + (Math.random() - 0.5) * 0.5;
+            e.startTime = simNow - Math.random() * 100;
+            // Trail follows team color with a fire tint
+            e.color = teamCol.clone().lerp(new THREE.Color('#ff4400'), 0.5).getStyle();
+            e.active = true;
+            e.type = 'embers' as any;
+            e.rot = Math.random() * 7;
+            (e as any).rScale = 0.5 * rScale;
+            (e as any).rGlow = rGlow * 0.5;
+          }
+        }
       }
 
       if (gi < 60) {
@@ -202,8 +232,13 @@ export function MageSpellEffect({ spellsRef, unitRegistry, simTimeRef }: { spell
         const e = impacts.current[eIdx];
         if (!e.active) activeImpacts.current.push(eIdx);
         impactIdx.current = (impactIdx.current + 1) % impacts.current.length;
-        e.x = s.toX; e.y = 1.2; e.z = s.toZ; e.startTime = simNow; e.color = s.color || '#44aaff'; e.active = true; e.type = 'sigil'; e.rot = Math.random() * 7;
-        (e as any).rScale = rScale; (e as any).rGlow = rGlow;
+        e.x = s.toX; e.y = 1.2; e.z = s.toZ; e.startTime = simNow;
+        const teamCol = new THREE.Color(s.color || '#44aaff');
+        // Impact sigil: Team color with golden core
+        e.color = s.isMeteor ? teamCol.lerp(new THREE.Color('#FFD700'), 0.3).getStyle() : (s.color || '#44aaff');
+        e.active = true; e.type = 'sigil'; e.rot = Math.random() * 7;
+        (e as any).rScale = rScale * (s.isMeteor ? 1.8 : 1.0); 
+        (e as any).rGlow = rGlow * (s.isMeteor ? 1.5 : 1.0);
         s.active = false;
       }
     }
@@ -241,6 +276,20 @@ export function MageSpellEffect({ spellsRef, unitRegistry, simTimeRef }: { spell
           _c.set(e.color).multiplyScalar(erGlow * (1.0 - t));
           crg.setColorAt(ci, _c);
           ci++;
+        }
+      } else if ((e.type as any) === 'embers') {
+        const t = age / 600;
+        if (t >= 1) { e.active = false; currentImpacts.splice(j, 1); continue; }
+        if (ii < 120) {
+          const fade = 1.0 - t;
+          _obj.position.set(e.x, e.y, e.z);
+          _obj.quaternion.copy(state.camera.quaternion);
+          _obj.scale.setScalar(erScale * fade);
+          _obj.updateMatrix();
+          imp.setMatrixAt(ii, _obj.matrix);
+          _c.set(e.color).multiplyScalar(erGlow * fade * 5.0);
+          imp.setColorAt(ii, _c);
+          ii++;
         }
       } else {
         const t = age / 500;

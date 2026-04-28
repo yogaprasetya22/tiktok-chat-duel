@@ -21,6 +21,7 @@ export const VFX_TEXTURES = {
         loadTex('/kenney_particle-pack/PNG (Transparent)/magic_05.png'),
     ],
     scorch: loadTex('/kenney_particle-pack/PNG (Transparent)/scorch_03.png'),
+    scorch_mewah: loadTex('/kenney_particle-pack/PNG (Transparent)/scorch_02.png'),
     flare: loadTex('/kenney_particle-pack/PNG (Transparent)/flare_01.png'),
     
     // Marksman - Animated Muzzle (1-5)

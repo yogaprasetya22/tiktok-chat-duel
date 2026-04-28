@@ -197,6 +197,15 @@ export const useBattleSystem = () => {
     const unitDataPoolRef = useRef<UnitRuntimeData[]>([]);
     const vehiclePoolRef = useRef<YUKA.Vehicle[]>([]);
     const activeIndicesRef = useRef<number[]>([]);
+    const lastMvpTimeRef = useRef(0);
+    const cachedMvpRef = useRef<any>(null);
+
+    // --- OPTIMIZATION: Spell Pool Pointers ---
+    const mageSpellPtr = useRef(0);
+    const mmSpellPtr = useRef(0);
+    const fighterSpellPtr = useRef(0);
+    const tankSpellPtr = useRef(0);
+    const assassinSpellPtr = useRef(0);
 
     useEffect(() => {
         const units: ActiveUnit[] = [];
@@ -434,6 +443,7 @@ export const useBattleSystem = () => {
 
             u.isActive = true;
             u.id = `${type}-${poolIdx}-${Date.now()}`;
+            u.poolIdx = poolIdx;
             u.type = type;
             u.userName = name;
             u.unitClass = unitClass;
@@ -478,6 +488,7 @@ export const useBattleSystem = () => {
 
             uData.isActive = true;
             uData.id = u.id;
+            uData.poolIdx = poolIdx;
             uData.type = type;
             uData.userName = name;
             uData.hp = u.hp;
@@ -700,8 +711,8 @@ export const useBattleSystem = () => {
                 }
 
                 const simFrame = Math.floor(simNow * 60); 
-                // PERFORMANCE: Spread collision/separation logic over 6 frames instead of 2.
-                const moveCheck = (simFrame + i) % 6 === 0;
+                // PERFORMANCE: Spread collision/separation logic over 12 frames instead of 6.
+                const moveCheck = (simFrame + i) % 12 === 0;
 
                 if (moveCheck && !u.isDying) {
                     const sepWeight = 0.5;
@@ -753,7 +764,7 @@ export const useBattleSystem = () => {
                     u.targetId = undefined;
                 }
 
-                const tIdx = currentTarget ? parseInt(currentTarget.id.split("-")[1]) : -1;
+                const tIdx = currentTarget ? currentTarget.poolIdx : -1;
                 const tData = tIdx >= 0 ? unitDataPoolRef.current[tIdx] : undefined;
 
                 // ============================================================
@@ -774,16 +785,18 @@ export const useBattleSystem = () => {
                         
                         if (enemyCount >= 1) {
                             uData.lastSkillTime = simNow;
-                            const s = fighterSpellsRef.current?.find(fs => !fs.active);
-                            if (s) {
+                            const pool = fighterSpellsRef.current;
+                            if (pool) {
+                                const s = pool[fighterSpellPtr.current];
                                 s.active = true; s.x = _px[i]; s.z = _pz[i]; s.startTime = simNow;
                                 s.color = u.type === 'player' ? '#ffd700' : '#ff4400';
                                 s.rarity = u.rarity; (s as any).isCyclone = true;
+                                fighterSpellPtr.current = (fighterSpellPtr.current + 1) % pool.length;
                             }
                             for(let n=0; n<neighbors.length; n++) {
                                 const tar = neighbors[n];
                                 if (tar.type !== u.type && !tar.isDying) {
-                                    const tnIdx = parseInt(tar.id.split('-')[1]);
+                                    const tnIdx = tar.poolIdx;
                                     const dmg = u.attack * 2.5; 
                                     if (tnIdx >= 0) {
                                         _vh[tnIdx] -= dmg;
@@ -794,16 +807,21 @@ export const useBattleSystem = () => {
                         }
                     } 
                     // 2. MAGE: Meteor Rain (Targeted AOE)
-                    else if (u.unitClass === 'mage' && currentTarget && tData) {
+                    else if (u.unitClass === 'mage' && (currentTarget || baseInRange)) {
                         uData.lastSkillTime = simNow;
-                        for(let m=0; m<3; m++) {
-                            const s = spellsRef.current?.find(sp => !sp.active);
-                            if (s) {
+                        const pool = spellsRef.current;
+                        if (pool) {
+                            const tx = currentTarget ? tData!.position[0] : (u.type === 'player' ? 0 : 0);
+                            const tz = currentTarget ? tData!.position[2] : targetBaseZ;
+                            for(let m=0; m<3; m++) {
+                                const s = pool[mageSpellPtr.current];
                                 s.active = true; s.startTime = simNow + m * 250;
-                                s.fromX = tData.position[0]; s.fromY = 25; s.fromZ = tData.position[2];
-                                s.toX = tData.position[0] + (Math.random()-0.5)*3; s.toY = 0; s.toZ = tData.position[2] + (Math.random()-0.5)*3;
+                                s.fromX = tx; s.fromY = 25; s.fromZ = tz;
+                                s.toX = tx + (Math.random()-0.5)*3; s.toY = 0; s.toZ = tz + (Math.random()-0.5)*3;
                                 s.color = u.type === 'player' ? '#44aaff' : '#ff2200';
                                 s.rarity = u.rarity; s.isMeteor = true;
+                                s.isBullet = false; (s as any).isTeleport = false; (s as any)._tIdx = undefined;
+                                mageSpellPtr.current = (mageSpellPtr.current + 1) % pool.length;
                             }
                         }
                     }
@@ -825,11 +843,13 @@ export const useBattleSystem = () => {
                             v.velocity.z += backDir * 25; 
 
                             // Spawn Visual Effect
-                            const s = mmSpellsRef.current?.find(sp => !sp.active);
-                            if (s) {
+                            const pool = mmSpellsRef.current;
+                            if (pool) {
+                                const s = pool[mmSpellPtr.current];
                                 s.active = true; s.x = _px[i]; s.z = _pz[i]; s.startTime = simNow;
                                 s.rarity = u.rarity; (s as any).isRolling = true;
                                 (s as any).isBuffed = true;
+                                mmSpellPtr.current = (mmSpellPtr.current + 1) % pool.length;
                             }
                         }
                     }
@@ -839,37 +859,44 @@ export const useBattleSystem = () => {
                         u.isShield = true;
                         uData.isShield = true;
                         (uData as any).shieldEndTime = simNow + 3000;
-                        const s = tankSpellsRef.current?.find(sp => !sp.active);
-                        if (s) {
+                        const pool = tankSpellsRef.current;
+                        if (pool) {
+                            const s = pool[tankSpellPtr.current];
                             s.active = true; s.x = _px[i]; s.z = _pz[i]; s.startTime = simNow;
                             s.rarity = u.rarity; (s as any).isShield = true;
+                            tankSpellPtr.current = (tankSpellPtr.current + 1) % pool.length;
                         }
                     }
                     // 5. ASSASSIN: Shadow Step (Teleport to Squishy)
                     else if (u.unitClass === 'assassin') {
-                        // Find a target that is a mage or marksman on the opposite team
-                        const targets = activeIdxArray.filter(idx => {
-                            const targetU = uPool[idx];
-                            return targetU.type !== u.type && (targetU.unitClass === 'mage' || targetU.unitClass === 'marksman') && !targetU.isDying;
-                        });
+                        // OPTIMIZED: Use spatial grid to find squishies in a large radius instead of O(N^2) filter
+                        const targets = battleGrid.queryRadius(uData.position[0], uData.position[2], 80);
+                        let bestTarget = null;
+                        for (let tj = 0; tj < targets.length; tj++) {
+                            const t = targets[tj];
+                            if (t.type !== u.type && (t.unitClass === 'mage' || t.unitClass === 'marksman') && !t.isDying) {
+                                bestTarget = t;
+                                break; // Found one!
+                            }
+                        }
                         
-                        if (targets.length > 0) {
-                            const targetIdx = targets[Math.floor(Math.random() * targets.length)];
-                            const targetData = uiPool[targetIdx];
-                            const targetU = uPool[targetIdx];
-                            
-                            uData.lastSkillTime = simNow;
-                            // Teleport!
-                            const tx = targetData.position[0] + (Math.random()-0.5)*2;
-                            const tz = targetData.position[2] + (u.type === 'player' ? 1 : -1) * 1.5;
-                            v.position.set(tx, -0.4, tz);
-                            uData.position = [tx, -0.4, tz];
-                            u.targetId = targetU.id;
-                            
-                            const s = assassinSpellsRef.current?.find(sp => !sp.active);
-                            if (s) {
-                                s.active = true; s.x = tx; s.y = 0.5; s.z = tz; s.startTime = simNow;
-                                s.rarity = u.rarity; (s as any).isTeleport = true;
+                        if (bestTarget) {
+                            const targetU = unitIndexRef.current.get(bestTarget.id);
+                            if (targetU) {
+                                uData.lastSkillTime = simNow;
+                                const tx = bestTarget.position[0] + (Math.random()-0.5)*2;
+                                const tz = bestTarget.position[2] + (u.type === 'player' ? 1 : -1) * 1.5;
+                                v.position.set(tx, -0.4, tz);
+                                uData.position = [tx, -0.4, tz];
+                                u.targetId = bestTarget.id;
+                                
+                                const pool = assassinSpellsRef.current;
+                                if (pool) {
+                                    const s = pool[assassinSpellPtr.current];
+                                    s.active = true; s.x = tx; s.y = 0.5; s.z = tz; s.startTime = simNow;
+                                    s.rarity = u.rarity; (s as any).isTeleport = true; (s as any)._tIdx = undefined;
+                                    assassinSpellPtr.current = (assassinSpellPtr.current + 1) % pool.length;
+                                }
                             }
                         }
                     }
@@ -934,7 +961,7 @@ export const useBattleSystem = () => {
                                     const dSq = dx * dx + dz * dz;
 
                                     if (dSq < searchRadius * searchRadius) {
-                                        const pIdx = parseInt(p.id.split('-')[1]);
+                                        const pIdx = p.poolIdx;
                                         if (pIdx >= 0) {
                                             _vh[pIdx] -= dmg;
                                             const pData = unitDataPoolRef.current[pIdx];
@@ -980,7 +1007,7 @@ export const useBattleSystem = () => {
                                 for (let cj = 0; cj < cleaveNearby.length && cleaveCount < 4; cj++) {
                                     const cp = cleaveNearby[cj];
                                     if (!cp.isActive || cp.type === u.type || cp.id === currentTarget!.id) continue;
-                                    const cIdx = parseInt(cp.id.split('-')[1]);
+                                    const cIdx = cp.poolIdx;
                                     if (cIdx >= 0) {
                                         const cDmg = dmg * cleavePerc;
                                         _vh[cIdx] -= cDmg;
@@ -1036,123 +1063,83 @@ export const useBattleSystem = () => {
 
                             switch (u.unitClass) {
                                 case 'fighter': {
-                                    const spells = fighterSpellsRef.current;
-                                    for (let si = 0; si < spells.length; si++) {
-                                        if (!spells[si].active) {
-                                            spells[si].x = uData.position[0] + fwdX * 0.8;
-                                            spells[si].y = 1.2;
-                                            spells[si].z = uData.position[2] + fwdZ * 0.8;
-                                            spells[si].targetX = tData.position[0];
-                                            spells[si].targetZ = tData.position[2];
-                                            spells[si].rotation = uData.rotation[1] || 0;
-                                            spells[si].startTime = simNow;
-                                            spells[si].color = teamColor;
-                                            spells[si].active = true;
-                                            spells[si].progress = 0;
-                                            spells[si].rarity = u.rarity || 'common';
-                                            break;
-                                        }
+                                    const pool = fighterSpellsRef.current;
+                                    if (pool) {
+                                        const s = pool[fighterSpellPtr.current];
+                                        s.x = uData.position[0] + fwdX * 0.8; s.y = 1.2; s.z = uData.position[2] + fwdZ * 0.8;
+                                        s.targetX = tData.position[0]; s.targetZ = tData.position[2];
+                                        s.rotation = uData.rotation[1] || 0; s.startTime = simNow;
+                                        s.color = teamColor; s.active = true; s.progress = 0;
+                                        s.rarity = u.rarity || 'common';
+                                        (s as any).isCyclone = false; (s as any)._tIdx = undefined;
+                                        fighterSpellPtr.current = (fighterSpellPtr.current + 1) % pool.length;
                                     }
                                     break;
                                 }
                                 case 'tank': {
-                                    const spells = tankSpellsRef.current;
-                                    for (let si = 0; si < spells.length; si++) {
-                                        if (!spells[si].active) {
-                                            spells[si].x = tData.position[0];
-                                            spells[si].y = 0.2;
-                                            spells[si].z = tData.position[2];
-                                            spells[si].startTime = simNow;
-                                            spells[si].color = teamColor;
-                                            spells[si].active = true;
-                                            spells[si].progress = 0;
-                                            spells[si].rarity = u.rarity || 'common';
-                                            break;
-                                        }
+                                    const pool = tankSpellsRef.current;
+                                    if (pool) {
+                                        const s = pool[tankSpellPtr.current];
+                                        s.x = tData.position[0]; s.y = 0.2; s.z = tData.position[2];
+                                        s.startTime = simNow; s.color = teamColor; s.active = true;
+                                        s.progress = 0; s.rarity = u.rarity || 'common';
+                                        s.isShield = false;
+                                        tankSpellPtr.current = (tankSpellPtr.current + 1) % pool.length;
                                     }
                                     break;
                                 }
                                 case 'mage': {
-                                    const spells = spellsRef.current;
-                                    for (let si = 0; si < spells.length; si++) {
-                                        if (!spells[si].active) {
-                                            spells[si].fromX = uData.position[0];
-                                            spells[si].fromY = launchY;
-                                            spells[si].fromZ = uData.position[2];
-                                            spells[si].toX = tData.position[0];
-                                            spells[si].toY = tData.position[1] + 1.0;
-                                            spells[si].toZ = tData.position[2];
-                                            spells[si].targetId = currentTarget!.id;
-                                            spells[si].startTime = simNow;
-                                            spells[si].color = teamColor;
-                                            spells[si].active = true;
-                                            spells[si].progress = 0;
-                                            spells[si].rarity = u.rarity || 'common';
-                                            break;
-                                        }
-                                    }
-                                    const aoeNearby = battleGrid.queryRadius(tData.position[0], tData.position[2], 3.5);
-                                    let aoeCount = 0;
-                                    for (let aj = 0; aj < aoeNearby.length && aoeCount < 3; aj++) {
-                                        const ap = aoeNearby[aj];
-                                        if (!ap.isActive || ap.type === u.type || ap.id === currentTarget!.id) continue;
-                                        for (let si = 0; si < spells.length; si++) {
-                                            if (!spells[si].active) {
-                                                spells[si].fromX = uData.position[0];
-                                                spells[si].fromY = launchY;
-                                                spells[si].fromZ = uData.position[2];
-                                                spells[si].toX = ap.position[0];
-                                                spells[si].toY = ap.position[1] + 1.0;
-                                                spells[si].toZ = ap.position[2];
-                                                spells[si].targetId = ap.id;
-                                                spells[si].startTime = simNow;
-                                                spells[si].color = teamColor;
-                                                spells[si].active = true;
-                                                spells[si].progress = 0;
-                                                spells[si].rarity = u.rarity || 'common';
-                                                aoeCount++;
-                                                break;
-                                            }
+                                    const pool = spellsRef.current;
+                                    if (pool) {
+                                        const s = pool[mageSpellPtr.current];
+                                        s.fromX = uData.position[0]; s.fromY = launchY; s.fromZ = uData.position[2];
+                                        s.toX = tData.position[0]; s.toY = tData.position[1] + 1.0; s.toZ = tData.position[2];
+                                        s.targetId = currentTarget.id; s.startTime = simNow;
+                                        s.color = teamColor; s.active = true; s.progress = 0;
+                                        s.rarity = u.rarity || 'common';
+                                        s.isMeteor = false; s.isBullet = false; (s as any)._tIdx = undefined;
+                                        mageSpellPtr.current = (mageSpellPtr.current + 1) % pool.length;
+
+                                        const aoeNearby = battleGrid.queryRadius(tData.position[0], tData.position[2], 3.5);
+                                        let aoeCount = 0;
+                                        for (let aj = 0; aj < aoeNearby.length && aoeCount < 3; aj++) {
+                                            const ap = aoeNearby[aj];
+                                            if (!ap.isActive || ap.type === u.type || ap.id === currentTarget.id) continue;
+                                            const as = pool[mageSpellPtr.current];
+                                            as.fromX = uData.position[0]; as.fromY = launchY; as.fromZ = uData.position[2];
+                                            as.toX = ap.position[0]; as.toY = ap.position[1] + 1.0; as.toZ = ap.position[2];
+                                            as.targetId = ap.id; as.startTime = simNow;
+                                            as.color = teamColor; as.active = true; as.progress = 0;
+                                            as.rarity = u.rarity || 'common';
+                                            as.isMeteor = false; as.isBullet = false; (as as any)._tIdx = undefined;
+                                            mageSpellPtr.current = (mageSpellPtr.current + 1) % pool.length;
+                                            aoeCount++;
                                         }
                                     }
                                     break;
                                 }
                                 case 'marksman': {
-                                    const spells = mmSpellsRef.current;
-                                    for (let si = 0; si < spells.length; si++) {
-                                        if (!spells[si].active) {
-                                            spells[si].fromX = uData.position[0] + fwdX * 2.5;
-                                            spells[si].fromY = launchY;
-                                            spells[si].fromZ = uData.position[2] + fwdZ * 2.5;
-                                            spells[si].toX = tData.position[0];
-                                            spells[si].toY = tData.position[1] + 1.2;
-                                            spells[si].toZ = tData.position[2];
-                                            spells[si].targetId = currentTarget!.id;
-                                            spells[si].startTime = simNow;
-                                            spells[si].color = teamColor;
-                                            spells[si].active = true;
-                                            spells[si].progress = 0;
-                                            spells[si].isBullet = true;
-                                            spells[si].rarity = u.rarity || 'common';
-                                            break;
-                                        }
+                                    const pool = mmSpellsRef.current;
+                                    if (pool) {
+                                        const s = pool[mmSpellPtr.current];
+                                        s.fromX = uData.position[0] + fwdX * 2.5; s.fromY = launchY; s.fromZ = uData.position[2] + fwdZ * 2.5;
+                                        s.toX = tData.position[0]; s.toY = tData.position[1] + 1.2; s.toZ = tData.position[2];
+                                        s.targetId = currentTarget!.id; s.startTime = simNow;
+                                        s.color = teamColor; s.active = true; s.progress = 0;
+                                        s.isBullet = true; s.isMeteor = false; s.isCyclone = false; s.isShield = false; (s as any).isRolling = false; (s as any).isTeleport = false; s.rarity = u.rarity || 'common';
+                                        (s as any)._tIdx = undefined;
+                                        mmSpellPtr.current = (mmSpellPtr.current + 1) % pool.length;
                                     }
                                     break;
                                 }
                                 case 'assassin': {
-                                    const spells = assassinSpellsRef.current;
-                                    for (let si = 0; si < spells.length; si++) {
-                                        if (!spells[si].active) {
-                                            spells[si].x = tData.position[0];
-                                            spells[si].y = 1.3;
-                                            spells[si].z = tData.position[2];
-                                            spells[si].startTime = simNow;
-                                            spells[si].color = '#FFFF00';
-                                            spells[si].active = true;
-                                            spells[si].progress = 0;
-                                            spells[si].rarity = u.rarity || 'common';
-                                            break;
-                                        }
+                                    const pool = assassinSpellsRef.current;
+                                    if (pool) {
+                                        const s = pool[assassinSpellPtr.current];
+                                        s.x = tData.position[0]; s.y = 1.3; s.z = tData.position[2];
+                                        s.startTime = simNow; s.color = teamColor; s.active = true;
+                                        s.progress = 0; s.rarity = u.rarity || 'common';
+                                        assassinSpellPtr.current = (assassinSpellPtr.current + 1) % pool.length;
                                     }
                                     break;
                                 }
@@ -1242,92 +1229,61 @@ export const useBattleSystem = () => {
 
                         switch (u.unitClass) {
                             case 'fighter': {
-                                const spells = fighterSpellsRef.current;
-                                for (let si = 0; si < spells.length; si++) {
-                                    if (!spells[si].active) {
-                                        spells[si].x = uData.position[0] + fwdX * 0.8;
-                                        spells[si].y = 1.2;
-                                        spells[si].z = uData.position[2] + fwdZ * 0.8;
-                                        spells[si].rotation = uData.rotation[1] || 0;
-                                        spells[si].startTime = simNow;
-                                        spells[si].color = teamColor;
-                                        spells[si].active = true;
-                                        spells[si].progress = 0;
-                                        break;
-                                    }
+                                const pool = fighterSpellsRef.current;
+                                if (pool) {
+                                    const s = pool[fighterSpellPtr.current];
+                                    s.x = uData.position[0] + fwdX * 0.8; s.y = 1.2; s.z = uData.position[2] + fwdZ * 0.8;
+                                    s.rotation = uData.rotation[1] || 0; s.startTime = simNow;
+                                    s.color = teamColor; s.active = true; s.progress = 0;
+                                    fighterSpellPtr.current = (fighterSpellPtr.current + 1) % pool.length;
                                 }
                                 break;
                             }
                             case 'tank': {
-                                const spells = tankSpellsRef.current;
-                                for (let si = 0; si < spells.length; si++) {
-                                    if (!spells[si].active) {
-                                        spells[si].x = tPos[0];
-                                        spells[si].y = 0.2;
-                                        spells[si].z = tPos[2];
-                                        spells[si].startTime = simNow;
-                                        spells[si].color = teamColor;
-                                        spells[si].active = true;
-                                        spells[si].progress = 0;
-                                        break;
-                                    }
+                                const pool = tankSpellsRef.current;
+                                if (pool) {
+                                    const s = pool[tankSpellPtr.current];
+                                    s.x = tPos[0]; s.y = 0.2; s.z = tPos[2]; s.startTime = simNow;
+                                    s.color = teamColor; s.active = true; s.progress = 0;
+                                    s.isShield = false;
+                                    tankSpellPtr.current = (tankSpellPtr.current + 1) % pool.length;
                                 }
                                 break;
                             }
                             case 'mage': {
-                                const spells = spellsRef.current;
-                                for (let si = 0; si < spells.length; si++) {
-                                    if (!spells[si].active) {
-                                        spells[si].fromX = uData.position[0];
-                                        spells[si].fromY = launchY;
-                                        spells[si].fromZ = uData.position[2];
-                                        spells[si].toX = tPos[0];
-                                        spells[si].toY = tPos[1] + 2.0;
-                                        spells[si].toZ = tPos[2];
-                                        spells[si].targetId = u.type === 'player' ? 'enemy-base' : 'player-base';
-                                        spells[si].startTime = simNow;
-                                        spells[si].color = teamColor;
-                                        spells[si].active = true;
-                                        spells[si].progress = 0;
-                                        break;
+                                const pool = spellsRef.current;
+                                if (pool) {
+                                    for (let m = 0; m < 3; m++) {
+                                        const s = pool[mageSpellPtr.current];
+                                        s.fromX = uData.position[0]; s.fromY = launchY; s.fromZ = uData.position[2];
+                                        s.toX = tPos[0]; s.toY = tPos[1] + 2.0; s.toZ = tPos[2];
+                                        s.targetId = u.type === 'player' ? 'enemy-base' : 'player-base';
+                                        s.startTime = simNow; s.color = teamColor; s.active = true; s.progress = 0;
+                                        mageSpellPtr.current = (mageSpellPtr.current + 1) % pool.length;
                                     }
                                 }
                                 break;
                             }
                             case 'marksman': {
-                                const spells = mmSpellsRef.current;
-                                for (let si = 0; si < spells.length; si++) {
-                                    if (!spells[si].active) {
-                                        spells[si].fromX = uData.position[0] + fwdX * 2.5;
-                                        spells[si].fromY = launchY;
-                                        spells[si].fromZ = uData.position[2] + fwdZ * 2.5;
-                                        spells[si].toX = tPos[0];
-                                        spells[si].toY = tPos[1] + 2.0;
-                                        spells[si].toZ = tPos[2];
-                                        spells[si].targetId = u.type === 'player' ? 'enemy-base' : 'player-base';
-                                        spells[si].startTime = simNow;
-                                        spells[si].color = teamColor;
-                                        spells[si].active = true;
-                                        spells[si].progress = 0;
-                                        spells[si].isBullet = true;
-                                        break;
-                                    }
+                                const pool = mmSpellsRef.current;
+                                if (pool) {
+                                    const s = pool[mmSpellPtr.current];
+                                    s.fromX = uData.position[0] + fwdX * 2.5; s.fromY = launchY; s.fromZ = uData.position[2] + fwdZ * 2.5;
+                                    s.toX = tPos[0]; s.toY = tPos[1] + 2.0; s.toZ = tPos[2];
+                                    s.targetId = u.type === 'player' ? 'enemy-base' : 'player-base';
+                                    s.startTime = simNow; s.color = teamColor; s.active = true; s.progress = 0;
+                                    s.isBullet = true;
+                                    mmSpellPtr.current = (mmSpellPtr.current + 1) % pool.length;
                                 }
                                 break;
                             }
                             case 'assassin': {
-                                const spells = assassinSpellsRef.current;
-                                for (let si = 0; si < spells.length; si++) {
-                                    if (!spells[si].active) {
-                                        spells[si].x = tPos[0];
-                                        spells[si].y = 1.3;
-                                        spells[si].z = tPos[2];
-                                        spells[si].startTime = simNow;
-                                        spells[si].color = '#FFFF00';
-                                        spells[si].active = true;
-                                        spells[si].progress = 0;
-                                        break;
-                                    }
+                                const pool = assassinSpellsRef.current;
+                                if (pool) {
+                                    const s = pool[assassinSpellPtr.current];
+                                    s.x = tPos[0]; s.y = 1.3; s.z = tPos[2]; s.startTime = simNow;
+                                    s.color = '#FFFF00'; s.active = true; s.progress = 0;
+                                    assassinSpellPtr.current = (assassinSpellPtr.current + 1) % pool.length;
                                 }
                                 break;
                             }
@@ -1365,7 +1321,7 @@ export const useBattleSystem = () => {
                         while (diff >  Math.PI) diff -= Math.PI * 2;
                         uData.rotation[1] += diff * Math.min(rotSmooth * 2, 1.0);
                     } else if (uData.status === 'attacking') {
-                        const tIdx2 = u.targetId && !isBaseTarget ? parseInt(u.targetId.split('-')[1]) : -1;
+                        const tIdx2 = currentTarget ? currentTarget.poolIdx : -1;
                         const td2 = tIdx2 !== -1 ? uiPool[tIdx2] : null;
                         const tx2 = (td2 && td2.isActive && td2.id === u.targetId) ? td2.position[0] : 0;
                         const tz2 = (td2 && td2.isActive && td2.id === u.targetId) ? td2.position[2] : targetBaseZ;
@@ -1382,8 +1338,8 @@ export const useBattleSystem = () => {
                     const lastBlink = uData.lastBlinkTime || 0;
                     
                     if (simNow - lastBlink > blinkCooldownS) {
-                        const tIdx3 = parseInt(u.targetId.split('-')[1]);
-                        const td3 = uiPool[tIdx3];
+                        const tIdx3 = currentTarget ? currentTarget.poolIdx : -1;
+                        const td3 = tIdx3 !== -1 ? uiPool[tIdx3] : null;
                         
                         if (td3 && td3.isActive && td3.id === u.targetId &&
                             (td3.unitClass === 'mage' || td3.unitClass === 'marksman')) {
@@ -1405,18 +1361,12 @@ export const useBattleSystem = () => {
                                 uData.pendingCrit = true;
                                 uData.status = 'attacking';
                                 
-                                const spells = assassinSpellsRef.current;
-                                for (let si = 0; si < spells.length; si++) {
-                                    if (!spells[si].active) {
-                                        spells[si].x = bx;
-                                        spells[si].y = 1.3;
-                                        spells[si].z = bz;
-                                        spells[si].startTime = simNow;
-                                        spells[si].color = '#ff00ff';
-                                        spells[si].active = true;
-                                        spells[si].progress = 0;
-                                        break;
-                                    }
+                                const pool = assassinSpellsRef.current;
+                                if (pool) {
+                                    const s = pool[assassinSpellPtr.current];
+                                    s.x = bx; s.y = 1.3; s.z = bz; s.startTime = simNow;
+                                    s.color = '#ff00ff'; s.active = true; s.progress = 0;
+                                    assassinSpellPtr.current = (assassinSpellPtr.current + 1) % pool.length;
                                 }
                             }
                         }
@@ -1505,6 +1455,11 @@ export const useBattleSystem = () => {
         spawnUnit,
         resetBattle,
         getMVPData: () => {
+            const now = performance.now();
+            if (cachedMvpRef.current && now - lastMvpTimeRef.current < 1000) {
+                return cachedMvpRef.current;
+            }
+
             const stats = statsRef.current;
             const getMax = (record: Record<string, number>) => {
                 let maxUser = "N/A";
@@ -1535,13 +1490,17 @@ export const useBattleSystem = () => {
                 .sort((a, b) => b.kills !== a.kills ? b.kills - a.kills : b.damage - a.damage)
                 .slice(0, 5);
 
-            return {
+            const result = {
                 topDamage: getMax({ ...stats.playerDamage, ...stats.enemyDamage }),
                 topSpawner: getMax(stats.unitsSpawned),
                 playerTopHit: getMax(stats.playerHits),
                 enemyTopHit: getMax(stats.enemyHits),
                 top5
             };
+
+            cachedMvpRef.current = result;
+            lastMvpTimeRef.current = now;
+            return result;
         },
         setMapObstacles,
         mapObstacles,

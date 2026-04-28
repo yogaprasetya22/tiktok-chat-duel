@@ -57,6 +57,7 @@ const _hideMatrix = _hideObj.matrix.clone();
 const _vec = new THREE.Vector3();
 const _projMatrix = new THREE.Matrix4();
 const _frustum = new THREE.Frustum();
+const _col = new THREE.Color();
 
 
 
@@ -204,7 +205,7 @@ const ProfileImageShader = {
 
 const BattleArmyComponent = ({
   unitRegistry, towerConfig, updateSimulation, settingsRef, simTimeRef,
-  spellsRef, mmSpellsRef, fighterSpellsRef,
+  unitIndex, spellsRef, mmSpellsRef, fighterSpellsRef,
   tankSpellsRef, assassinSpellsRef, vfxRef, compBuffers
 }: BattleArmyProps) => {
   const shadowRef = useRef<THREE.InstancedMesh>(null!);
@@ -301,38 +302,45 @@ const BattleArmyComponent = ({
     frameCountRef.current++;
     
     // PERFORMANCE: Use consistent constants at the top
-    const HUD_DETAIL_DIST_SQ = 70 * 70; 
-    const HUD_MAX_RANGE_SQ = HUD_DETAIL_DIST_SQ * 1.5;
+    const HUD_DETAIL_DIST_SQ = 4900; // 70 * 70
+    const HUD_MAX_RANGE_SQ = 7350; // 4900 * 1.5
 
-    // PERFORMANCE: Throttle sorting and unit filtering to every 5-10 frames
-    const shouldSort = frameCountRef.current % 10 === 0 || cachedActiveUnits.current.length === 0;
+    // PERFORMANCE: Throttle sorting and unit filtering to every 12 frames
+    const shouldSort = frameCountRef.current % 12 === 0 || cachedActiveUnits.current.length === 0;
     
     if (shouldSort) {
-      const activeUnits: any[] = [];
-      const buckets: Record<string, UnitRuntimeData[]> = { fighter: [], tank: [], mage: [], marksman: [], assassin: [] };
+      // Zero-allocation bucket clearing using persistent state
+      const b = (state as any)._persBuckets ||= { fighter: [], tank: [], mage: [], marksman: [], assassin: [] };
+      b.fighter.length = 0; b.tank.length = 0; b.mage.length = 0; b.marksman.length = 0; b.assassin.length = 0;
       
+      const nearUnits = (state as any)._persNearUnits ||= [];
+      nearUnits.length = 0;
+
       const indices = compBuffers?.activeIndices?.current || [];
       for (let k = 0; k < indices.length; k++) {
         const i = indices[k];
         const u = rawMap[i];
         if (!u || !u.isActive || u.hp <= 0) continue;
+        
         const dx = camPos.x - u.position[0];
         const dz = camPos.z - u.position[2];
-        u.dSq = dx * dx + dz * dz;
-        activeUnits.push(u);
-        if (buckets[u.unitClass]) buckets[u.unitClass].push(u);
+        const dSq = dx * dx + dz * dz;
+        u.dSq = dSq;
+        
+        if (b[u.unitClass]) b[u.unitClass].push(u);
+        if (dSq < HUD_MAX_RANGE_SQ) {
+          nearUnits.push(u);
+        }
       }
 
-      // Optimized sorting: only sort units that are roughly within range to save CPU
-      const nearUnits = activeUnits.filter(u => (u.dSq || 0) < HUD_MAX_RANGE_SQ);
-      
-      nearUnits.sort((a, b) => {
+      // Sort only units near the camera to save CPU
+      nearUnits.sort((a: any, b: any) => {
         if (a.isBoss !== b.isBoss) return a.isBoss ? -1 : 1;
         return (a.dSq || 0) - (b.dSq || 0);
       });
       
-      cachedActiveUnits.current = nearUnits; // We only need the near ones for the HUD
-      (state as any).unitBuckets = buckets;
+      cachedActiveUnits.current = nearUnits; 
+      (state as any).unitBuckets = b;
     }
 
     const activeUnits = cachedActiveUnits.current;
@@ -358,8 +366,7 @@ const BattleArmyComponent = ({
 
       // Cleanup names
       for (const [uid, slot] of namePoolMap.current.entries()) {
-        const uIdx = parseInt(uid.split('-')[1]);
-        const u = rawMap[uIdx];
+        const u = unitIndex.current.get(uid);
         const gone = !u || !u.isActive || u.id !== uid || u.hp <= 0 || (u.dSq || 0) > HUD_DETAIL_DIST_SQ || isPotato;
         
         if (gone) {
@@ -412,16 +419,18 @@ const BattleArmyComponent = ({
             }
 
             const rawCol = u.type === 'player' ? towerConfig.player.color : towerConfig.enemy.color;
-            const teamCol = new THREE.Color(rawCol).offsetHSL(0, 0, 0.2); // Boost brightness
+            // Use scratch object and getStyle() to avoid reference sharing
+            _col.set(rawCol).offsetHSL(0, 0, 0.2);
+            const teamStyle = _col.getStyle();
             
-            if (nameSlotColor.current[slot] !== teamCol.getHexString()) { 
-              mesh.color = teamCol; 
-              nameSlotColor.current[slot] = teamCol.getHexString(); 
+            if (nameSlotColor.current[slot] !== teamStyle) { 
+              mesh.color = teamStyle; 
+              nameSlotColor.current[slot] = teamStyle; 
               
-              // Update border color too with high-intensity versions
+              // Update border color too
               const borderMesh = nameBorderRefs.current[slot];
               if (borderMesh) {
-                (borderMesh.material as THREE.MeshBasicMaterial).color.copy(teamCol);
+                (borderMesh.material as THREE.MeshBasicMaterial).color.copy(_col);
                 (borderMesh.material as THREE.MeshBasicMaterial).opacity = 1.0;
               }
               

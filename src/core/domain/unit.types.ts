@@ -110,6 +110,9 @@ export interface ActiveUnit extends UnitStats {
     rarity?: UnitRarity;
     isShield?: boolean;
     isTeleporting?: boolean;
+    isArmorBroken?: boolean;
+    poolIdx: number;
+    dSq?: number;
 }
 
 export interface MapObstacle {
@@ -197,9 +200,11 @@ export interface UnitRuntimeData {
     isRolling?: boolean;    // New: state for Tactical Roll
     isShield?: boolean;      // New: state for Tank Shield
     isTeleporting?: boolean; // New: state for Assassin Teleport
+    isArmorBroken?: boolean; // New: state for Armor Break (Fighter skill)
     profileImage?: string;
     rarity?: UnitRarity;
     spawnTime: number;
+    poolIdx: number;
 }
 
 

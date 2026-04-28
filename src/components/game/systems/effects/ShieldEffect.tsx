@@ -111,8 +111,8 @@ export function ShieldEffect({ unitRegistry, activeIndicesRef, settingsRef, simT
         const globalScale = settingsRef.current?.unitScale || 0.45;
         const simTime = simTimeRef.current || 0;
         
-        if (mat.uniforms) {
-            mat.uniforms.uTime = { value: state.clock.elapsedTime };
+        if (mat.uniforms && mat.uniforms.uTime) {
+            mat.uniforms.uTime.value = state.clock.elapsedTime;
         }
 
         let count = 0;

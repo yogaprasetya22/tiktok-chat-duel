@@ -57,7 +57,7 @@ export let CLASS_CONFIG: ClassConfig = {
         cooldown_reduction: 0.15,
         skill_cooldown: 8000,
         skill_range: 0.0,
-        skill_duration: 0.0,
+        skill_duration: 3500,
         ai_behavior: {
             separation: 1.5,
             encirclement: 1.0,

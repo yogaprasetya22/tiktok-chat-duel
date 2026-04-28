@@ -190,18 +190,44 @@ export function DamageHUDBatcher({ damageQueue }: { damageQueue: React.RefObject
         const mesh = meshRef.current;
         if (!mesh || !mesh.geometry.attributes.aCharIdx) return;
 
+        const spawnSprite = (charCode: number, xOffset: number, event: any, vx: number, vy: number, vz: number, startTime: number) => {
+            const idx = nextSlotRef.current;
+            const slot = slots[idx];
+            if (!slot.active) activeIndices.current.push(idx);
+            slot.active = true;
+            slot.startTime = startTime;
+            slot.baseX = event.position[0];
+            slot.baseY = event.position[1] + 1.8;
+            slot.baseZ = event.position[2];
+            slot.velX = vx;
+            slot.velY = vy;
+            slot.velZ = vz;
+            slot.isCrit = event.isCrit;
+            slot.isMagic = event.isMagic;
+            slot.charIdx = charCode;
+            slot.digitOffset = xOffset;
+            nextSlotRef.current = (nextSlotRef.current + 1) % MAX_DAMAGE_SPRITES;
+        };
+
         // 1. Process New Damage Events
         if (damageQueue.current && damageQueue.current.length > 0) {
             const batch = Math.min(damageQueue.current.length, 16);
             for (let p = 0; p < batch; p++) {
-                const event = damageQueue.current.shift();
-                if (!event) continue;
-
+                const event = damageQueue.current!.shift()!;
                 const rawVal = Math.round(event.value);
-                const text = event.isCrit ? `${rawVal}CRIT` : `${rawVal}!`;
-                const chars = text.split('');
+                const isCrit = event.isCrit;
+                
+                // Optimized Digit Extraction (Zero String Allocation)
+                let temp = rawVal;
+                const digits: number[] = [];
+                if (temp === 0) digits.push(0);
+                while (temp > 0) {
+                    digits.unshift(temp % 10);
+                    temp = Math.floor(temp / 10);
+                }
+                
                 const charGap = SPRITE_SIZE * 0.42;
-                const totalW = chars.length * charGap;
+                const totalW = (digits.length + (isCrit ? 4 : 1)) * charGap;
 
                 // Physics: Upward explode with random horizontal spray
                 const angle = Math.random() * Math.PI * 2;
@@ -218,29 +244,21 @@ export function DamageHUDBatcher({ damageQueue }: { damageQueue: React.RefObject
                    spawnVFX(event.position, 'spark', event.color || '#ffffff');
                 }
 
-                for (let c = 0; c < chars.length; c++) {
-                    const charCode = CHAR_MAP[chars[c]];
-                    if (charCode === undefined) continue;
+                // Add digits
+                for (let c = 0; c < digits.length; c++) {
+                    const charCode = CHAR_MAP[digits[c].toString()];
+                    spawnSprite(charCode, (c * charGap) - totalW * 0.5, event, vx, vy, vz, now);
+                }
 
-                    const idx = nextSlotRef.current;
-                    const slot = slots[idx];
-                    
-                    if (!slot.active) activeIndices.current.push(idx);
-                    
-                    slot.active = true;
-                    slot.startTime = now;
-                    slot.baseX = event.position[0];
-                    slot.baseY = event.position[1] + 1.8;
-                    slot.baseZ = event.position[2];
-                    slot.velX = vx;
-                    slot.velY = vy;
-                    slot.velZ = vz;
-                    slot.isCrit = event.isCrit;
-                    slot.isMagic = event.isMagic;
-                    slot.charIdx = charCode;
-                    slot.digitOffset = (c * charGap) - totalW * 0.5;
-
-                    nextSlotRef.current = (nextSlotRef.current + 1) % MAX_DAMAGE_SPRITES;
+                // Add suffix (! or CRIT)
+                if (isCrit) {
+                    const start = digits.length;
+                    spawnSprite(CHAR_MAP['C'], (start * charGap) - totalW * 0.5, event, vx, vy, vz, now);
+                    spawnSprite(CHAR_MAP['R'], ((start + 1) * charGap) - totalW * 0.5, event, vx, vy, vz, now);
+                    spawnSprite(CHAR_MAP['I'], ((start + 2) * charGap) - totalW * 0.5, event, vx, vy, vz, now);
+                    spawnSprite(CHAR_MAP['T'], ((start + 3) * charGap) - totalW * 0.5, event, vx, vy, vz, now);
+                } else {
+                    spawnSprite(CHAR_MAP['!'], (digits.length * charGap) - totalW * 0.5, event, vx, vy, vz, now);
                 }
             }
         }
