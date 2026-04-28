@@ -43,6 +43,9 @@ export interface ClassStatusStats {
     range: number;
     tenacity: number;
     cooldown_reduction: number;
+    skill_cooldown: number;   // New: Base cooldown for active skills (ms)
+    skill_range: number;      // New: Range required to trigger skill
+    skill_duration: number;    // New: How long the skill effect lasts (ms)
     ai_behavior: {
         separation: number;
         encirclement: number;
@@ -105,6 +108,8 @@ export interface ActiveUnit extends UnitStats {
     untargetableUntil?: number;
     profileImage?: string;
     rarity?: UnitRarity;
+    isShield?: boolean;
+    isTeleporting?: boolean;
 }
 
 export interface MapObstacle {
@@ -187,6 +192,11 @@ export interface UnitRuntimeData {
     dSq?: number;
     pendingCrit?: boolean;
     lastEffectTime?: number;
+    lastSkillTime?: number; // New: tracking skill cooldown
+    isBuffed?: boolean;     // New: state for Eagle Eye
+    isRolling?: boolean;    // New: state for Tactical Roll
+    isShield?: boolean;      // New: state for Tank Shield
+    isTeleporting?: boolean; // New: state for Assassin Teleport
     profileImage?: string;
     rarity?: UnitRarity;
     spawnTime: number;

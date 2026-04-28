@@ -27,6 +27,9 @@ export let CLASS_CONFIG: ClassConfig = {
         range: 3.5, // Buffed from 3.2
         tenacity: 0.2,
         cooldown_reduction: 0.1,
+        skill_cooldown: 10000,
+        skill_range: 4.0,
+        skill_duration: 800,
         ai_behavior: {
             separation: 1.0,
             encirclement: 1.2,
@@ -52,6 +55,9 @@ export let CLASS_CONFIG: ClassConfig = {
         range: 3.0,
         tenacity: 0.5,
         cooldown_reduction: 0.15,
+        skill_cooldown: 8000,
+        skill_range: 0.0,
+        skill_duration: 0.0,
         ai_behavior: {
             separation: 1.5,
             encirclement: 1.0,
@@ -77,6 +83,9 @@ export let CLASS_CONFIG: ClassConfig = {
         range: 9.5, // Nerfed from 15.0
         tenacity: 0.0,
         cooldown_reduction: 0.1,
+        skill_cooldown: 14000,
+        skill_range: 12.0,
+        skill_duration: 2500,
         ai_behavior: {
             separation: 2.5,
             encirclement: 1.5,
@@ -102,6 +111,9 @@ export let CLASS_CONFIG: ClassConfig = {
         range: 7.2, // Nerfed from 8.5
         tenacity: 0.0,
         cooldown_reduction: 0.1,
+        skill_cooldown: 12000,
+        skill_range: 5.0,
+        skill_duration: 5000,
         ai_behavior: {
             separation: 2.8,
             encirclement: 1.0,
@@ -127,6 +139,9 @@ export let CLASS_CONFIG: ClassConfig = {
         range: 2.2, // Buffed from 2.0
         tenacity: 0.1,
         cooldown_reduction: 0.2,
+        skill_cooldown: 10000,
+        skill_range: 0.0,
+        skill_duration: 0.0,
         ai_behavior: {
             separation: 1.2,
             encirclement: 2.2,

@@ -28,6 +28,11 @@ export const calculateProcessedDamage = (
     
     dmg = Math.max(dmg * 0.1, dmg - effectiveDefense);
 
+    // Fortress Shield (70% Damage Reduction)
+    if (target.isShield) {
+        dmg *= 0.3;
+    }
+
     return { dmg, isCrit };
 };
 

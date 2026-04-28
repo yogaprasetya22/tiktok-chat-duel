@@ -366,7 +366,15 @@ const ECSArmyRendererInner = ({
         const baseScale = getBaseScale(classKey, uData.level || 1, uData.isBoss);
         const rarity = uData.rarity || 'common';
         const rScale = uData.isBoss ? 1.0 : (rarity === 'legendary' ? 1.8 : (rarity === 'epic' ? 1.4 : (rarity === 'elite' ? 1.2 : 1.0)));
-        item.group.scale.setScalar(baseScale * settings.unitScale * rScale);
+        
+        // UNIQUE VARIATION: Subtle height variation based on ID for an 'Organic Army' feel
+        const idNum = parseInt(id.replace(/\D/g, '')) || 0;
+        const hVar = 1.0 + ((idNum % 7) - 3) * 0.015; // +/- 4.5% height variation
+        item.group.scale.set(
+            baseScale * settings.unitScale * rScale,
+            baseScale * settings.unitScale * rScale * hVar,
+            baseScale * settings.unitScale * rScale
+        );
 
         // ASSIGN SHARED MATERIAL FROM CACHED MASTER
         // This eliminates 90% of shader work and memory usage

@@ -1,66 +1,68 @@
 'use client';
-/**
- * MageSpellEffect — Redesigned (Modern Energy Orb)
- * Clean orb projectile with velocity arc and radial impact burst.
- * No heavy displacement loops. 2 draw calls: orb + impact.
- */
 import * as THREE from 'three';
 import React, { useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { MAGE_PROJECTILE_TIME_MS } from "@/src/core/logic/combat/constants";
+import { UnitRuntimeData, UnitRarity } from "@/src/core/domain/unit.types";
+import { VFX_TEXTURES } from './VFXAssets';
 
 export interface SpellEntry {
   fromX: number; fromY: number; fromZ: number;
-  toX: number;   toY: number;   toZ: number;
+  toX: number; toY: number; toZ: number;
   progress: number;
   startTime: number;
   active: boolean;
   color?: string;
   targetId?: string;
   isBullet?: boolean;
+  isMeteor?: boolean; // New: vertical falling projectile
+  rarity?: UnitRarity;
 }
 export type SpellsRegistryRef = React.RefObject<SpellEntry[]>;
 
-import { UnitRuntimeData } from "@/src/core/domain/unit.types";
-
-const MAX_SPELLS = 200;
-const MAX_IMPACTS = 60;
-
-// ─── Orb shader: glowing sphere ──────────────────────────────────────────────
-const OrbMat = () => new THREE.ShaderMaterial({
-    vertexShader: `
-        varying vec3 vNormal;
+// ─── Optimized Magic Material (Billboarded for projectiles/flashes) ──────────
+const SuperMagicMat = (tex: THREE.Texture) => new THREE.ShaderMaterial({
+  uniforms: { tDiffuse: { value: tex }, uTime: { value: 0 } },
+  vertexShader: `
+        varying vec2 vUv;
         #ifndef USE_INSTANCING_COLOR
             attribute vec3 instanceColor;
         #endif
         varying vec3 vColor;
         void main() {
-            vNormal = normalize(normalMatrix * normal);
+            vUv = uv;
             vColor = instanceColor;
-            gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
+            vec4 mvPosition = modelViewMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
+            float sc = length(vec3(instanceMatrix[0][0], instanceMatrix[0][1], instanceMatrix[0][2]));
+            mvPosition.xy += position.xy * sc;
+            gl_Position = projectionMatrix * mvPosition;
         }
     `,
-    fragmentShader: `
-        varying vec3 vNormal;
+  fragmentShader: `
+        uniform sampler2D tDiffuse;
+        uniform float uTime;
+        varying vec2 vUv;
         varying vec3 vColor;
         void main() {
-            // Fresnel rim glow
-            float fresnel = pow(1.0 - max(0.0, dot(vNormal, vec3(0.0, 0.0, 1.0))), 2.0);
-            float core = pow(max(0.0, dot(vNormal, vec3(0.0, 0.0, 1.0))), 1.5);
-            vec3 col = mix(vColor * 3.0, vec3(1.0), core * 0.7);
-            float alpha = clamp(fresnel * 1.5 + core * 0.8, 0.0, 1.0);
-            gl_FragColor = vec4(col, alpha);
-            if (gl_FragColor.a < 0.04) discard;
+            vec4 tex = texture2D(tDiffuse, vUv);
+            float dist = length(vUv - 0.5);
+            float core = smoothstep(0.12, 0.0, dist) * 2.5;
+            float pulse = 0.8 + 0.2 * sin(uTime * 10.0 + dist * 5.0);
+            vec3 glow = vColor * tex.rgb * 5.0;
+            vec3 whiteCore = vec3(1.5) * core * pulse;
+            gl_FragColor = vec4(glow + whiteCore, tex.a * (0.7 + core));
+            if (gl_FragColor.a < 0.01) discard;
         }
     `,
-    transparent: true,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending,
+  transparent: true,
+  depthWrite: false,
+  blending: THREE.AdditiveBlending,
 });
 
-// ─── Impact burst: flat ring expanding ───────────────────────────────────────
-const ImpactMat = () => new THREE.ShaderMaterial({
-    vertexShader: `
+// ─── Ground Magic Material (Respects Matrix rotation, used for flat seals) ───
+const GroundMagicMat = (tex: THREE.Texture) => new THREE.ShaderMaterial({
+  uniforms: { tDiffuse: { value: tex }, uTime: { value: 0 } },
+  vertexShader: `
         varying vec2 vUv;
         #ifndef USE_INSTANCING_COLOR
             attribute vec3 instanceColor;
@@ -72,137 +74,205 @@ const ImpactMat = () => new THREE.ShaderMaterial({
             gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
         }
     `,
-    fragmentShader: `
+  fragmentShader: `
+        uniform sampler2D tDiffuse;
+        uniform float uTime;
         varying vec2 vUv;
         varying vec3 vColor;
         void main() {
-            vec2 c = vUv - 0.5;
-            float d = length(c);
-            float ring = smoothstep(0.03, 0.0, abs(d - 0.42));
-            float inner = smoothstep(0.35, 0.0, d) * 0.4;
-            float alpha = ring * 3.0 + inner;
-            gl_FragColor = vec4(vColor * 3.5, clamp(alpha, 0.0, 1.0));
-            if (gl_FragColor.a < 0.03) discard;
+            vec4 tex = texture2D(tDiffuse, vUv);
+            float dist = length(vUv - 0.5);
+            float pulse = 0.8 + 0.2 * sin(uTime * 5.0 + dist * 3.0);
+            vec3 glow = vColor * tex.rgb * 3.0 * pulse;
+            gl_FragColor = vec4(glow, tex.a);
+            if (gl_FragColor.a < 0.01) discard;
         }
     `,
-    transparent: true,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending,
+  transparent: true,
+  depthWrite: false,
+  blending: THREE.AdditiveBlending,
 });
 
 const _obj = new THREE.Object3D();
+const MAX_ORB_INSTANCES = 800; // Optimized count
 
-interface Props {
-  spellsRef: SpellsRegistryRef;
-  unitRegistry: React.RefObject<UnitRuntimeData[]>;
-  simTimeRef: React.RefObject<number>;
-}
+interface ImpactEntry { x: number; y: number; z: number; startTime: number; color: string; active: boolean; type: 'sigil' | 'embers' | 'charge'; rot: number; }
 
-interface ImpactEntry { x: number; y: number; z: number; startTime: number; color: string; active: boolean; }
-
-export function MageSpellEffect({ spellsRef, unitRegistry, simTimeRef }: Props) {
-  const orbRef    = useRef<THREE.InstancedMesh>(null!);
+export function MageSpellEffect({ spellsRef, unitRegistry, simTimeRef }: { spellsRef: SpellsRegistryRef; unitRegistry: React.RefObject<UnitRuntimeData[]>; simTimeRef: React.RefObject<number>; }) {
+  const meshRef = useRef<THREE.InstancedMesh>(null!);
+  const groundRef = useRef<THREE.InstancedMesh>(null!);
+  const chargeRef = useRef<THREE.InstancedMesh>(null!);
   const impactRef = useRef<THREE.InstancedMesh>(null!);
-  const impacts   = useRef<ImpactEntry[]>(
-    Array.from({ length: MAX_IMPACTS }, () => ({ x:0,y:0,z:0, startTime:0, color:'#fff', active:false }))
-  );
+  const impactIdx = useRef(0);
+  const impacts = useRef<ImpactEntry[]>(Array.from({ length: 150 }, () => ({ x: 0, y: 0, z: 0, startTime: 0, color: '#fff', active: false, type: 'sigil', rot: 0 })));
+  const activeImpacts = useRef<number[]>([]);
   const _c = useMemo(() => new THREE.Color(), []);
 
-  useFrame((_) => {
-    const orb = orbRef.current;
+  const quadGeo = useMemo(() => new THREE.PlaneGeometry(1, 1), []);
+  const orbMat = useMemo(() => SuperMagicMat(VFX_TEXTURES.magic[2]), []);
+  const bottomMat = useMemo(() => GroundMagicMat(VFX_TEXTURES.magic[0]), []);
+  const impMat = useMemo(() => GroundMagicMat(VFX_TEXTURES.magic[4]), []);
+
+  useFrame((state) => {
+    const mesh = meshRef.current;
+    const grd = groundRef.current;
+    const crg = chargeRef.current;
     const imp = impactRef.current;
     const spells = spellsRef?.current;
-    if (!orb || !imp || !spells) return;
+    if (!mesh || !grd || !imp || !crg || !spells) return;
 
     const simNow = simTimeRef.current || 0;
-    let oi = 0;
+    const time = state.clock.elapsedTime;
+    
+    // Animation: Sequential textures
+    const frameIdx = Math.floor(time * 12) % 5;
+    orbMat.uniforms.tDiffuse.value = VFX_TEXTURES.magic[frameIdx];
+    bottomMat.uniforms.tDiffuse.value = VFX_TEXTURES.magic[(frameIdx + 1) % 5];
+    impMat.uniforms.tDiffuse.value = VFX_TEXTURES.magic[(frameIdx + 2) % 5];
+
+    let oi = 0; let gi = 0; let ci = 0; let ii = 0;
+
+    const RARITY_SCALE = { common: 0.8, elite: 1.1, epic: 1.3, legendary: 1.5 };
+    const RARITY_GLOW = { common: 2.0, elite: 4.0, epic: 6.0, legendary: 10.0 };
 
     for (let i = 0; i < spells.length; i++) {
       const s = spells[i];
       if (!s || !s.active || s.isBullet) continue;
 
-      // Homing: update target position
-      // Homing: update target position
+      const r = s.rarity || 'common';
+      const rScale = (RARITY_SCALE as any)[r] || 1.0;
+      const rGlow = (RARITY_GLOW as any)[r] || 4.0;
+
+      // Cache target index
       if (s.targetId && unitRegistry.current) {
-        // Fast numeric extraction via custom property if available, or simpler logic
-        const tIdx = parseInt(s.targetId.match(/\d+/)?.toString() || '0');
+        const tIdx = (s as any)._tIdx ??= parseInt(s.targetId.replace(/\D/g, '')) || 0;
         const tar = unitRegistry.current[tIdx];
-        if (tar && tar.isActive && tar.id === s.targetId) {
-          s.toX = tar.position[0]; s.toY = tar.position[1] + 1.0; s.toZ = tar.position[2];
+        if (tar?.isActive && tar.id === s.targetId) {
+          s.toX = tar.position[0]; s.toY = tar.position[1] + 1.2; s.toZ = tar.position[2];
         }
       }
 
-      const dur = MAGE_PROJECTILE_TIME_MS || 380;
+      if ((s as any)._charged !== s.startTime) {
+        (s as any)._charged = s.startTime;
+        const eIdx = impactIdx.current;
+        const e = impacts.current[eIdx];
+        if (!e.active) activeImpacts.current.push(eIdx);
+        impactIdx.current = (impactIdx.current + 1) % impacts.current.length;
+        e.x = s.fromX; e.y = 0.1; e.z = s.fromZ; e.startTime = simNow; e.color = s.color || '#fff'; e.active = true; e.type = 'charge'; e.rot = Math.random() * 7;
+        (e as any).rScale = rScale; (e as any).rGlow = rGlow;
+      }
+
+      const dur = s.isMeteor ? 800 : (MAGE_PROJECTILE_TIME_MS || 450);
       const t = Math.min(1, (simNow - s.startTime) / dur);
-      s.progress = t;
+      
+      let px, py, pz;
+      if (s.isMeteor) {
+        px = s.toX;
+        pz = s.toZ;
+        py = s.fromY - (s.fromY - s.toY) * Math.pow(t, 2.0); // Accelerated fall
+      } else {
+        px = s.fromX + (s.toX - s.fromX) * t;
+        pz = s.fromZ + (s.toZ - s.fromZ) * t;
+        py = s.fromY + (s.toY - s.fromY) * t + Math.sin(t * Math.PI) * 2.0;
+      }
 
-      // Arc path: lerp + vertical arc
-      const px = s.fromX + (s.toX - s.fromX) * t;
-      const pz = s.fromZ + (s.toZ - s.fromZ) * t;
-      const arc = Math.sin(t * Math.PI) * 1.5;
-      const py = s.fromY + (s.toY - s.fromY) * t + arc;
-
-      const fade = 1 - t * t;
-
-      if (oi < MAX_SPELLS) {
+      if (oi < MAX_ORB_INSTANCES) {
         _obj.position.set(px, py, pz);
-        _obj.scale.setScalar((0.28 + arc * 0.05) * fade + 0.05);
+        _obj.scale.setScalar(0.8 * (1.1 - t * 0.3) * rScale);
         _obj.updateMatrix();
-        orb.setMatrixAt(oi, _obj.matrix);
-        _c.set(s.color || '#44aaff').multiplyScalar(1.5);
-        orb.setColorAt(oi, _c);
+        mesh.setMatrixAt(oi, _obj.matrix);
+        _c.set(s.color || '#44aaff').multiplyScalar(rGlow);
+        mesh.setColorAt(oi, _c);
         oi++;
       }
 
+      if (gi < 60) {
+        _obj.position.set(px, 0.12, pz);
+        _obj.rotation.set(-Math.PI / 2, 0, time * 2.0);
+        _obj.scale.setScalar(1.2 * (1.1 - t) * rScale);
+        _obj.updateMatrix();
+        grd.setMatrixAt(gi, _obj.matrix);
+        _c.set(s.color || '#fff').multiplyScalar(1.2 * rScale);
+        grd.setColorAt(gi, _c);
+        gi++;
+      }
+
       if (t >= 0.99) {
-        // Spawn impact burst
-        const e = impacts.current.find(x => !x.active);
-        if (e) { e.x = s.toX; e.y = 0.1; e.z = s.toZ; e.startTime = simNow; e.color = s.color || '#44aaff'; e.active = true; }
+        const eIdx = impactIdx.current;
+        const e = impacts.current[eIdx];
+        if (!e.active) activeImpacts.current.push(eIdx);
+        impactIdx.current = (impactIdx.current + 1) % impacts.current.length;
+        e.x = s.toX; e.y = 1.2; e.z = s.toZ; e.startTime = simNow; e.color = s.color || '#44aaff'; e.active = true; e.type = 'sigil'; e.rot = Math.random() * 7;
+        (e as any).rScale = rScale; (e as any).rGlow = rGlow;
         s.active = false;
       }
     }
 
-    orb.count = oi;
-    orb.instanceMatrix.needsUpdate = true;
-    if (orb.instanceColor) orb.instanceColor.needsUpdate = true;
+    mesh.count = oi;
+    mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    grd.count = gi;
+    grd.instanceMatrix.needsUpdate = true;
+    if (grd.instanceColor) grd.instanceColor.needsUpdate = true;
+    (mesh.material as THREE.ShaderMaterial).uniforms.uTime.value = time;
+    (grd.material as THREE.ShaderMaterial).uniforms.uTime.value = time;
+    (crg.material as THREE.ShaderMaterial).uniforms.uTime.value = time;
+    (imp.material as THREE.ShaderMaterial).uniforms.uTime.value = time;
 
-    // Impact rings
-    let ii = 0;
-    for (let i = 0; i < impacts.current.length; i++) {
-      const e = impacts.current[i];
-      if (!e.active) continue;
-      const t = (simNow - e.startTime) / 350;
-      if (t >= 1) { e.active = false; continue; }
-      if (ii >= MAX_IMPACTS) break;
+    const currentImpacts = activeImpacts.current;
+    for (let j = currentImpacts.length - 1; j >= 0; j--) {
+      const idx = currentImpacts[j];
+      const e = impacts.current[idx];
+      if (!e.active) { currentImpacts.splice(j, 1); continue; }
+      
+      const age = simNow - e.startTime;
+      const erScale = (e as any).rScale || 1.0;
+      const erGlow = (e as any).rGlow || 4.0;
 
-      _obj.position.set(e.x, e.y, e.z);
-      _obj.quaternion.identity(); // Geometry is pre-rotated
-      _obj.scale.setScalar(1 + t * 3.5);
-      _obj.updateMatrix();
-      imp.setMatrixAt(ii, _obj.matrix);
-      _c.set(e.color).multiplyScalar((1 - t) * 2.0);
-      imp.setColorAt(ii, _c);
-      ii++;
+      if (e.type === 'charge') {
+        const t = age / 400;
+        if (t >= 1) { e.active = false; currentImpacts.splice(j, 1); continue; }
+        if (ci < 80) {
+          _obj.position.set(e.x, 0.1, e.z);
+          _obj.rotation.set(-Math.PI / 2, 0, time * 5.0);
+          _obj.scale.setScalar((0.5 + t * 2.5) * (1.0 - t) * erScale);
+          _obj.updateMatrix();
+          crg.setMatrixAt(ci, _obj.matrix);
+          _c.set(e.color).multiplyScalar(erGlow * (1.0 - t));
+          crg.setColorAt(ci, _c);
+          ci++;
+        }
+      } else {
+        const t = age / 500;
+        if (t >= 1) { e.active = false; currentImpacts.splice(j, 1); continue; }
+        if (ii < 120) {
+          const easeOut = Math.sqrt(t);
+          const fade = 1.0 - t;
+          _obj.position.set(e.x, 0.15, e.z);
+          _obj.rotation.set(-Math.PI / 2, 0, e.rot + time * 2.0);
+          _obj.scale.setScalar((2.0 + easeOut * 8.0) * erScale);
+          _obj.updateMatrix();
+          imp.setMatrixAt(ii, _obj.matrix);
+          _c.set(e.color).multiplyScalar(erGlow * fade * 2.0);
+          imp.setColorAt(ii, _c);
+          ii++;
+        }
+      }
     }
-
     imp.count = ii;
     imp.instanceMatrix.needsUpdate = true;
     if (imp.instanceColor) imp.instanceColor.needsUpdate = true;
+    crg.count = ci;
+    crg.instanceMatrix.needsUpdate = true;
+    if (crg.instanceColor) crg.instanceColor.needsUpdate = true;
   });
-
-  const orbGeo    = useMemo(() => new THREE.SphereGeometry(1, 8, 8), []);
-  const impactGeo = useMemo(() => {
-    const geo = new THREE.CircleGeometry(1, 10);
-    geo.rotateX(-Math.PI / 2);
-    return geo;
-  }, []);
-  const orbMat    = useMemo(() => OrbMat(), []);
-  const impactMat = useMemo(() => ImpactMat(), []);
 
   return (
     <group>
-      <instancedMesh ref={orbRef}    args={[orbGeo,    orbMat,    MAX_SPELLS]}  frustumCulled={false} />
-      <instancedMesh ref={impactRef} args={[impactGeo, impactMat, MAX_IMPACTS]} frustumCulled={false} />
+      <instancedMesh ref={meshRef} args={[quadGeo, orbMat, MAX_ORB_INSTANCES]} frustumCulled={false} />
+      <instancedMesh ref={groundRef} args={[quadGeo, bottomMat, 60]} frustumCulled={false} />
+      <instancedMesh ref={chargeRef} args={[quadGeo, bottomMat, 80]} frustumCulled={false} />
+      <instancedMesh ref={impactRef} args={[quadGeo, impMat, 120]} frustumCulled={false} />
     </group>
   );
 }

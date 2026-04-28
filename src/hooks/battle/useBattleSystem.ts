@@ -122,62 +122,44 @@ export const useBattleSystem = () => {
 
     const spellsRef = useRef<any[]>(
         Array.from({ length: 300 }, () => ({
-            fromX: 0,
-            fromY: 1,
-            fromZ: 0,
-            toX: 0,
-            toY: 1,
-            toZ: 0,
-            progress: 0,
-            startTime: 0,
-            active: false,
+            fromX: 0, fromY: 1, fromZ: 0,
+            toX: 0, toY: 1, toZ: 0,
+            progress: 0, startTime: 0, active: false,
+            rarity: 'common'
         })),
     );
     const mmSpellsRef = useRef<any[]>(
         Array.from({ length: 400 }, () => ({
-            fromX: 0,
-            fromY: 1,
-            fromZ: 0,
-            toX: 0,
-            toY: 1,
-            toZ: 0,
-            progress: 0,
-            startTime: 0,
-            active: false,
+            fromX: 0, fromY: 1, fromZ: 0,
+            toX: 0, toY: 1, toZ: 0,
+            progress: 0, startTime: 0, active: false,
+            rarity: 'common'
         })),
     );
     const fighterSpellsRef = useRef<any[]>(
         Array.from({ length: 200 }, () => ({
-            x: 0,
-            y: 0,
-            z: 0,
-            rotation: 0,
-            progress: 0,
-            startTime: 0,
-            active: false,
+            x: 0, y: 0, z: 0,
+            targetX: 0, targetZ: 0,
+            rotation: 0, progress: 0,
+            startTime: 0, active: false,
             color: "#ffffff",
+            rarity: 'common'
         })),
     );
     const tankSpellsRef = useRef<any[]>(
         Array.from({ length: 150 }, () => ({
-            x: 0,
-            y: 0,
-            z: 0,
-            progress: 0,
-            startTime: 0,
-            active: false,
+            x: 0, y: 0, z: 0,
+            progress: 0, startTime: 0, active: false,
             color: "#ffffff",
+            rarity: 'common'
         })),
     );
     const assassinSpellsRef = useRef<any[]>(
         Array.from({ length: 150 }, () => ({
-            x: 0,
-            y: 0,
-            z: 0,
-            progress: 0,
-            startTime: 0,
-            active: false,
+            x: 0, y: 0, z: 0,
+            progress: 0, startTime: 0, active: false,
             color: "#ffffff",
+            rarity: 'common'
         })),
     );
 
@@ -577,7 +559,9 @@ export const useBattleSystem = () => {
             }
             if (activeCount === 0 && gameStateRef.current !== "PLAYING") return;
 
-            if (frameCountRef.current % 2 === 0) {
+            // OPTIMIZATION: Reduce grid update frequency to once every 5 frames (was 2).
+            // This reclaim CPU time for VFX while maintaining accurate targeting.
+            if (frameCountRef.current % 5 === 0) {
                 battleGrid.update(unitDataPoolRef.current, activeIndicesRef.current);
             }
 
@@ -651,9 +635,11 @@ export const useBattleSystem = () => {
                     continue;
                 }
 
-                const thinkThrottle = u.unitClass === "fighter" ? 90 : 140; 
-                const phaseOffset = i % 8; 
-                const frameCheck = (Math.floor(simNow / 16) + phaseOffset) % 8 === 0;
+                // PERFORMANCE: Spread 'Thinking' logic across 16 frames instead of 8. 
+                // This reduces the per-frame cost of spatial queries by 50% in high-density combat.
+                const thinkThrottle = u.unitClass === "fighter" ? 120 : 180; 
+                const phaseOffset = i % 16; 
+                const frameCheck = (Math.floor(simNow / 16) + phaseOffset) % 16 === 0;
 
                 if (frameCheck && (!u.lastThinkTime || simNow - u.lastThinkTime > thinkThrottle)) {
                     u.lastThinkTime = simNow;
@@ -714,7 +700,8 @@ export const useBattleSystem = () => {
                 }
 
                 const simFrame = Math.floor(simNow * 60); 
-                const moveCheck = (simFrame + i) % 2 === 0;
+                // PERFORMANCE: Spread collision/separation logic over 6 frames instead of 2.
+                const moveCheck = (simFrame + i) % 6 === 0;
 
                 if (moveCheck && !u.isDying) {
                     const sepWeight = 0.5;
@@ -742,8 +729,11 @@ export const useBattleSystem = () => {
 
                 const isRanged =
                     u.unitClass === "mage" || u.unitClass === "marksman";
+                
+                // --- Skill/Buff Range Adjustment ---
+                const skillRange = uData.isBuffed ? u.range * 1.5 : u.range;
                 const rangeMult = isBaseTarget && isRanged ? 0.82 : 1.0;
-                const effectiveRange = u.range * rangeMult;
+                const effectiveRange = skillRange * rangeMult;
                 const rangeSq = effectiveRange * effectiveRange;
 
                 const dxB = _px[i];
@@ -763,16 +753,143 @@ export const useBattleSystem = () => {
                     u.targetId = undefined;
                 }
 
-                if (currentTarget) {
-                    const tIdx = parseInt(currentTarget.id.split("-")[1]);
-                    const tData = unitDataPoolRef.current[tIdx];
+                const tIdx = currentTarget ? parseInt(currentTarget.id.split("-")[1]) : -1;
+                const tData = tIdx >= 0 ? unitDataPoolRef.current[tIdx] : undefined;
+
+                // ============================================================
+                // ACTIVE SKILL SYSTEM (INNOVATION)
+                // ============================================================
+                const cfg = CLASS_CONFIG[u.unitClass];
+                const cooldown = cfg.skill_cooldown * (1 - u.cooldownReduction);
+                const skillReady = !uData.lastSkillTime || (simNow - uData.lastSkillTime > cooldown);
+
+                if (skillReady && !u.isDying) {
+                    // 1. FIGHTER: Cyclone Slash (AOE around self)
+                    if (u.unitClass === 'fighter') {
+                        const neighbors = battleGrid.queryRadius(_px[i], _pz[i], cfg.skill_range);
+                        let enemyCount = 0;
+                        for(let n=0; n<neighbors.length; n++) {
+                            if (neighbors[n].type !== u.type && !neighbors[n].isDying) enemyCount++;
+                        }
+                        
+                        if (enemyCount >= 1) {
+                            uData.lastSkillTime = simNow;
+                            const s = fighterSpellsRef.current?.find(fs => !fs.active);
+                            if (s) {
+                                s.active = true; s.x = _px[i]; s.z = _pz[i]; s.startTime = simNow;
+                                s.color = u.type === 'player' ? '#ffd700' : '#ff4400';
+                                s.rarity = u.rarity; (s as any).isCyclone = true;
+                            }
+                            for(let n=0; n<neighbors.length; n++) {
+                                const tar = neighbors[n];
+                                if (tar.type !== u.type && !tar.isDying) {
+                                    const tnIdx = parseInt(tar.id.split('-')[1]);
+                                    const dmg = u.attack * 2.5; 
+                                    if (tnIdx >= 0) {
+                                        _vh[tnIdx] -= dmg;
+                                        accumulateDamage(tar.id, dmg, tar.position, "#fff");
+                                    }
+                                }
+                            }
+                        }
+                    } 
+                    // 2. MAGE: Meteor Rain (Targeted AOE)
+                    else if (u.unitClass === 'mage' && currentTarget && tData) {
+                        uData.lastSkillTime = simNow;
+                        for(let m=0; m<3; m++) {
+                            const s = spellsRef.current?.find(sp => !sp.active);
+                            if (s) {
+                                s.active = true; s.startTime = simNow + m * 250;
+                                s.fromX = tData.position[0]; s.fromY = 25; s.fromZ = tData.position[2];
+                                s.toX = tData.position[0] + (Math.random()-0.5)*3; s.toY = 0; s.toZ = tData.position[2] + (Math.random()-0.5)*3;
+                                s.color = u.type === 'player' ? '#44aaff' : '#ff2200';
+                                s.rarity = u.rarity; s.isMeteor = true;
+                            }
+                        }
+                    }
+                    // 3. MARKSMAN: Tactical Combo (Roll + Eagle Eye)
+                    else if (u.unitClass === 'marksman') {
+                        const neighbors = battleGrid.queryRadius(_px[i], _pz[i], cfg.skill_range);
+                        let threat = false;
+                        for(let n=0; n<neighbors.length; n++) {
+                            if (neighbors[n].type !== u.type && !neighbors[n].isDying) { threat = true; break; }
+                        }
+                        
+                        if (threat) {
+                            uData.lastSkillTime = simNow;
+                            uData.isRolling = true;
+                            uData.isBuffed = true;
+                            (uData as any).buffEndTime = simNow + cfg.skill_duration;
+                            (uData as any).rollEndTime = simNow + 800;
+                            const backDir = u.type === 'player' ? 1 : -1;
+                            v.velocity.z += backDir * 25; 
+
+                            // Spawn Visual Effect
+                            const s = mmSpellsRef.current?.find(sp => !sp.active);
+                            if (s) {
+                                s.active = true; s.x = _px[i]; s.z = _pz[i]; s.startTime = simNow;
+                                s.rarity = u.rarity; (s as any).isRolling = true;
+                                (s as any).isBuffed = true;
+                            }
+                        }
+                    }
+                    // 4. TANK: Fortress Guard (Shield)
+                    else if (u.unitClass === 'tank' && u.hp < u.maxHp * 0.6) {
+                        uData.lastSkillTime = simNow;
+                        u.isShield = true;
+                        uData.isShield = true;
+                        (uData as any).shieldEndTime = simNow + 3000;
+                        const s = tankSpellsRef.current?.find(sp => !sp.active);
+                        if (s) {
+                            s.active = true; s.x = _px[i]; s.z = _pz[i]; s.startTime = simNow;
+                            s.rarity = u.rarity; (s as any).isShield = true;
+                        }
+                    }
+                    // 5. ASSASSIN: Shadow Step (Teleport to Squishy)
+                    else if (u.unitClass === 'assassin') {
+                        // Find a target that is a mage or marksman on the opposite team
+                        const targets = activeIdxArray.filter(idx => {
+                            const targetU = uPool[idx];
+                            return targetU.type !== u.type && (targetU.unitClass === 'mage' || targetU.unitClass === 'marksman') && !targetU.isDying;
+                        });
+                        
+                        if (targets.length > 0) {
+                            const targetIdx = targets[Math.floor(Math.random() * targets.length)];
+                            const targetData = uiPool[targetIdx];
+                            const targetU = uPool[targetIdx];
+                            
+                            uData.lastSkillTime = simNow;
+                            // Teleport!
+                            const tx = targetData.position[0] + (Math.random()-0.5)*2;
+                            const tz = targetData.position[2] + (u.type === 'player' ? 1 : -1) * 1.5;
+                            v.position.set(tx, -0.4, tz);
+                            uData.position = [tx, -0.4, tz];
+                            u.targetId = targetU.id;
+                            
+                            const s = assassinSpellsRef.current?.find(sp => !sp.active);
+                            if (s) {
+                                s.active = true; s.x = tx; s.y = 0.5; s.z = tz; s.startTime = simNow;
+                                s.rarity = u.rarity; (s as any).isTeleport = true;
+                            }
+                        }
+                    }
+                }
+
+                if (uData.isBuffed && simNow > ((uData as any).buffEndTime || 0)) uData.isBuffed = false;
+                if (uData.isRolling && simNow > ((uData as any).rollEndTime || 0)) uData.isRolling = false;
+                if (uData.isShield && simNow > ((uData as any).shieldEndTime || 0)) {
+                    uData.isShield = false;
+                    u.isShield = false;
+                }
+
+                if (currentTarget && tData) {
                     const dxT = _px[i] - tData.position[0];
                     const dzT = _pz[i] - tData.position[2];
                     const dSq = dxT * dxT + dzT * dzT;
 
-                    if (dSq < u.range * u.range) {
+                    if (dSq < rangeSq) {
                         uData.status = "attacking";
-                        v.maxSpeed = 0;
+                        v.maxSpeed = uData.isRolling ? u.speed * 4.0 : 0;
                         if (
                             simNow - (uData.lastAttackTime || 0) >
                             u.attackCooldown
@@ -925,11 +1042,14 @@ export const useBattleSystem = () => {
                                             spells[si].x = uData.position[0] + fwdX * 0.8;
                                             spells[si].y = 1.2;
                                             spells[si].z = uData.position[2] + fwdZ * 0.8;
+                                            spells[si].targetX = tData.position[0];
+                                            spells[si].targetZ = tData.position[2];
                                             spells[si].rotation = uData.rotation[1] || 0;
                                             spells[si].startTime = simNow;
                                             spells[si].color = teamColor;
                                             spells[si].active = true;
                                             spells[si].progress = 0;
+                                            spells[si].rarity = u.rarity || 'common';
                                             break;
                                         }
                                     }
@@ -946,6 +1066,7 @@ export const useBattleSystem = () => {
                                             spells[si].color = teamColor;
                                             spells[si].active = true;
                                             spells[si].progress = 0;
+                                            spells[si].rarity = u.rarity || 'common';
                                             break;
                                         }
                                     }
@@ -966,6 +1087,7 @@ export const useBattleSystem = () => {
                                             spells[si].color = teamColor;
                                             spells[si].active = true;
                                             spells[si].progress = 0;
+                                            spells[si].rarity = u.rarity || 'common';
                                             break;
                                         }
                                     }
@@ -987,6 +1109,7 @@ export const useBattleSystem = () => {
                                                 spells[si].color = teamColor;
                                                 spells[si].active = true;
                                                 spells[si].progress = 0;
+                                                spells[si].rarity = u.rarity || 'common';
                                                 aoeCount++;
                                                 break;
                                             }
@@ -1010,6 +1133,7 @@ export const useBattleSystem = () => {
                                             spells[si].active = true;
                                             spells[si].progress = 0;
                                             spells[si].isBullet = true;
+                                            spells[si].rarity = u.rarity || 'common';
                                             break;
                                         }
                                     }
@@ -1026,6 +1150,7 @@ export const useBattleSystem = () => {
                                             spells[si].color = '#FFFF00';
                                             spells[si].active = true;
                                             spells[si].progress = 0;
+                                            spells[si].rarity = u.rarity || 'common';
                                             break;
                                         }
                                     }
@@ -1034,16 +1159,15 @@ export const useBattleSystem = () => {
                             }
                         }
                     } else if (u.targetId) {
-                                uData.status = "chasing";
-                        const classWeatherMult =
-                            weatherMults[u.unitClass]?.move_speed_mult || 1.0;
-                        v.maxSpeed = u.speed * classWeatherMult;
+                        uData.status = "chasing";
+                        const classWeatherMult = weatherMults[u.unitClass]?.move_speed_mult || 1.0;
+                        v.maxSpeed = (u.speed * classWeatherMult) * (uData.isRolling ? 4.0 : 1.0);
                         const seek = v.steering.behaviors[0] as any;
                         if (seek?.target && tData) {
                             if (u.unitClass === 'mage') {
                                 const ddx = _px[i] - tData.position[0];
                                 const ddz = _pz[i] - tData.position[2];
-                                if (ddx*ddx + ddz*ddz < 49) {
+                                if (ddx * ddx + ddz * ddz < 49) {
                                     const rDir = u.type === 'player' ? 1 : -1;
                                     seek.target.set(_px[i] + ddx * 2, 0, _pz[i] + ddz * 2 + rDir * 5);
                                 } else {
@@ -1055,7 +1179,7 @@ export const useBattleSystem = () => {
                                 const orbitR = uData.encirclementRadius || 1.25;
                                 const ddx = _px[i] - tData.position[0];
                                 const ddz = _pz[i] - tData.position[2];
-                                if (ddx*ddx + ddz*ddz < 80 * 80) {
+                                if (ddx * ddx + ddz * ddz < 80 * 80) {
                                     seek.target.set(
                                         tData.position[0] + Math.cos(angle) * orbitR,
                                         0,
@@ -1066,7 +1190,7 @@ export const useBattleSystem = () => {
                                 }
                             } else {
                                 const offsetX = ((i * 127) % 7 - 3) * 0.25;
-                                const offsetZ = ((i * 53)  % 7 - 3) * 0.25;
+                                const offsetZ = ((i * 53) % 7 - 3) * 0.25;
                                 seek.target.set(
                                     tData.position[0] + offsetX, 0,
                                     tData.position[2] + offsetZ
@@ -1076,7 +1200,7 @@ export const useBattleSystem = () => {
                     }
                 } else if (baseInRange) {
                     uData.status = "attacking";
-                    v.maxSpeed = 0;
+                    v.maxSpeed = uData.isRolling ? u.speed * 4.0 : 0;
                     if (
                         simNow - (uData.lastAttackTime || 0) >
                         u.attackCooldown
@@ -1221,7 +1345,7 @@ export const useBattleSystem = () => {
                         classWeatherMult *
                         globalWeatherMult;
 
-                    v.maxSpeed = baseSpeed;
+                    v.maxSpeed = baseSpeed * (uData.isRolling ? 4.0 : 1.0);
                     const seek = v.steering.behaviors[0] as any;
                     if (seek?.target) {
                         const swagger =
