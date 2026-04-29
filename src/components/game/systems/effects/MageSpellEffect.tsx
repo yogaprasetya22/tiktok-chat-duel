@@ -124,7 +124,7 @@ const GroundMagicMat = (tex: THREE.Texture) => new THREE.ShaderMaterial({
 const _obj = new THREE.Object3D();
 const MAX_ORB_INSTANCES = 800; 
 
-interface ImpactEntry { x: number; y: number; z: number; startTime: number; color: string; active: boolean; type: 'sigil' | 'embers' | 'charge' | 'splinter'; rot: number; vel?: THREE.Vector3; }
+interface ImpactEntry { x: number; y: number; z: number; startTime: number; color: string; active: boolean; type: 'sigil' | 'embers' | 'charge' | 'splinter'; rot: number; vx?: number; vy?: number; vz?: number; }
 
 export function MageSpellEffect({ spellsRef, unitRegistry, simTimeRef }: { spellsRef: SpellsRegistryRef; unitRegistry: React.RefObject<UnitRuntimeData[]>; simTimeRef: React.RefObject<number>; }) {
   const meshRef = useRef<THREE.InstancedMesh>(null!);
@@ -230,8 +230,8 @@ export function MageSpellEffect({ spellsRef, unitRegistry, simTimeRef }: { spell
         _obj.updateMatrix();
         mesh.setMatrixAt(oi, _obj.matrix);
         
-        const teamCol = new THREE.Color(s.color || '#44aaff');
-        _c.copy(teamCol).multiplyScalar(rGlow * (s.isMeteor ? 3.0 : 1.5));
+        _c.set(s.color || '#44aaff');
+        _c.multiplyScalar(rGlow * (s.isMeteor ? 3.0 : 1.5));
         mesh.setColorAt(oi, _c);
         oi++;
 
@@ -278,7 +278,9 @@ export function MageSpellEffect({ spellsRef, unitRegistry, simTimeRef }: { spell
             e.active = true;
             e.type = 'splinter' as any;
             e.rot = Math.random() * Math.PI * 2;
-            e.vel = new THREE.Vector3((Math.random() - 0.5) * 0.05, 0.05 + Math.random() * 0.1, (Math.random() - 0.5) * 0.05);
+            e.vx = (Math.random() - 0.5) * 0.05;
+            e.vy = 0.05 + Math.random() * 0.1;
+            e.vz = (Math.random() - 0.5) * 0.05;
             (e as any).rScale = 0.3 * rScale;
             (e as any).rGlow = rGlow;
         }
@@ -336,9 +338,9 @@ export function MageSpellEffect({ spellsRef, unitRegistry, simTimeRef }: { spell
         if (t >= 1) { e.active = false; currentImpacts.splice(j, 1); continue; }
         if (oi < MAX_ORB_INSTANCES) {
             const tSim = age * 0.01;
-            const px = e.x + (e.vel?.x || 0) * age;
-            const py = e.y + (e.vel?.y || 0) * age - 0.5 * 0.001 * age * age;
-            const pz = e.z + (e.vel?.z || 0) * age;
+            const px = e.x + (e.vx || 0) * age;
+            const py = e.y + (e.vy || 0) * age - 0.5 * 0.001 * age * age;
+            const pz = e.z + (e.vz || 0) * age;
             
             _obj.position.set(px, Math.max(0.1, py), pz);
             _obj.rotation.set(e.rot + tSim, e.rot * 0.5, tSim * 2.0);

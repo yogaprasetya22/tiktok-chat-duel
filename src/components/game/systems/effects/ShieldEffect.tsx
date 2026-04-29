@@ -156,7 +156,10 @@ export function ShieldEffect({ unitRegistry, activeIndicesRef, settingsRef, simT
 
             const baseCol = u.type === 'player' ? '#4488ff' : '#ff4444';
             _col.set(baseCol);
-            if (rarity === 'legendary') _col.lerp(new THREE.Color('#FFD700'), 0.5);
+            if (rarity === 'legendary') {
+                const _gold = _obj.userData._gold || (_obj.userData._gold = new THREE.Color('#FFD700'));
+                _col.lerp(_gold, 0.5);
+            }
             _col.multiplyScalar(opacity);
             mesh.setColorAt(count, _col);
             

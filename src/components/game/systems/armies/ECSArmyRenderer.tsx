@@ -373,6 +373,9 @@ const CLASS_KEYS: ClassKey[] = ['fighter', 'tank', 'mage', 'marksman', 'assassin
       const hudBase = CLASS_HUD_BASE[classKey];
       const healthAttr = healthBarRef.current?.geometry.getAttribute('aHealthInfo') as THREE.InstancedBufferAttribute | undefined;
       const cooldownAttr = cooldownRef.current?.geometry.getAttribute('aProgress') as THREE.InstancedBufferAttribute | undefined;
+      
+      const lerpFactor = 1.0 - Math.exp(-45 * delta);
+      const rotLerpFactor = 1.0 - Math.exp(-15 * delta);
 
       for (let vi = 0; vi < visibleUnitsCount; vi++) {
         const uData = bucket[vi];
@@ -441,7 +444,6 @@ const CLASS_KEYS: ClassKey[] = ['fighter', 'tank', 'mage', 'marksman', 'assassin
         // ── Position Lerp ──────────────────────────────────────────────────
         const tp = uData.position;
         const cp = item.group.position;
-        const lerpFactor = 1.0 - Math.exp(-45 * delta);
         const distSq = (tp[0] - cp.x) ** 2 + (tp[2] - cp.z) ** 2;
 
         if (!item.initialized || distSq > 25) {
@@ -457,7 +459,7 @@ const CLASS_KEYS: ClassKey[] = ['fighter', 'tank', 'mage', 'marksman', 'assassin
           let diff = uData.rotation[1] - item.rotation;
           while (diff < -Math.PI) diff += Math.PI * 2;
           while (diff >  Math.PI) diff -= Math.PI * 2;
-          item.rotation += diff * (1.0 - Math.exp(-15 * delta));
+          item.rotation += diff * rotLerpFactor;
           item.group.rotation.y = item.rotation;
         }
 

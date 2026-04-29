@@ -9,6 +9,10 @@ import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import * as THREE from "three";
 import * as YUKA from "yuka";
 import { useStore } from "@/src/state/useStore";
+
+// --- Zero-Allocation Scratch Objects ---
+const _scratchCol = new THREE.Color();
+const _white = new THREE.Color("#ffffff");
 import {
     createWorld,
     defineComponent,
@@ -195,9 +199,8 @@ export const useBattleSystem = () => {
 
     const simulationTimeRef = useRef<number>(0);
     const physicsAccumulatorRef = useRef(0);
-    const lastStateUpdate = useRef<number>(0);
+    const lastStateUpdate = useRef<number>(0); // --- BITECS ECS ARCHITECTURE ---
 
-    // --- BITECS ECS ARCHITECTURE ---
     const world = useMemo(() => createWorld(), []);
     const frameCountRef = useRef(0);
     const Position = useMemo(
@@ -218,12 +221,10 @@ export const useBattleSystem = () => {
                 isBuffed: Types.ui8,
             }),
         [],
-    );
+    ); // Entity mapping for pool management
 
-    // Entity mapping for pool management
-    const eidMap = useRef<number[]>(new Array(WORLD_UNIT_POOL_SIZE).fill(-1));
+    const eidMap = useRef<number[]>(new Array(WORLD_UNIT_POOL_SIZE).fill(-1)); // Ref pointers to raw bitecs arrays for tight loop access
 
-    // Ref pointers to raw bitecs arrays for tight loop access
     const _px = Position.x;
     const _py = Position.y;
     const _pz = Position.z;
@@ -231,17 +232,15 @@ export const useBattleSystem = () => {
     const _vmh = Health.max;
     const _vActive = Status.active;
     const _vType = Status.type;
-    const _vState = Status.state;
+    const _vState = Status.state; // --- ZERO-ALLOCATION OBJECT POOL ---
 
-    // --- ZERO-ALLOCATION OBJECT POOL ---
     const unitPoolRef = useRef<ActiveUnit[]>([]);
     const unitDataPoolRef = useRef<UnitRuntimeData[]>([]);
     const vehiclePoolRef = useRef<YUKA.Vehicle[]>([]);
     const activeIndicesRef = useRef<number[]>([]);
     const lastMvpTimeRef = useRef(0);
-    const cachedMvpRef = useRef<any>(null);
+    const cachedMvpRef = useRef<any>(null); // --- OPTIMIZATION: Spell Pool Pointers ---
 
-    // --- OPTIMIZATION: Spell Pool Pointers ---
     const mageSpellPtr = useRef(0);
     const mmSpellPtr = useRef(0);
     const fighterSpellPtr = useRef(0);
@@ -430,9 +429,8 @@ export const useBattleSystem = () => {
         playerBaseHpRef.current = towerConfigRef.current.baseHp;
         enemyBaseHpRef.current = towerConfigRef.current.baseHp;
         useStore.getState().setGameState("PLAYING");
-        useStore.getState().resetStore(towerConfigRef.current);
+        useStore.getState().resetStore(towerConfigRef.current); // Clear internal simulation stats
 
-        // Clear internal simulation stats
         statsRef.current = {
             damageDealt: {},
             playerDamage: {},
@@ -444,16 +442,46 @@ export const useBattleSystem = () => {
             enemyHits: {},
             profileImages: statsRef.current.profileImages, // Preserve textures
             classStats: {
-                fighter: { damageDealt: 0, damageTaken: 0, kills: 0, unitsSpawned: 0, healing: 0 },
-                tank: { damageDealt: 0, damageTaken: 0, kills: 0, unitsSpawned: 0, healing: 0 },
-                mage: { damageDealt: 0, damageTaken: 0, kills: 0, unitsSpawned: 0, healing: 0 },
-                marksman: { damageDealt: 0, damageTaken: 0, kills: 0, unitsSpawned: 0, healing: 0 },
-                assassin: { damageDealt: 0, damageTaken: 0, kills: 0, unitsSpawned: 0, healing: 0 },
+                fighter: {
+                    damageDealt: 0,
+                    damageTaken: 0,
+                    kills: 0,
+                    unitsSpawned: 0,
+                    healing: 0,
+                },
+                tank: {
+                    damageDealt: 0,
+                    damageTaken: 0,
+                    kills: 0,
+                    unitsSpawned: 0,
+                    healing: 0,
+                },
+                mage: {
+                    damageDealt: 0,
+                    damageTaken: 0,
+                    kills: 0,
+                    unitsSpawned: 0,
+                    healing: 0,
+                },
+                marksman: {
+                    damageDealt: 0,
+                    damageTaken: 0,
+                    kills: 0,
+                    unitsSpawned: 0,
+                    healing: 0,
+                },
+                assassin: {
+                    damageDealt: 0,
+                    damageTaken: 0,
+                    kills: 0,
+                    unitsSpawned: 0,
+                    healing: 0,
+                },
             },
             teamSummary: {
                 player: { totalDamage: 0, totalKills: 0, unitsLost: 0 },
                 enemy: { totalDamage: 0, totalKills: 0, unitsLost: 0 },
-            }
+            },
         };
 
         for (let i = 0; i < WORLD_UNIT_POOL_SIZE; i++) {
@@ -510,9 +538,8 @@ export const useBattleSystem = () => {
                 pickWeightedRandom(
                     ["fighter", "tank", "assassin", "marksman", "mage"],
                     [35, 35, 7, 11, 12],
-                );
+                ); // --- MODULAR GACHA SYSTEM ---
 
-            // --- MODULAR GACHA SYSTEM ---
             const rarity = pickWeightedRandom(
                 ["common", "elite", "epic", "legendary"],
                 [
@@ -544,13 +571,11 @@ export const useBattleSystem = () => {
             u.type = type;
             u.userName = name;
             u.unitClass = unitClass;
-            u.rarity = rarity;
+            u.rarity = rarity; // --- MODULAR STAT SCALING ---
 
-            // --- MODULAR STAT SCALING ---
             u.hp = stats.hp * c.hp;
-            u.attack = stats.attack * c.atk;
+            u.attack = stats.attack * c.atk; // Apply specialized scaling from modular logic
 
-            // Apply specialized scaling from modular logic
             applyClassSpecialization(
                 u,
                 unitClass as ClassKey,
@@ -694,10 +719,9 @@ export const useBattleSystem = () => {
                 const eid = eidArr[i];
                 if (eid !== -1 && activeArr[i]) activeCount++;
             }
-            if (activeCount === 0 && gameStateRef.current !== "PLAYING") return;
-
-            // OPTIMIZATION: Reduce grid update frequency to once every 5 frames (was 2).
+            if (activeCount === 0 && gameStateRef.current !== "PLAYING") return; // OPTIMIZATION: Reduce grid update frequency to once every 5 frames (was 2).
             // This reclaim CPU time for VFX while maintaining accurate targeting.
+
             if (frameCountRef.current % 5 === 0) {
                 battleGrid.update(
                     unitDataPoolRef.current,
@@ -744,9 +768,8 @@ export const useBattleSystem = () => {
 
                 const u = uPool[i];
                 const uData = uiPool[i];
-                const v = vPool[i];
+                const v = vPool[i]; // PRIMARY DEATH CHECK: use eid-indexed buffer for instant cleanup
 
-                // PRIMARY DEATH CHECK: use eid-indexed buffer for instant cleanup
                 if (_vh[i] <= 0) {
                     uData.position[1] = -100;
                     _py[i] = -100;
@@ -755,9 +778,8 @@ export const useBattleSystem = () => {
                     u.isActive = false;
                     uData.isActive = false;
                     continue;
-                }
+                } // SECONDARY: trigger dying animation on first frame at 0 HP
 
-                // SECONDARY: trigger dying animation on first frame at 0 HP
                 if (_vh[i] <= 0 && !u.isDying) {
                     u.isDying = true;
                     u.deathTime = simNow;
@@ -780,10 +802,9 @@ export const useBattleSystem = () => {
                         unitIndexRef.current.delete(u.id);
                     }
                     continue;
-                }
-
-                // PERFORMANCE: Spread 'Thinking' logic across 16 frames instead of 8.
+                } // PERFORMANCE: Spread 'Thinking' logic across 16 frames instead of 8.
                 // This reduces the per-frame cost of spatial queries by 50% in high-density combat.
+
                 const thinkThrottle =
                     u.unitClass === "fighter"
                         ? 120
@@ -864,8 +885,7 @@ export const useBattleSystem = () => {
                     }
                 }
 
-                const simFrame = Math.floor(simNow * 60);
-                // PERFORMANCE: Spread collision/separation logic over 12 frames instead of 6.
+                const simFrame = Math.floor(simNow * 60); // PERFORMANCE: Spread collision/separation logic over 12 frames instead of 6.
                 const moveCheck = (simFrame + i) % 12 === 0;
 
                 if (moveCheck && !u.isDying) {
@@ -897,9 +917,8 @@ export const useBattleSystem = () => {
                     u.targetId === "player-base" || u.targetId === "enemy-base";
 
                 const isRanged =
-                    u.unitClass === "mage" || u.unitClass === "marksman";
+                    u.unitClass === "mage" || u.unitClass === "marksman"; // --- Skill/Buff Range Adjustment ---
 
-                // --- Skill/Buff Range Adjustment ---
                 const skillRange = uData.isBuffed ? u.range * 1.5 : u.range;
                 const rangeMult = isBaseTarget && isRanged ? 0.82 : 1.0;
                 const effectiveRange = skillRange * rangeMult;
@@ -924,11 +943,10 @@ export const useBattleSystem = () => {
 
                 const tIdx = currentTarget ? currentTarget.poolIdx : -1;
                 const tData =
-                    tIdx >= 0 ? unitDataPoolRef.current[tIdx] : undefined;
-
-                // ============================================================
+                    tIdx >= 0 ? unitDataPoolRef.current[tIdx] : undefined; // ============================================================
                 // ACTIVE SKILL SYSTEM (INNOVATION)
                 // ============================================================
+
                 const cfg = CLASS_CONFIG[u.unitClass];
                 const cooldown = cfg.skill_cooldown * (1 - u.cooldownReduction);
                 const skillReady =
@@ -997,12 +1015,11 @@ export const useBattleSystem = () => {
                                 }
                             }
                         }
-                    }
-                    // 2. MAGE: Meteor Rain (Targeted AOE)
-                    else if (
+                    } else if (
                         u.unitClass === "mage" &&
                         (currentTarget || baseInRange)
                     ) {
+                        // 2. MAGE: Meteor Rain (Targeted AOE)
                         uData.lastSkillTime = simNow;
                         const pool = spellsRef.current;
                         if (pool) {
@@ -1014,39 +1031,37 @@ export const useBattleSystem = () => {
                             const tz = currentTarget
                                 ? tData!.position[2]
                                 : targetBaseZ;
-                            const iceRainCount = 20; // LUXURY: 20 high-fidelity 3D ice shards
+                            const shardCount = 12; // LUXURY: 20 high-fidelity 3D ice shards
 
-                            for (let m = 0; m < iceRainCount; m++) {
+                            for (let m = 0; m < shardCount; m++) {
                                 const s = pool[mageSpellPtr.current];
-                                s.active = true;
+                                s.active = true; // Rhythmic Staggering: Shards fall in waves
 
-                                // Rhythmic Staggering: Shards fall in waves
                                 const waveIndex = Math.floor(m / 5);
                                 s.startTime =
                                     simNow +
                                     waveIndex * 300 +
-                                    Math.random() * 400;
+                                    Math.random() * 400; // High-altitude source
 
-                                // High-altitude source
                                 s.fromX = tx + (Math.random() - 0.5) * 10;
                                 s.fromY = 25 + Math.random() * 15;
-                                s.fromZ = tz + (Math.random() - 0.5) * 10;
+                                s.fromZ = tz + (Math.random() - 0.5) * 10; // Precise landing with slight spread
 
-                                // Precise landing with slight spread
                                 s.toX = tx + (Math.random() - 0.5) * 7;
                                 s.toY = 0;
-                                s.toZ = tz + (Math.random() - 0.5) * 7;
+                                s.toZ = tz + (Math.random() - 0.5) * 7; // Team-Based Icy Colors
 
-                                // Team-Based Icy Colors
                                 const teamBaseCol =
                                     u.type === "player"
                                         ? towerConfigRef.current.player.color
                                         : towerConfigRef.current.enemy.color;
 
-                                const col = new THREE.Color(teamBaseCol);
-                                if (Math.random() > 0.4)
-                                    col.lerp(new THREE.Color("#ffffff"), 0.4);
-                                s.color = col.getStyle();
+                                // PERFORMANCE: Reuse scratch color objects instead of creating new ones in a loop
+                                _scratchCol.set(teamBaseCol);
+                                if (Math.random() > 0.4) {
+                                    _scratchCol.lerp(_white, 0.4);
+                                }
+                                s.color = _scratchCol.getStyle();
 
                                 s.rarity = u.rarity;
                                 s.isMeteor = true;
@@ -1061,13 +1076,11 @@ export const useBattleSystem = () => {
                                     (mageSpellPtr.current + 1) % pool.length;
                             }
                         }
-                    }
-                    // 2.2 MAGE: Base Attack Enhancement (Tower)
-                    else if (u.unitClass === "mage" && baseInRange) {
+                    } else if (u.unitClass === "mage" && baseInRange) {
+                        // 2.2 MAGE: Base Attack Enhancement (Tower)
                         // Logic already handles tower attacks below
-                    }
-                    // 3. MARKSMAN: Triple Threat Precision (Sniper Burst Initialization)
-                    else if (u.unitClass === "marksman") {
+                    } else if (u.unitClass === "marksman") {
+                        // 3. MARKSMAN: Triple Threat Precision (Sniper Burst Initialization)
                         // Pick target (priority: CLOSEST in range for better accuracy)
                         const targets = battleGrid.queryRadius(
                             _px[i],
@@ -1099,16 +1112,14 @@ export const useBattleSystem = () => {
                             uData.targetId = bestTarget.id;
                             (uData as any).sniperCount = 0;
                             (uData as any).lastSniperTime = 0;
-                            (uData as any).sniperChargeDone = false;
-                            // buffEndTime set panjang agar tidak memotong rangkaian 5 tembakan
+                            (uData as any).sniperChargeDone = false; // buffEndTime set panjang agar tidak memotong rangkaian 5 tembakan
                             (uData as any).buffEndTime = simNow + 8000;
                             (uData as any).sniperTargetId = bestTarget.id;
                             (uData as any).sniperTargetPoolIdx =
                                 bestTarget.poolIdx;
                         }
-                    }
-                    // 4. TANK: Fortress Guard (Shield)
-                    else if (u.unitClass === "tank" && u.hp < u.maxHp * 0.6) {
+                    } else if (u.unitClass === "tank" && u.hp < u.maxHp * 0.6) {
+                        // 4. TANK: Fortress Guard (Shield)
                         uData.lastSkillTime = simNow;
                         u.isShield = true;
                         uData.isShield = true;
@@ -1125,9 +1136,8 @@ export const useBattleSystem = () => {
                             tankSpellPtr.current =
                                 (tankSpellPtr.current + 1) % pool.length;
                         }
-                    }
-                    // 5. ASSASSIN: Shadow Step (Teleport to Squishy)
-                    else if (u.unitClass === "assassin") {
+                    } else if (u.unitClass === "assassin") {
+                        // 5. ASSASSIN: Shadow Step (Teleport to Squishy)
                         const targets = battleGrid.queryRadius(
                             _px[i],
                             _pz[i],
@@ -1207,9 +1217,8 @@ export const useBattleSystem = () => {
                             }
                         }
                     }
-                }
+                } // --- ACTIVE SKILL UPDATES (Post-Initiation) ---
 
-                // --- ACTIVE SKILL UPDATES (Post-Initiation) ---
                 if (
                     uData.isBuffed &&
                     u.unitClass === "marksman" &&
@@ -1231,9 +1240,8 @@ export const useBattleSystem = () => {
                         const targetData =
                             targetPoolIdx !== undefined && targetPoolIdx >= 0
                                 ? unitDataPoolRef.current[targetPoolIdx]
-                                : null;
+                                : null; // Update target jika masih aktif, atau cari target baru
 
-                        // Update target jika masih aktif, atau cari target baru
                         let tPos: [number, number, number] | null = null;
                         let tId = (uData as any).sniperTargetId;
                         if (
@@ -1281,9 +1289,8 @@ export const useBattleSystem = () => {
                         }
 
                         if (tPos) {
-                            const tPoolIdx = (uData as any).sniperTargetPoolIdx;
+                            const tPoolIdx = (uData as any).sniperTargetPoolIdx; // Lead Shooting (Predictive Aiming)
 
-                            // Lead Shooting (Predictive Aiming)
                             let txP = tPos[0];
                             let tzP = tPos[2];
                             const tVeh =
@@ -1337,8 +1344,7 @@ export const useBattleSystem = () => {
                                     // Balanced: 1.8x normal, 5.0x finisher
                                     const dmg =
                                         u.attack *
-                                        (sCount + 1 === 5 ? 5.0 : 1.8);
-                                    // Sync _vh, u.hp, uData.hp all at once
+                                        (sCount + 1 === 5 ? 5.0 : 1.8); // Sync _vh, u.hp, uData.hp all at once
                                     const newHp = Math.max(
                                         0,
                                         _vh[tPoolIdx] - dmg,
@@ -1963,9 +1969,8 @@ export const useBattleSystem = () => {
                             u.type === "player" ? "#0066FF" : "#FF0033",
                         );
 
-                        uData.lastAttackTime = simNow;
+                        uData.lastAttackTime = simNow; // COMBAT EFFECTS FOR TOWER ATTACK
 
-                        // COMBAT EFFECTS FOR TOWER ATTACK
                         const teamColor =
                             u.type === "player"
                                 ? towerConfigRef.current.player.color
@@ -2152,8 +2157,7 @@ export const useBattleSystem = () => {
                         const isSniper =
                             u.unitClass === "marksman" && uData.isBuffed;
                         const finalSmooth = isSniper ? 1.0 : rotSmooth;
-                        uData.rotation[1] +=
-                            diff * Math.min(finalSmooth, 1.0);
+                        uData.rotation[1] += diff * Math.min(finalSmooth, 1.0);
                     }
                 }
 
@@ -2248,9 +2252,8 @@ export const useBattleSystem = () => {
 
                 uData.position[0] = _px[i];
                 uData.position[2] = _pz[i];
-            }
+            } // --- SPELL IMPACT LOGIC (Mage Meteors) ---
 
-            // --- SPELL IMPACT LOGIC (Mage Meteors) ---
             const sPool = spellsRef.current;
             for (let si = 0; si < sPool.length; si++) {
                 const s = sPool[si];
@@ -2288,8 +2291,7 @@ export const useBattleSystem = () => {
                                 const td = unitDataPoolRef.current[tIdx];
                                 if (td && tUnit) {
                                     td.hp = _vh[tIdx];
-                                    tUnit.hp = _vh[tIdx];
-                                    // Visual feedback for impact
+                                    tUnit.hp = _vh[tIdx]; // Visual feedback for impact
                                     accumulateDamage(
                                         target.id,
                                         dmg,
@@ -2315,16 +2317,16 @@ export const useBattleSystem = () => {
                         score: (prev.enemy.score || 0) + 1,
                     },
                 }));
-                
                 const currentWins = useStore.getState().enemyWins;
-                useStore.getState().setWins(useStore.getState().playerWins, currentWins + 1);
-                useStore.getState().setGameState("LOST");
+                useStore
+                    .getState()
+                    .setWins(useStore.getState().playerWins, currentWins + 1);
+                useStore.getState().setGameState("LOST"); // Auto-reset stats after 10 seconds of glory
 
-                // Auto-reset stats after 10 seconds of glory
                 setTimeout(() => {
-                  if (gameStateRef.current === "LOST") {
-                    resetBattle();
-                  }
+                    if (gameStateRef.current === "LOST") {
+                        resetBattle();
+                    }
                 }, 10000);
             }
             if (
@@ -2339,16 +2341,16 @@ export const useBattleSystem = () => {
                         score: (prev.player.score || 0) + 1,
                     },
                 }));
-                
                 const currentWins = useStore.getState().playerWins;
-                useStore.getState().setWins(currentWins + 1, useStore.getState().enemyWins);
-                useStore.getState().setGameState("WON");
+                useStore
+                    .getState()
+                    .setWins(currentWins + 1, useStore.getState().enemyWins);
+                useStore.getState().setGameState("WON"); // Auto-reset stats after 10 seconds of glory
 
-                // Auto-reset stats after 10 seconds of glory
                 setTimeout(() => {
-                  if (gameStateRef.current === "WON") {
-                    resetBattle();
-                  }
+                    if (gameStateRef.current === "WON") {
+                        resetBattle();
+                    }
                 }, 10000);
             }
 

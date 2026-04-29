@@ -15,10 +15,10 @@ export const VFX_TEXTURES = {
     // Mage - Animated Sequence (1-5)
     magic: [
         loadTex('/kenney_particle-pack/PNG (Transparent)/magic_01.png'),
-        loadTex('/kenney_particle-pack/PNG (Transparent)/magic_02.png'),
         loadTex('/kenney_particle-pack/PNG (Transparent)/magic_03.png'),
-        loadTex('/kenney_particle-pack/PNG (Transparent)/magic_04.png'),
+        loadTex('/kenney_particle-pack/PNG (Transparent)/magic_02.png'),
         loadTex('/kenney_particle-pack/PNG (Transparent)/magic_05.png'),
+        loadTex('/kenney_particle-pack/PNG (Transparent)/magic_04.png'),
     ],
     scorch: loadTex('/kenney_particle-pack/PNG (Transparent)/scorch_03.png'),
     scorch_mewah: loadTex('/kenney_particle-pack/PNG (Transparent)/scorch_02.png'),
