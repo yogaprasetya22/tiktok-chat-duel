@@ -185,6 +185,7 @@ export function DamageHUDBatcher({ damageQueue }: { damageQueue: React.RefObject
         magic: new THREE.Color('#bf00ff'),
     };
 
+
     useFrame((state) => {
         const now = state.clock.elapsedTime;
         const mesh = meshRef.current;
@@ -268,9 +269,11 @@ export function DamageHUDBatcher({ damageQueue }: { damageQueue: React.RefObject
         const charAttr = mesh.geometry.attributes.aCharIdx as THREE.InstancedBufferAttribute;
         const opacityAttrBuf = mesh.geometry.attributes.aOpacity as THREE.InstancedBufferAttribute;
         
-        const remaining: number[] = [];
-
-        for (const idx of activeIndices.current) {
+        // Zero-allocation active list maintenance: swap-remove dead entries
+        const ai = activeIndices.current;
+        let writeIdx = 0;
+        for (let ri = 0; ri < ai.length; ri++) {
+            const idx = ai[ri];
             const slot = slots[idx];
             const elapsed = now - slot.startTime;
 
@@ -278,32 +281,31 @@ export function DamageHUDBatcher({ damageQueue }: { damageQueue: React.RefObject
                 slot.active = false;
                 mesh.setMatrixAt(idx, _hideMatrix);
                 opacityAttr[idx] = 0;
-                continue;
+                continue; // don't copy to writeIdx
             }
 
-            remaining.push(idx);
+            ai[writeIdx++] = idx; // keep alive
             const t = elapsed;
-            
+
             // "Juicy" Pop-Bounce Motion
             let px = slot.baseX + slot.velX * t + slot.digitOffset;
-            let py = slot.baseY + slot.velY * t - 16.0 * t * t * 0.5; // High gravity for snappy feel
+            let py = slot.baseY + slot.velY * t - 8.0 * t * t; // gravity
             let pz = slot.baseZ + slot.velZ * t;
 
-            // Crit Shake (Sinusoidal screen-space jitter)
+            // Crit Shake
             if (slot.isCrit && t < 0.3) {
-                const shake = Math.sin(t * 60) * 0.12 * (1.0 - t/0.3);
-                px += shake;
-                py += shake;
+                const shake = Math.sin(t * 60) * 0.1 * (1.0 - t/0.3);
+                px += shake; py += shake;
             }
 
-            // High-Impact Scale Curve
-            let s = 1.0;
+            // Scale curve
+            let s: number;
             if (t < 0.1) {
-                s = (t / 0.1) * 2.0; // Oversize pop
+                s = (t / 0.1) * 1.8;
             } else if (t < 0.25) {
-                s = 2.0 - ((t - 0.1) / 0.15) * 1.0; // Settle bounce
+                s = 1.8 - ((t - 0.1) / 0.15) * 0.8;
             } else {
-                s = 1.0 - ((t - 0.25) / (DURATION - 0.25)) * 0.4; // Fade shrink
+                s = 1.0 - ((t - 0.25) / (DURATION - 0.25)) * 0.4;
             }
 
             const finalScale = s * (slot.isCrit ? CRIT_SCALE_MULT : 1.0) * SPRITE_SIZE;
@@ -314,12 +316,10 @@ export function DamageHUDBatcher({ damageQueue }: { damageQueue: React.RefObject
             _dummy.updateMatrix();
             mesh.setMatrixAt(idx, _dummy.matrix);
 
-            // Per-instance Color/Alpha
-            opacityAttr[idx] = Math.max(0, Math.pow(1.0 - t / DURATION, 2.0));
+            opacityAttr[idx] = Math.max(0, (1.0 - t / DURATION) ** 2);
             charIdxAttr[idx] = slot.charIdx;
 
             if (slot.isCrit) {
-                // Flash between red and gold during the "hit" moment
                 mesh.setColorAt(idx, (Math.floor(t * 30) % 2 === 0) ? colors.critHighlight : colors.crit);
             } else if (slot.isMagic) {
                 mesh.setColorAt(idx, colors.magic);
@@ -327,8 +327,7 @@ export function DamageHUDBatcher({ damageQueue }: { damageQueue: React.RefObject
                 mesh.setColorAt(idx, colors.phys);
             }
         }
-
-        activeIndices.current = remaining;
+        ai.length = writeIdx; // trim dead entries in-place (zero allocation)
 
         mesh.instanceMatrix.needsUpdate = true;
         charAttr.needsUpdate = true;

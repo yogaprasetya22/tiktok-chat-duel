@@ -38,7 +38,7 @@ interface BattleArmyProps {
 
 
 import { WORLD_UNIT_POOL_SIZE as MAX_UNITS } from '@/src/core/domain/unit.types';
-const NAME_POOL_SIZE = 40; 
+const NAME_POOL_SIZE = 60; 
 const TEST_IMAGE_URL = 'https://t3.ftcdn.net/jpg/13/11/22/86/360_F_1311228699_YoiLc5aJ3RWz3uRfdEtlV0UYSQjqf7RW.jpg';
 
 const textureLoader = new THREE.TextureLoader();
@@ -179,6 +179,56 @@ const MLHealthBarShader = {
   `
 };
 
+const RadialCooldownShader = {
+  vertexShader: `
+    attribute float aProgress;
+    varying vec2 vUv;
+    varying float vProgress;
+    #ifndef USE_INSTANCING_COLOR
+      attribute vec3 instanceColor;
+    #endif
+    varying vec3 vColor;
+    
+    void main() {
+      vUv = uv;
+      vProgress = aProgress;
+      vColor = instanceColor;
+      gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: `
+    varying vec2 vUv;
+    varying float vProgress;
+    varying vec3 vColor;
+    void main() {
+      vec2 uv = vUv - 0.5;
+      float dist = length(uv);
+      
+      // Ring shape
+      float inner = 0.38;
+      float outer = 0.5;
+      if (dist > outer || dist < inner) discard;
+
+      // Radial Fill (Clockwise from Top)
+      float angle = atan(uv.x, uv.y); // Range -PI to PI. Top is 0.
+      if (angle < 0.0) angle += 6.283185;
+      
+      float normAngle = angle / 6.283185;
+      
+      // If progress is 1.0 (ready), show full ring. If 0.0, show nothing.
+      if (normAngle > vProgress) discard;
+
+      // Glow effect based on proximity to center of ring thickness
+      float glow = 1.0 - abs(dist - (inner + outer) * 0.5) / (outer - inner);
+      
+      // Team Color Sync (vColor) + Readiness White Glow
+      vec3 color = mix(vColor, vec3(1.0), vProgress * 0.5);
+      
+      gl_FragColor = vec4(color * (1.2 + glow), 0.8 * glow);
+    }
+  `
+};
+
 const ProfileImageShader = {
   vertexShader: `
     varying vec2 vUv;
@@ -210,12 +260,13 @@ const BattleArmyComponent = ({
 }: BattleArmyProps) => {
   const shadowRef = useRef<THREE.InstancedMesh>(null!);
   const healthBarRef = useRef<THREE.InstancedMesh>(null!);
+  const cooldownRef = useRef<THREE.InstancedMesh>(null!);
 
   const { spawnVFX } = useVFX();
 
-  // Shared ref: each army class adds its rendered unit IDs here each frame.
+  // Shared ref: each army class adds its rendered unit indices (poolIdx) here each frame.
   // The InstancedImpostorRenderer reads this to skip already-rendered units.
-  const renderedIdsRef = useRef<Set<string>>(new Set());
+  const renderedIdsRef = useRef<Set<number>>(new Set());
 
   // --- VFX BRIDGE: Link the context to the ref ---
   useEffect(() => {
@@ -232,9 +283,11 @@ const BattleArmyComponent = ({
       for (let i = 0; i < 1500; i++) {
         shadowRef.current.setMatrixAt(i, tempObject.matrix);
         healthBarRef.current?.setMatrixAt(i, tempObject.matrix);
+        cooldownRef.current?.setMatrixAt(i, tempObject.matrix);
       }
       shadowRef.current.instanceMatrix.needsUpdate = true;
       if (healthBarRef.current) healthBarRef.current.instanceMatrix.needsUpdate = true;
+      if (cooldownRef.current) cooldownRef.current.instanceMatrix.needsUpdate = true;
     }
   }, []);
 
@@ -255,6 +308,24 @@ const BattleArmyComponent = ({
     geo.rotateX(-Math.PI / 2); // Pre-rotate on CPU once to save 1,500 rotation matrix calculations per frame
     return geo;
   }, []);
+  const cooldownGeo = useMemo(() => {
+    const geo = new THREE.PlaneGeometry(1, 1);
+    geo.rotateX(-Math.PI / 2);
+    const progressArray = new Float32Array(1500);
+    const attr = new THREE.InstancedBufferAttribute(progressArray, 1);
+    attr.setUsage(THREE.DynamicDrawUsage);
+    geo.setAttribute('aProgress', attr);
+    return geo;
+  }, []);
+  const cooldownMat = useMemo(() => new THREE.ShaderMaterial({
+      ...RadialCooldownShader,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      vertexColors: true,
+      defines: { USE_INSTANCING: '', USE_INSTANCING_COLOR: '' }
+  }), []);
+
   const shadowMat = useMemo(() => new THREE.ShaderMaterial({
       ...AuraShadowShader,
       transparent: true,
@@ -320,7 +391,8 @@ const BattleArmyComponent = ({
       for (let k = 0; k < indices.length; k++) {
         const i = indices[k];
         const u = rawMap[i];
-        if (!u || !u.isActive || u.hp <= 0) continue;
+        // ROBUST ACTIVE CHECK: skip if dead, inactive, or sunk below field (y < -50 = death signal)
+        if (!u || !u.isActive || u.hp <= 0 || u.position[1] < -50) continue;
         
         const dx = camPos.x - u.position[0];
         const dz = camPos.z - u.position[2];
@@ -346,7 +418,7 @@ const BattleArmyComponent = ({
     const activeUnits = cachedActiveUnits.current;
     (state as any).sortedActiveUnits = activeUnits;
     const isPotato = !!settingsRef.current.potatoMode;
-    const gameMode = useStore.getState().gameMode;
+    const gameMode = (state as any)._cachedGameMode ||= useStore.getState().gameMode;
     const frustum = (state as any).battleFrustum as THREE.Frustum;
 
     if (isPotato) {
@@ -354,6 +426,7 @@ const BattleArmyComponent = ({
         for (let i = 0; i < 1500; i++) {
           shadowRef.current?.setMatrixAt(i, _hideMatrix);
           healthBarRef.current?.setMatrixAt(i, _hideMatrix);
+          cooldownRef.current?.setMatrixAt(i, _hideMatrix);
         }
         shadowRef.current.instanceMatrix.needsUpdate = true;
         if (healthBarRef.current) healthBarRef.current.instanceMatrix.needsUpdate = true;
@@ -367,14 +440,20 @@ const BattleArmyComponent = ({
       // Cleanup names
       for (const [uid, slot] of namePoolMap.current.entries()) {
         const u = unitIndex.current.get(uid);
-        const gone = !u || !u.isActive || u.id !== uid || u.hp <= 0 || (u.dSq || 0) > HUD_DETAIL_DIST_SQ || isPotato;
+        // DEAD if: removed from unitIndex, hp=0, inactive, sunk, or too far
+        const gone = !u
+          || !u.isActive
+          || u.hp <= 0
+          || (u.position && u.position[1] < -50)
+          || (u.dSq || 0) > HUD_DETAIL_DIST_SQ
+          || isPotato;
         
         if (gone) {
           if (nameTextRefs.current[slot]) nameTextRefs.current[slot].visible = false;
           if (nameImageRefs.current[slot]) nameImageRefs.current[slot].visible = false;
           if (nameBorderRefs.current[slot]) nameBorderRefs.current[slot].visible = false;
           if (nameGroupRefs.current[slot]) {
-            nameGroupRefs.current[slot].position.set(0, -100, 0);
+            nameGroupRefs.current[slot].position.set(0, -200, 0); // hide below world
             nameGroupRefs.current[slot].visible = false;
           }
           nameAvailableSlots.current.push(slot);
@@ -539,6 +618,12 @@ const BattleArmyComponent = ({
       const attr = healthBarRef.current.geometry.getAttribute('aHealthInfo');
       if (attr) attr.needsUpdate = true;
     }
+    if (cooldownRef.current) {
+      cooldownRef.current.instanceMatrix.needsUpdate = true;
+      if (cooldownRef.current.instanceColor) cooldownRef.current.instanceColor.needsUpdate = true;
+      const attr = cooldownRef.current.geometry.getAttribute('aProgress');
+      if (attr) attr.needsUpdate = true;
+    }
   });
 
   return (
@@ -556,6 +641,7 @@ const BattleArmyComponent = ({
         renderedIdsRef={renderedIdsRef}
         shadowRef={shadowRef}
         healthBarRef={healthBarRef}
+        cooldownRef={cooldownRef}
         namePoolMap={namePoolMap}
         nameGroupRefs={nameGroupRefs}
       />
@@ -591,6 +677,7 @@ const BattleArmyComponent = ({
 
       {/* Centralized HUD Layer (Extended pool to support class offsets) */}
       <instancedMesh ref={shadowRef} args={[null as any, null as any, 1500]} geometry={shadowGeo} material={shadowMat} frustumCulled={false} />
+      <instancedMesh ref={cooldownRef} args={[null as any, null as any, 1500]} geometry={cooldownGeo} material={cooldownMat} frustumCulled={false} />
       <instancedMesh ref={healthBarRef} args={[null as any, null as any, 1500]} geometry={healthGeo} material={healthBarMat} renderOrder={7} frustumCulled={false} />
 
       <group>
@@ -638,7 +725,7 @@ const BattleArmyComponent = ({
               position={[0, 1.25, -0.01]}
               renderOrder={101}
             >
-              <circleGeometry args={[0.38, 32]} />
+              <circleGeometry args={[0.38, 12]} />
               <meshBasicMaterial color="#ffffff" transparent opacity={0.8} />
             </mesh>
           </group>

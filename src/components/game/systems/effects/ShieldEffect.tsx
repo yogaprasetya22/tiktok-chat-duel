@@ -122,15 +122,24 @@ export function ShieldEffect({ unitRegistry, activeIndicesRef, settingsRef, simT
             
             if (!u.isActive || u.unitClass !== 'tank' || u.hp <= 0) continue;
 
-            // Deployment Shield Logic: 5 second duration (5000ms)
+            // 1. Deployment Shield (first 5 seconds of life)
             const age = simTime - (u.spawnTime || 0);
+            const isDeployment = age < 5000;
             
-            if (age > 5000) continue; // Shield expires after 5 seconds
+            // 2. Skill Shield (Fortress Guard active)
+            const isSkillShield = u.isShield;
 
-            // Fade out in the last second (4000ms - 5000ms)
+            if (!isDeployment && !isSkillShield) continue;
+
             let opacity = 1.0;
-            if (age > 4000) {
-                opacity = 1.0 - (age - 4000) / 1000;
+            if (isSkillShield) {
+                // Skill shield fade out (based on shieldEndTime if available)
+                const endTime = (u as any).shieldEndTime || 0;
+                const remaining = endTime - simTime;
+                if (remaining < 800) opacity = Math.max(0, remaining / 800);
+            } else if (isDeployment) {
+                // Deployment shield fade out
+                if (age > 4000) opacity = 1.0 - (age - 4000) / 1000;
             }
 
             const bScale = getBaseScale(u.unitClass, u.level || 1, u.isBoss);
@@ -145,7 +154,10 @@ export function ShieldEffect({ unitRegistry, activeIndicesRef, settingsRef, simT
             _obj.updateMatrix();
             mesh.setMatrixAt(count, _obj.matrix);
 
-            _col.set(u.type === 'player' ? '#4488ff' : '#ff4444').multiplyScalar(opacity);
+            const baseCol = u.type === 'player' ? '#4488ff' : '#ff4444';
+            _col.set(baseCol);
+            if (rarity === 'legendary') _col.lerp(new THREE.Color('#FFD700'), 0.5);
+            _col.multiplyScalar(opacity);
             mesh.setColorAt(count, _col);
             
             count++;

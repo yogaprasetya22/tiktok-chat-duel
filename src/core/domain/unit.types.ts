@@ -98,6 +98,9 @@ export interface ActiveUnit extends UnitStats {
     deathTime?: number;
     isBoss: boolean;
     animationOffset: number;
+    isBuffed?: boolean;
+    isShield?: boolean;
+    isRolling?: boolean;
     attackCooldown: number;
     critChance: number;
     lastBlinkTime?: number;
@@ -108,7 +111,6 @@ export interface ActiveUnit extends UnitStats {
     untargetableUntil?: number;
     profileImage?: string;
     rarity?: UnitRarity;
-    isShield?: boolean;
     isTeleporting?: boolean;
     isArmorBroken?: boolean;
     poolIdx: number;

@@ -31,7 +31,7 @@ import { UnitRuntimeData } from "@/src/core/domain/unit.types";
 
 interface InstancedImpostorRendererProps {
   unitRegistry: React.RefObject<UnitRuntimeData[]>;
-  renderedIdsRef: React.RefObject<Set<string>>;
+  renderedIdsRef: React.RefObject<Set<number>>;
   playerColor: string;
   enemyColor: string;
   settingsRef: React.RefObject<any>;
@@ -173,10 +173,8 @@ export function InstancedImpostorRenderer({
       if (idx >= LOD_IMPOSTOR_MAX) break;
       const i = indices[k];
       const u = rawMap[i];
-      if (!u || !u.isActive || u.hp <= 0) continue;
-
-      const id = u.id;
-      if (renderedIds.has(id)) continue;
+      // Robust Check: skip if inactive, sunk, or already rendered by 3D pool
+      if (!u || !u.isActive || u.position[1] < -10 || renderedIds.has(i)) continue;
       
       const frustum = (state as any).battleFrustum;
       const isVisible = frustum ? frustum.containsPoint(_dummy.position.set(u.position[0], 0, u.position[2])) : true;

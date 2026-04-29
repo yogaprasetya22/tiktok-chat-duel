@@ -117,8 +117,8 @@ export function FighterSpellEffect({ fighterSpellsRef, simTimeRef }: { fighterSp
         const simTime = simTimeRef.current || 0;
         const time = state.clock.elapsedTime;
 
-        const RARITY_SCALE = { common: 0.9, elite: 1.2, epic: 1.5, legendary: 1.8 };
-        const RARITY_GLOW = { common: 4.0, elite: 8.0, epic: 12.0, legendary: 18.0 };
+        const RARITY_SCALE = { common: 0.9, elite: 1.2, epic: 1.5, legendary: 2.0 };
+        const RARITY_GLOW = { common: 4.0, elite: 8.0, epic: 14.0, legendary: 25.0 };
 
         for (let i = 0; i < spells.length; i++) {
             const s = spells[i];
@@ -161,16 +161,27 @@ export function FighterSpellEffect({ fighterSpellsRef, simTimeRef }: { fighterSp
     
                     const targetX = s.targetX ?? s.x;
                     const targetZ = s.targetZ ?? s.z;
-                    for(let k=0; k<1; k++) {
+                    
+                    // EXTRA: Spark spray for Legendary strikes
+                    const sparkCount = r === 'legendary' ? 3 : 1;
+                    for(let k=0; k<sparkCount; k++) {
                        const p3 = pool.current[vfxOrder.current];
                        if (!p3.active) activeIndices.current.push(vfxOrder.current);
                        vfxOrder.current = (vfxOrder.current + 1) % pool.current.length;
-                       p3.x = targetX; p3.y = 1.2; p3.z = targetZ; 
+                       p3.x = targetX + (Math.random()-0.5)*k; p3.y = 1.2; p3.z = targetZ + (Math.random()-0.5)*k; 
                        p3.startTime = simTime; 
-                       p3.color = s.color; p3.active = true; p3.type = 'slash'; 
-                       p3.rot = (s.rotation || 0); 
+                       p3.color = r === 'legendary' ? '#FFD700' : s.color; p3.active = true; p3.type = 'slash'; 
+                       p3.rot = (s.rotation || 0) + (Math.random()-0.5)*0.5; 
                        p3.scale = 1.5 * rScale;
                        (p3 as any).rGlow = rGlow;
+                    }
+
+                    if (r === 'legendary') {
+                        // Secondary Impact Ring for Legendary
+                        const p4 = pool.current[vfxOrder.current]; 
+                        if (!p4.active) activeIndices.current.push(vfxOrder.current);
+                        vfxOrder.current = (vfxOrder.current + 1) % pool.current.length;
+                        p4.x = s.x; p4.y = 0.05; p4.z = s.z; p4.startTime = simTime + 100; p4.color = '#FFD700'; p4.active = true; p4.type = 'impact'; p4.scale = 1.5 * rScale;
                     }
                 }
             }

@@ -20,7 +20,7 @@ import { useGLTF } from '@react-three/drei';
 import { MeshoptDecoder } from 'meshoptimizer';
 import { SkeletonUtils } from 'three-stdlib';
 import { UnitRuntimeData, TowerConfig, SimulationSettings } from '@/src/core/domain/unit.types';
-import { ARMY_POOL_SIZE, ANIM_CULL_DIST_SQ } from '@/src/core/logic/combat/constants';
+import { ARMY_POOL_SIZE, ANIM_CULL_DIST_SQ, CLASS_CONFIG } from '@/src/core/logic/combat/constants';
 import { applyPainterlyStyle } from '../effects/PainterlyMaterials';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -54,9 +54,10 @@ interface ECSArmyRendererProps {
   towerConfig: TowerConfig;
   settingsRef: React.RefObject<SimulationSettings>;
   simTimeRef: React.RefObject<number>;
-  renderedIdsRef: React.RefObject<Set<string>>;
+  renderedIdsRef: React.RefObject<Set<number>>;
   shadowRef: React.RefObject<THREE.InstancedMesh>;
   healthBarRef: React.RefObject<THREE.InstancedMesh>;
+  cooldownRef: React.RefObject<THREE.InstancedMesh>;
   namePoolMap: React.MutableRefObject<Map<string, number>>;
   nameGroupRefs: React.RefObject<(THREE.Group | null)[]>;
 }
@@ -170,7 +171,7 @@ const getCachedMaterial = (
 
 const ECSArmyRendererInner = ({
   unitRegistry, activeIndicesRef, towerConfig, settingsRef, simTimeRef,
-  renderedIdsRef, shadowRef, healthBarRef,
+  renderedIdsRef, shadowRef, healthBarRef, cooldownRef,
   namePoolMap, nameGroupRefs,
 }: ECSArmyRendererProps) => {
 
@@ -302,6 +303,7 @@ const ECSArmyRendererInner = ({
     _hudTemp.updateMatrix();
     shadowRef.current?.setMatrixAt(hIdx, _hudTemp.matrix);
     healthBarRef.current?.setMatrixAt(hIdx, _hudTemp.matrix);
+    cooldownRef.current?.setMatrixAt(hIdx, _hudTemp.matrix);
   };
 
 // ─── Constants ──────────────────────────────────────────────────────────────
@@ -361,10 +363,14 @@ const CLASS_KEYS: ClassKey[] = ['fighter', 'tank', 'mage', 'marksman', 'assassin
       const pool = p[classKey];
       const hudBase = CLASS_HUD_BASE[classKey];
       const healthAttr = healthBarRef.current?.geometry.getAttribute('aHealthInfo') as THREE.InstancedBufferAttribute | undefined;
+      const cooldownAttr = cooldownRef.current?.geometry.getAttribute('aProgress') as THREE.InstancedBufferAttribute | undefined;
 
       for (let vi = 0; vi < visibleUnitsCount; vi++) {
         const uData = bucket[vi];
+        // Only skip if totally inactive or sunk. Dying units MUST render to prevent impostor 'ghosts'.
+        if (!uData.isActive || uData.position[1] < -10) continue;
         const id = uData.id;
+        const pIdx = uData.poolIdx;
         const team = uData.type;
         const teamColor = team === 'player' ? towerConfig.player.color : towerConfig.enemy.color;
 
@@ -372,7 +378,7 @@ const CLASS_KEYS: ClassKey[] = ['fighter', 'tank', 'mage', 'marksman', 'assassin
         if (slotIdx === null) continue;
 
         pool.activeSet.add(id);
-        renderedIdsRef.current?.add(id);
+        renderedIdsRef.current?.add(pIdx);
 
         const item = pool.items[slotIdx];
         item.group.visible = true;
@@ -472,6 +478,29 @@ const CLASS_KEYS: ClassKey[] = ['fighter', 'tank', 'mage', 'marksman', 'assassin
             _hudTemp.scale.set(ss, ss, 1);
             _hudTemp.updateMatrix();
             shadowRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
+
+            // ── Cooldown Radial Sync ──
+            if (cooldownRef.current && cooldownAttr && uData.hp > 0) {
+              const skillCfg = CLASS_CONFIG[classKey];
+              const cdTime = skillCfg.skill_cooldown * (1.0 - ((uData as any).cooldownReduction || 0));
+              const timeSinceSkill = (simTimeRef.current || 0) - (uData.lastSkillTime || 0);
+              const progress = Math.min(1.0, timeSinceSkill / cdTime);
+              
+              _hudTemp.position.set(vPos.x, -0.44, vPos.z); // Slightly above shadow
+              _hudTemp.quaternion.identity(); // Geometry is already pre-rotated -PI/2
+              _hudTemp.scale.set(ss * 1.5, ss * 1.5, 1);
+              _hudTemp.updateMatrix();
+              cooldownRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
+              cooldownAttr.setX(hIdx, progress);
+              
+              // NEW: Sync cooldown ring color with team color
+              _healthColor.set(teamColor);
+              cooldownRef.current.setColorAt(hIdx, _healthColor);
+            } else {
+              _hudTemp.scale.set(0.001, 0.001, 0.001);
+              _hudTemp.updateMatrix();
+              cooldownRef.current?.setMatrixAt(hIdx, _hudTemp.matrix);
+            }
             
             // Use emissive color for shadow aura
             _healthColor.copy(sharedMat.emissive); 
@@ -508,7 +537,7 @@ const CLASS_KEYS: ClassKey[] = ['fighter', 'tank', 'mage', 'marksman', 'assassin
           } else {
             // Far: shadow only
             _hudTemp.position.set(cp.x, -0.45, cp.z);
-            _hudTemp.rotation.set(-Math.PI / 2, 0, 0);
+            _hudTemp.quaternion.identity(); // Pre-rotated geo
             _hudTemp.scale.set(uData.isBoss ? 4.5 : 1.6, uData.isBoss ? 4.5 : 1.6, 1);
             _hudTemp.updateMatrix();
             shadowRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
@@ -516,6 +545,7 @@ const CLASS_KEYS: ClassKey[] = ['fighter', 'tank', 'mage', 'marksman', 'assassin
             _hudTemp.scale.set(0.001, 0.001, 0.001);
             _hudTemp.updateMatrix();
             healthBarRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
+            cooldownRef.current?.setMatrixAt(hIdx, _hudTemp.matrix);
           }
         }
 

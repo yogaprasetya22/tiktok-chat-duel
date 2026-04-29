@@ -36,20 +36,29 @@ const CameraDirector = () => {
   const lastBaseHp = useRef({ player: 1000, enemy: 1000 });
   const shakeIntensity = useRef(0);
 
+  const _lastPHP = useRef(1000);
+  const _lastEHP = useRef(1000);
+
   useFrame((_, delta) => {
-    const gameState = useStore.getState().gameState;
-    const playerBaseHp = useStore.getState().playerBaseHp;
-    const enemyBaseHp = useStore.getState().enemyBaseHp;
+    // Baca store SATU KALI per frame via getState() — hindari triple call
+    const st = useStore.getState();
+    const gameState = st.gameState;
+    const playerBaseHp = st.playerBaseHp;
+    const enemyBaseHp = st.enemyBaseHp;
 
     // Damage Shake
-    if (playerBaseHp < lastBaseHp.current.player || enemyBaseHp < lastBaseHp.current.enemy) {
-      shakeIntensity.current = 0.35;
+    if (playerBaseHp < _lastPHP.current || enemyBaseHp < _lastEHP.current) {
+      shakeIntensity.current = 0.25;
+      _lastPHP.current = playerBaseHp;
+      _lastEHP.current = enemyBaseHp;
       lastBaseHp.current = { player: playerBaseHp, enemy: enemyBaseHp };
     }
-    if (shakeIntensity.current > 0) {
+    if (shakeIntensity.current > 0.01) {
       camera.position.x += (Math.random() - 0.5) * shakeIntensity.current;
       camera.position.y += (Math.random() - 0.5) * shakeIntensity.current;
-      shakeIntensity.current -= delta * 1.8;
+      shakeIntensity.current -= delta * 2.2;
+    } else {
+      shakeIntensity.current = 0;
     }
 
     // Cinematic Ending
@@ -198,19 +207,17 @@ export const GameCanvas = React.memo(({
   return (
     <>
       <Canvas
-        // 1. Tambahkan setting camera di sini
         camera={{
           position: [0, 0.5, 5],
           fov: 40,
-          near: 0.01,  // Diperkecil agar tidak memotong objek yang dekat
-          far: 2000    // Pastikan cukup jauh untuk melihat seluruh scene
+          near: 0.1,
+          far: 500  // Dikurangi: depth buffer lebih presisi, less overdraw
         }}
-        shadows={{ type: THREE.PCFShadowMap }}
+        shadows={false}  // DIMATIKAN: PCFShadowMap sangat mahal, tidak visible dari atas
         dpr={dpr}
         gl={{
-          antialias: true,
+          antialias: false,  // DIMATIKAN: 2x GPU cost. Bloom sudah memberi glow anti-alias visual
           powerPreference: "high-performance",
-          // 2. Set ke true hanya jika melihat z-fighting (kedip) di jarak sangat jauh
           logarithmicDepthBuffer: false,
           stencil: false,
           depth: true,
@@ -220,7 +227,9 @@ export const GameCanvas = React.memo(({
       >
       <PerformanceMonitor
         onIncline={() => setDpr(Math.min(dpr + 0.1, 1.0))}
-        onDecline={() => setDpr(Math.max(dpr - 0.1, 0.7))}
+        onDecline={() => setDpr(Math.max(dpr - 0.15, 0.4))}
+        threshold={0.85}
+        flipflops={3}
       />
       <AdaptiveEvents />
       <AdaptiveDpr pixelated={true} />
@@ -296,14 +305,15 @@ export const GameCanvas = React.memo(({
         ))}
       </VFXProvider>
 
-      {/* Post Processing */}
+      {/* Post Processing — Ringan: threshold tinggi agar hanya efek bersinar yg kena bloom */}
       {gameState !== 'SETUP' && !settingsRef.current.potatoMode && (
         <EffectComposer enableNormalPass={false} multisampling={0}>
           <Bloom
-            luminanceThreshold={1.0}
-            mipmapBlur
-            intensity={0.5}
-            radius={0.4}
+            luminanceThreshold={1.2}
+            mipmapBlur={false}
+            intensity={0.3}
+            radius={0.25}
+            levels={3}
           />
           <ToneMapping adaptive={false} />
         </EffectComposer>

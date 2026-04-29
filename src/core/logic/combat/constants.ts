@@ -11,7 +11,7 @@ export let LANE_OFFSETS = [-15, -7.5, 0, 7.5, 15];
 
 export let CLASS_CONFIG: ClassConfig = {
     fighter: {
-        hp: 5.5,
+        hp: 7.5,
         hp_regen: 0.18,
         atk: 2.2,
         physical_defense: 50,
@@ -27,9 +27,9 @@ export let CLASS_CONFIG: ClassConfig = {
         range: 3.5, // Buffed from 3.2
         tenacity: 0.2,
         cooldown_reduction: 0.1,
-        skill_cooldown: 10000,
+        skill_cooldown: 7000,
         skill_range: 4.0,
-        skill_duration: 800,
+        skill_duration: 3000,
         ai_behavior: {
             separation: 1.0,
             encirclement: 1.2,
@@ -39,7 +39,7 @@ export let CLASS_CONFIG: ClassConfig = {
         },
     },
     tank: {
-        hp: 10.0,
+        hp: 15.0,
         hp_regen: 0.35,
         atk: 1.3,
         physical_defense: 95,
@@ -83,7 +83,7 @@ export let CLASS_CONFIG: ClassConfig = {
         range: 9.5, // Nerfed from 15.0
         tenacity: 0.0,
         cooldown_reduction: 0.1,
-        skill_cooldown: 14000,
+        skill_cooldown: 8500,
         skill_range: 12.0,
         skill_duration: 2500,
         ai_behavior: {
@@ -105,15 +105,15 @@ export let CLASS_CONFIG: ClassConfig = {
         lifesteal: 0.2,
         spell_vamp: 0.0,
         move_speed_mult: 1.0, // Nerfed from 1.05
-        attack_speed_mult: 1.6,
+        attack_speed_mult: 1.5,
         crit_chance: 0.35,
         crit_damage: 2.5,
         range: 7.2, // Nerfed from 8.5
         tenacity: 0.0,
         cooldown_reduction: 0.1,
-        skill_cooldown: 12000,
-        skill_range: 5.0,
-        skill_duration: 5000,
+        skill_cooldown: 25000,
+        skill_range: 12.0,
+        skill_duration: 4000,
         ai_behavior: {
             separation: 2.8,
             encirclement: 1.0,
@@ -126,8 +126,8 @@ export let CLASS_CONFIG: ClassConfig = {
         hp: 3.8,
         hp_regen: 0.12,
         atk: 4.5, // Buffed from 4.2
-        physical_defense: 30,
-        magic_defense: 30,
+        physical_defense: 60,
+        magic_defense: 60,
         physical_pen: 35,
         magic_pen: 0,
         lifesteal: 2.15,
@@ -135,13 +135,13 @@ export let CLASS_CONFIG: ClassConfig = {
         move_speed_mult: 1.3, // Buffed from 1.25
         attack_speed_mult: 1.25,
         crit_chance: 0.3,
-        crit_damage: 2.5,
+        crit_damage: 3.5,
         range: 2.2, // Buffed from 2.0
         tenacity: 0.1,
         cooldown_reduction: 0.2,
         skill_cooldown: 10000,
-        skill_range: 0.0,
-        skill_duration: 0.0,
+        skill_range: 17.0,
+        skill_duration: 600,
         ai_behavior: {
             separation: 1.2,
             encirclement: 2.2,
@@ -211,16 +211,15 @@ export let INITIAL_SETTINGS: SimulationSettings = {
 export const MAGE_PROJECTILE_TIME_MS = 520;
 export const CORPSE_DESPAWN_MS = 0; // Time in ms before a corpse is removed from the field
 
-
 // --- LOD IMPOSTOR SYSTEM ---
 
-export const LOD_IMPOSTOR_MAX = 1200; 
-export const LOD_IMPOSTOR_SCALE = 1.8; 
-export const LOD_IMPOSTOR_BOSS_SCALE = 5.0; 
+export const LOD_IMPOSTOR_MAX = 1200;
+export const LOD_IMPOSTOR_SCALE = 1.8;
+export const LOD_IMPOSTOR_BOSS_SCALE = 5.0;
 
 // --- CENTRALIZED PERFORMANCE CONFIG ---
 export const ARMY_POOL_SIZE = 30; // Number of high-detail 3D models per class
-export const ANIM_CULL_DIST_SQ = 150 * 150; // Distance where bone animations stop (150m)
+export const ANIM_CULL_DIST_SQ = 350 * 350; // Distance where bone animations stop (150m)
 
 // --- WEATHER SYSTEM CONFIG ---
 export const WEATHER_CONFIG = {

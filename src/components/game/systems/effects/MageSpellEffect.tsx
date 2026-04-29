@@ -132,8 +132,8 @@ export function MageSpellEffect({ spellsRef, unitRegistry, simTimeRef }: { spell
 
     let oi = 0; let gi = 0; let ci = 0; let ii = 0;
 
-    const RARITY_SCALE = { common: 0.8, elite: 1.1, epic: 1.3, legendary: 1.5 };
-    const RARITY_GLOW = { common: 2.0, elite: 4.0, epic: 6.0, legendary: 10.0 };
+    const RARITY_SCALE = { common: 0.8, elite: 1.1, epic: 1.3, legendary: 1.6 };
+    const RARITY_GLOW = { common: 2.0, elite: 4.5, epic: 8.0, legendary: 18.0 };
 
     for (let i = 0; i < spells.length; i++) {
       const s = spells[i];
@@ -162,14 +162,15 @@ export function MageSpellEffect({ spellsRef, unitRegistry, simTimeRef }: { spell
         (e as any).rScale = rScale; (e as any).rGlow = rGlow;
       }
 
-      const dur = s.isMeteor ? 800 : (MAGE_PROJECTILE_TIME_MS || 450);
+      const dur = s.isMeteor ? (600 + Math.random() * 400) : (MAGE_PROJECTILE_TIME_MS || 450);
       const t = Math.min(1, (simNow - s.startTime) / dur);
+      if (t < 0) continue; // Waiting for randomized start time
       
       let px, py, pz;
       if (s.isMeteor) {
-        px = s.toX;
-        pz = s.toZ;
-        py = s.fromY - (s.fromY - s.toY) * Math.pow(t, 2.0); // Accelerated fall
+        px = s.fromX + (s.toX - s.fromX) * t; // Slight diagonal fall
+        pz = s.fromZ + (s.toZ - s.fromZ) * t;
+        py = s.fromY - (s.fromY - s.toY) * Math.pow(t, 1.5); 
       } else {
         px = s.fromX + (s.toX - s.fromX) * t;
         pz = s.fromZ + (s.toZ - s.fromZ) * t;
@@ -178,39 +179,35 @@ export function MageSpellEffect({ spellsRef, unitRegistry, simTimeRef }: { spell
 
       if (oi < MAX_ORB_INSTANCES) {
         _obj.position.set(px, py, pz);
-        // Cinematic Meteor Head (Reduced Size)
-        const headScale = s.isMeteor ? (1.0 * rScale) : (0.8 * rScale);
-        _obj.scale.setScalar(headScale * (1.1 - t * 0.3));
+        // Icy Shard Visual (Spiky/Elongated)
+        const headScale = s.isMeteor ? (0.6 * rScale) : (0.8 * rScale);
+        _obj.scale.set(headScale * 0.5, headScale * 1.5, headScale * 0.5); 
+        _obj.rotation.set(Math.PI / 4, 0, time * 5.0);
         _obj.updateMatrix();
         mesh.setMatrixAt(oi, _obj.matrix);
-        // Team Color + Subtle Gold Gradient
+        
         const teamCol = new THREE.Color(s.color || '#44aaff');
-        if (s.isMeteor) {
-          // Less gold (0.25 lerp), more team color
-          _c.copy(teamCol).lerp(new THREE.Color('#FFD700'), 0.25).multiplyScalar(rGlow * 1.5);
-        } else {
-          _c.copy(teamCol).multiplyScalar(rGlow);
-        }
+        _c.copy(teamCol).multiplyScalar(rGlow * (s.isMeteor ? 2.5 : 1.0));
         mesh.setColorAt(oi, _c);
         oi++;
 
-        // Meteor Trail Particles (Embers)
+        // Ice Crystals (Embers)
         if (s.isMeteor && t > 0.1 && t < 0.9) {
-          for (let k = 0; k < 2; k++) {
+          const particleCount = 2;
+          for (let k = 0; k < particleCount; k++) {
             const eIdx = impactIdx.current;
             const e = impacts.current[eIdx];
             if (!e.active) activeImpacts.current.push(eIdx);
             impactIdx.current = (impactIdx.current + 1) % impacts.current.length;
-            e.x = px + (Math.random() - 0.5) * 0.5;
-            e.y = py + (Math.random() - 0.5) * 0.5;
-            e.z = pz + (Math.random() - 0.5) * 0.5;
+            e.x = px + (Math.random() - 0.5) * 1.0;
+            e.y = py + (Math.random() - 0.5) * 1.0;
+            e.z = pz + (Math.random() - 0.5) * 1.0;
             e.startTime = simNow - Math.random() * 100;
-            // Trail follows team color with a fire tint
-            e.color = teamCol.clone().lerp(new THREE.Color('#ff4400'), 0.5).getStyle();
+            e.color = '#ffffff'; // White ice crystals
             e.active = true;
             e.type = 'embers' as any;
             e.rot = Math.random() * 7;
-            (e as any).rScale = 0.5 * rScale;
+            (e as any).rScale = 0.3 * rScale;
             (e as any).rGlow = rGlow * 0.5;
           }
         }
@@ -219,7 +216,7 @@ export function MageSpellEffect({ spellsRef, unitRegistry, simTimeRef }: { spell
       if (gi < 60) {
         _obj.position.set(px, 0.12, pz);
         _obj.rotation.set(-Math.PI / 2, 0, time * 2.0);
-        _obj.scale.setScalar(1.2 * (1.1 - t) * rScale);
+        _obj.scale.setScalar(s.isMeteor ? (2.0 * rScale * t) : (1.2 * (1.1 - t) * rScale));
         _obj.updateMatrix();
         grd.setMatrixAt(gi, _obj.matrix);
         _c.set(s.color || '#fff').multiplyScalar(1.2 * rScale);
@@ -233,12 +230,10 @@ export function MageSpellEffect({ spellsRef, unitRegistry, simTimeRef }: { spell
         if (!e.active) activeImpacts.current.push(eIdx);
         impactIdx.current = (impactIdx.current + 1) % impacts.current.length;
         e.x = s.toX; e.y = 1.2; e.z = s.toZ; e.startTime = simNow;
-        const teamCol = new THREE.Color(s.color || '#44aaff');
-        // Impact sigil: Team color with golden core
-        e.color = s.isMeteor ? teamCol.lerp(new THREE.Color('#FFD700'), 0.3).getStyle() : (s.color || '#44aaff');
+        e.color = s.color || '#00ffff'; 
         e.active = true; e.type = 'sigil'; e.rot = Math.random() * 7;
-        (e as any).rScale = rScale * (s.isMeteor ? 1.8 : 1.0); 
-        (e as any).rGlow = rGlow * (s.isMeteor ? 1.5 : 1.0);
+        (e as any).rScale = rScale * (s.isMeteor ? 1.2 : 1.0); 
+        (e as any).rGlow = rGlow * (s.isMeteor ? 2.0 : 1.0);
         s.active = false;
       }
     }
