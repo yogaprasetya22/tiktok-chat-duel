@@ -297,30 +297,53 @@ export function MMSpellEffect({ spellsRef, unitRegistry, simTimeRef }: Props) {
         const r      = s.rarity || 'common';
         const rScale = (RARITY_SCALE as any)[r] || 1.0;
         const rGlow  = (RARITY_GLOW  as any)[r] || 6.0;
+        const isSniper = (s as any).isSniper;
 
         // Track target yang bergerak
-        if (s.targetId && unitRegistry.current) {
-          const tIdx = (s as any)._tIdx ??= parseInt(s.targetId.replace(/\D/g, '')) || 0;
-          const tar = unitRegistry.current[tIdx];
+        const targetPoolIdx = (s as any).targetPoolIdx;
+        if (targetPoolIdx !== undefined && unitRegistry.current) {
+          const tar = unitRegistry.current[targetPoolIdx];
           if (tar?.isActive && tar.id === s.targetId) {
             s.toX = tar.position[0]; s.toY = tar.position[1] + 1.2; s.toZ = tar.position[2];
           }
         }
+        
+        // --- Velocity-Based Movement (Fixes 'stuttering' when target moves) ---
+        const speed = isSniper ? ((s as any).sniperSpeed || 55.0) : ((s as any).bulletSpeed || 110.0);
+        
+        // Initialize current position if not set
+        if ((s as any).curX === undefined) {
+          (s as any).curX = s.fromX;
+          (s as any).curY = s.fromY;
+          (s as any).curZ = s.fromZ;
+          (s as any).lastSimTime = s.startTime;
+        }
 
-        _from.set(s.fromX, s.fromY, s.fromZ);
-        _to.set(s.toX, s.toY, s.toZ);
+        // Calculate time delta since last update (simulated time)
+        const dt = (simNow - (s as any).lastSimTime) / 1000;
+        (s as any).lastSimTime = simNow;
 
-        const dist  = _from.distanceTo(_to);
-        const speed = (s as any).isSniper ? ((s as any).sniperSpeed || 40.0) : 85.0;
-        const ratio = Math.min(1, (simNow - s.startTime) / ((dist / speed) * 1000));
-        const t     = Math.pow(ratio, 1.1); // sedikit easing
+        if (dt > 0) {
+          _from.set((s as any).curX, (s as any).curY, (s as any).curZ);
+          _to.set(s.toX, s.toY, s.toZ);
+          
+          _dir.subVectors(_to, _from).normalize();
+          const step = speed * dt;
+          const distToTarget = _from.distanceTo(_to);
 
-        const isSniper   = (s as any).isSniper;
+          if (step >= distToTarget) {
+            (s as any).curX = s.toX; (s as any).curY = s.toY; (s as any).curZ = s.toZ;
+            (s as any).isHit = true;
+          } else {
+            _from.addScaledVector(_dir, step);
+            (s as any).curX = _from.x; (s as any).curY = _from.y; (s as any).curZ = _from.z;
+          }
+        }
+
+        _obj.position.set((s as any).curX, (s as any).curY, (s as any).curZ);
+        _obj.lookAt(s.toX, s.toY, s.toZ); 
+
         const isFinisher = (s as any).isFinisher;
-
-        // Posisi peluru saat ini
-        _obj.position.copy(_from).lerp(_to, t);
-        _obj.lookAt(_to); // +Z mengarah ke target
 
         if (isSniper) {
             // ── Inti peluru sniper: silinder tipis memanjang ──────────────
@@ -337,7 +360,9 @@ export function MMSpellEffect({ spellsRef, unitRegistry, simTimeRef }: Props) {
             // ── Jejak/lesatan di belakang peluru ──────────────────────────
             if (tn < 200) {
                 // Panjang trail tumbuh seiring progress
-                const trailLen = (isFinisher ? 14.0 : 7.0) * rScale * (0.3 + t * 0.7);
+                // Trail growth factor
+                const growth = Math.min(1, (simNow - s.startTime) / 200);
+                const trailLen = (isFinisher ? 14.0 : 7.0) * rScale * (0.3 + growth * 0.7);
                 const trailW   = isFinisher ? 0.18 * rScale : 0.1 * rScale;
 
                 // Arah terbang: dari _from ke _to
@@ -365,7 +390,7 @@ export function MMSpellEffect({ spellsRef, unitRegistry, simTimeRef }: Props) {
         }
 
         // ── Impact explosion saat sampai di target ────────────────────────
-        if (ratio >= 0.99) {
+        if ((s as any).isHit) {
             const vIdx = ringIdx.current;
             const v = vfxPool.current[vIdx];
             if (!v.active) activeVfx.current.push(vIdx);
@@ -377,7 +402,12 @@ export function MMSpellEffect({ spellsRef, unitRegistry, simTimeRef }: Props) {
             v.type = 'hit'; v.rot = Math.random() * 7;
             (v as any).rScale = rScale * (isFinisher ? 2.0 : 1.0);
             (v as any).rGlow  = rGlow  * (isFinisher ? 2.5 : 1.0);
+            
+            // CLEANUP for pool reuse
             s.active = false;
+            (s as any).isHit = false;
+            (s as any).curX = undefined;
+            (s as any).lastSimTime = undefined;
             (s as any)._tIdx = undefined;
         }
     }

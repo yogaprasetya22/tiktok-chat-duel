@@ -54,6 +54,11 @@ interface BattleState {
   environment: "DIORAMA" | "STORM";
   setEnvironment: (env: "DIORAMA" | "STORM") => void;
 
+  // Tower Score (Persistent across resets)
+  playerWins: number;
+  enemyWins: number;
+  setWins: (player: number, enemy: number) => void;
+
   // Reset
   resetStore: (config: TowerConfig) => void;
 }
@@ -100,7 +105,11 @@ export const useStore = create<BattleState>((set) => ({
   environment: "STORM",
   setEnvironment: (environment) => set({ environment }),
 
-  resetStore: (config) => set({
+  playerWins: 0,
+  enemyWins: 0,
+  setWins: (playerWins, enemyWins) => set({ playerWins, enemyWins }),
+
+  resetStore: (config) => set((state) => ({
     gameState: "PLAYING",
     weather: "CLEAR",
     playerBaseHp: config.baseHp,
@@ -111,9 +120,9 @@ export const useStore = create<BattleState>((set) => ({
       enemyDamage: {},
       playerKills: {},
       enemyKills: {},
-      profileImages: {}
+      profileImages: state.liveStats.profileImages // Keep profile images to avoid reloading textures
     },
     killEvents: [],
     armyCounts: { player: 0, enemy: 0 }
-  })
+  }))
 }));

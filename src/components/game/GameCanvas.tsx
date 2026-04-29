@@ -288,6 +288,7 @@ export const GameCanvas = React.memo(({
           type="player"
           name={towerConfig.player.name}
           customColor={towerConfig.player.color}
+          flagUrl={towerConfig.player.flagUrl}
         />
         <Base
           maxHp={towerConfig.baseHp}
@@ -295,6 +296,7 @@ export const GameCanvas = React.memo(({
           type="enemy"
           name={towerConfig.enemy.name}
           customColor={towerConfig.enemy.color}
+          flagUrl={towerConfig.enemy.flagUrl}
         />
 
         {/* Debug Obstacles */}

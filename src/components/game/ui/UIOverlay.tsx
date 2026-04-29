@@ -154,6 +154,56 @@ const Leaderboard = React.memo(({ team, color, name }: { team: 'player' | 'enemy
   );
 });
 
+const Scoreboard = React.memo(() => {
+  const playerWins = useStore(s => s.playerWins);
+  const enemyWins = useStore(s => s.enemyWins);
+
+  return (
+    <div className="absolute top-4 left-1/2 -translate-x-1/2 flex items-center gap-6 z-40 pointer-events-none select-none">
+      <div className="flex flex-col items-center">
+        <span className="text-[10px] font-black uppercase text-indigo-400 tracking-widest mb-1">TEAM A</span>
+        <div className="hud-glass rounded-2xl w-16 h-16 flex items-center justify-center border-2 border-indigo-500/30 shadow-[0_0_20px_rgba(99,102,241,0.2)]">
+          <span className="text-4xl font-black italic text-white">{playerWins}</span>
+        </div>
+      </div>
+      
+      <div className="flex flex-col items-center justify-center pt-5">
+        <div className="h-0.5 w-12 bg-gradient-to-r from-indigo-500 via-white to-rose-500 opacity-50 mb-2" />
+        <span className="text-[12px] font-black italic text-white/40 tracking-tighter">VS</span>
+        <div className="h-0.5 w-12 bg-gradient-to-r from-indigo-500 via-white to-rose-500 opacity-50 mt-2" />
+      </div>
+
+      <div className="flex flex-col items-center">
+        <span className="text-[10px] font-black uppercase text-rose-400 tracking-widest mb-1">TEAM B</span>
+        <div className="hud-glass rounded-2xl w-16 h-16 flex items-center justify-center border-2 border-rose-500/30 shadow-[0_0_20px_rgba(244,63,94,0.2)]">
+          <span className="text-4xl font-black italic text-white">{enemyWins}</span>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+const VictoryWipe = React.memo(({ state }: { state: string }) => {
+  if (state === 'PLAYING' || state === 'SETUP') return null;
+
+  return (
+    <div className="fixed inset-0 z-[100] pointer-events-none overflow-hidden">
+      {/* Intense Initial Flash */}
+      <div className="absolute inset-0 bg-white animate-flash-out" />
+      
+      {/* Colored Mood Overlay */}
+      <div className={`absolute inset-0 ${state === 'WON' ? 'bg-indigo-600/40' : 'bg-rose-600/40'} backdrop-blur-[4px] animate-fade-in`} 
+           style={{ animationDelay: '0.2s' }} />
+      
+      {/* Dynamic Scanlines / Glitch */}
+      <div className="absolute inset-0 opacity-30">
+        <div className="w-full h-1/2 bg-gradient-to-b from-white/0 via-white/20 to-white/0 absolute top-0 animate-glitch-line-1" />
+        <div className="w-full h-1/2 bg-gradient-to-b from-white/0 via-white/10 to-white/0 absolute bottom-0 animate-glitch-line-2" />
+      </div>
+    </div>
+  );
+});
+
 const TowerHPBars = React.memo(({ towerConfig }: { towerConfig: TowerConfig }) => {
   const [playerBaseHp, setPlayerHp] = useState(useStore.getState().playerBaseHp);
   const [enemyBaseHp, setEnemyHp] = useState(useStore.getState().enemyBaseHp);
@@ -325,18 +375,19 @@ export const UIOverlay = ({
           <div className="w-full max-w-lg hud-glass rounded-3xl p-5 md:p-10 shadow-[0_0_80px_-20px_rgba(99,102,241,0.25)] relative overflow-hidden animate-fade-in-scale">
             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-72 h-72 bg-indigo-600/8 blur-[100px] rounded-full -z-10" />
 
-            {/* Header */}
             <div className="flex flex-col items-center text-center gap-3 mb-6">
-              <div className="p-3 bg-indigo-500/15 rounded-2xl text-indigo-400 ring-4 ring-indigo-500/5">
-                <Settings2 className="w-6 h-6" />
+              <div className="p-4 bg-indigo-500/10 rounded-2xl text-indigo-400 ring-1 ring-white/10 backdrop-blur-md shadow-xl animate-pulse-slow">
+                <Settings2 className="w-7 h-7" />
               </div>
-              <div>
-                <h2 className="text-2xl md:text-3xl font-black uppercase tracking-tighter text-white italic">Setup Battle</h2>
-                <p className="text-zinc-500 text-[9px] uppercase font-bold tracking-[0.2em] mt-1">Step {step} of 3</p>
+              <div className="space-y-1">
+                <h2 className="text-3xl md:text-4xl font-black uppercase tracking-tighter text-white italic drop-shadow-lg">
+                  Setup <span className="text-indigo-500">Battle</span>
+                </h2>
+                <p className="text-zinc-400 text-[10px] uppercase font-black tracking-[0.3em]">Step {step} of 3</p>
               </div>
-              <div className="flex gap-1.5 w-full max-w-[160px]">
+              <div className="flex gap-2 w-full max-w-[200px] mt-2">
                 {[1, 2, 3].map(i => (
-                  <div key={i} className={`flex-1 h-1 rounded-full transition-all duration-500 ${step >= i ? 'bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.5)]' : 'bg-zinc-800'}`} />
+                  <div key={i} className={`flex-1 h-1.5 rounded-full transition-all duration-700 ${step >= i ? 'bg-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.6)]' : 'bg-white/5'}`} />
                 ))}
               </div>
             </div>
@@ -462,6 +513,12 @@ export const UIOverlay = ({
                         className="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2.5 text-xs font-bold focus:outline-none focus:border-blue-500/30" placeholder="rose" />
                     </div>
                   </div>
+                  <div className="space-y-1">
+                    <label className="text-[8px] font-black text-zinc-500 uppercase tracking-widest flex items-center gap-1"><Camera className="w-2.5 h-2.5" /> Flag Image URL</label>
+                    <input type="text" value={towerConfig.player.flagUrl || ''}
+                      onChange={(e) => setTowerConfig(prev => ({ ...prev, player: { ...prev.player, flagUrl: e.target.value } }))}
+                      className="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2.5 text-[10px] font-bold focus:outline-none focus:border-blue-500/30" placeholder="https://..." />
+                  </div>
                 </div>
                 <div className="flex gap-3">
                   <button onClick={prevStep} className="flex-1 py-3.5 bg-zinc-800/60 text-white font-black uppercase tracking-widest text-[9px] rounded-xl hover:bg-zinc-700/60 transition-all active:scale-[0.98]">Back</button>
@@ -515,6 +572,12 @@ export const UIOverlay = ({
                         onChange={(e) => setTowerConfig(prev => ({ ...prev, enemy: { ...prev.enemy, giftKeyword: e.target.value } }))}
                         className="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2.5 text-xs font-bold focus:outline-none focus:border-red-500/30" placeholder="coffee" />
                     </div>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[8px] font-black text-zinc-500 uppercase tracking-widest flex items-center gap-1"><Camera className="w-2.5 h-2.5" /> Flag Image URL</label>
+                    <input type="text" value={towerConfig.enemy.flagUrl || ''}
+                      onChange={(e) => setTowerConfig(prev => ({ ...prev, enemy: { ...prev.enemy, flagUrl: e.target.value } }))}
+                      className="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2.5 text-[10px] font-bold focus:outline-none focus:border-red-500/30" placeholder="https://..." />
                   </div>
                 </div>
                 <div className="flex gap-3">
@@ -577,9 +640,12 @@ export const UIOverlay = ({
             </div>
           )}
 
-          {/* Weather Indicator — Top Center */}
+          {/* Scoreboard — Persistent Top Center */}
+          <Scoreboard />
+
+          {/* Weather Indicator — Top Center (Below Scoreboard) */}
           {gameState === 'PLAYING' && (
-            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 pointer-events-none animate-fade-in-scale">
+            <div className="absolute top-28 left-1/2 -translate-x-1/2 z-10 pointer-events-none animate-fade-in-scale">
               <div className="hud-glass rounded-xl px-3 py-1.5 flex items-center gap-2">
                 {weather === 'CLEAR' && <Sun className="w-3.5 h-3.5 text-yellow-400" />}
                 {weather === 'RAIN' && <CloudRain className="w-3.5 h-3.5 text-blue-400" />}
@@ -619,7 +685,10 @@ export const UIOverlay = ({
 
           {/* Victory/Defeat Screen */}
           {(gameState === "WON" || gameState === "LOST") && (
-            <MVPScreen data={mvpData} onRestart={onRestart} isVictory={gameState === "WON"} />
+            <>
+              <VictoryWipe state={gameState} />
+              <MVPScreen data={mvpData} onRestart={onRestart} isVictory={gameState === "WON"} />
+            </>
           )}
         </>
       )}

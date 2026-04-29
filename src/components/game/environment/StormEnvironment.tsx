@@ -360,7 +360,7 @@ const Grass = ({ baseDistance }: { baseDistance: number }) => {
   });
 
   return (
-    <instancedMesh ref={meshRef} args={[undefined, undefined, GRASS_COUNT]}>
+    <instancedMesh ref={meshRef} args={[undefined, undefined, GRASS_COUNT]} frustumCulled={false}>
       <planeGeometry args={[0.3, 1.0, 1, 4]} />
       <primitive object={GrassMaterial} attach="material" />
     </instancedMesh>

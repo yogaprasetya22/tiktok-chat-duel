@@ -74,7 +74,7 @@ const CharacterModel = ({ modelPath }: { modelPath: string }) => {
 
 export const MVPScreen = ({ data, onRestart, isVictory }: MVPScreenProps) => {
   return (
-    <div className="absolute inset-0 z-[40] flex items-center justify-center p-4 pointer-events-auto animate-fade-in"
+    <div className="absolute inset-0 z-[150] flex items-center justify-center p-4 pointer-events-auto animate-fade-in"
       style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(20px)' }}>
 
       <div className="w-full max-w-4xl hud-glass rounded-[2.5rem] p-6 md:p-10 relative overflow-hidden flex flex-col md:flex-row items-center gap-8 border border-white/10 shadow-2xl">

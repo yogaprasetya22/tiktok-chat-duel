@@ -102,6 +102,30 @@ html, body {
   animation: fade-in-scale 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+@keyframes flash-out {
+  0% { opacity: 1; }
+  100% { opacity: 0; }
+}
+.animate-flash-out {
+  animation: flash-out 0.8s ease-out forwards;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out forwards;
+}
+
+@keyframes glitch-line {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+.animate-glitch-line-1 { animation: glitch-line 0.2s linear infinite; }
+.animate-glitch-line-2 { animation: glitch-line 0.15s linear infinite reverse; }
+.animate-glitch-line-3 { animation: glitch-line 0.25s linear infinite; }
+
 @keyframes shimmer {
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }

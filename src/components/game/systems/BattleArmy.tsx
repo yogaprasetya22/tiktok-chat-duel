@@ -379,6 +379,16 @@ const BattleArmyComponent = ({
     // PERFORMANCE: Throttle sorting and unit filtering to every 12 frames
     const shouldSort = frameCountRef.current % 12 === 0 || cachedActiveUnits.current.length === 0;
     
+    const indices = compBuffers?.activeIndices?.current || [];
+    for (let k = 0; k < indices.length; k++) {
+      const i = indices[k];
+      const u = rawMap[i];
+      if (!u || !u.isActive || u.hp <= 0 || u.position[1] < -50) continue;
+      const dx = camPos.x - u.position[0];
+      const dz = camPos.z - u.position[2];
+      u.dSq = dx * dx + dz * dz;
+    }
+
     if (shouldSort) {
       // Zero-allocation bucket clearing using persistent state
       const b = (state as any)._persBuckets ||= { fighter: [], tank: [], mage: [], marksman: [], assassin: [] };
@@ -387,20 +397,13 @@ const BattleArmyComponent = ({
       const nearUnits = (state as any)._persNearUnits ||= [];
       nearUnits.length = 0;
 
-      const indices = compBuffers?.activeIndices?.current || [];
       for (let k = 0; k < indices.length; k++) {
         const i = indices[k];
         const u = rawMap[i];
-        // ROBUST ACTIVE CHECK: skip if dead, inactive, or sunk below field (y < -50 = death signal)
         if (!u || !u.isActive || u.hp <= 0 || u.position[1] < -50) continue;
         
-        const dx = camPos.x - u.position[0];
-        const dz = camPos.z - u.position[2];
-        const dSq = dx * dx + dz * dz;
-        u.dSq = dSq;
-        
         if (b[u.unitClass]) b[u.unitClass].push(u);
-        if (dSq < HUD_MAX_RANGE_SQ) {
+        if ((u.dSq || 0) < HUD_MAX_RANGE_SQ) {
           nearUnits.push(u);
         }
       }
@@ -433,86 +436,81 @@ const BattleArmyComponent = ({
       }
     }
 
-    // 2. Name Labels Lifecycle
+    // ─── 2. Name Labels Lifecycle ─────────────────────────────────────────────
+
+    // FIX B: Immediate cleanup tiap frame — jangan tunggu 4 frame
+    // Cek kematian, jauh dari kamera, atau inactive langsung
+    for (const [uid, slot] of namePoolMap.current.entries()) {
+      const uIdx = unitIndex.current.get(uid);
+      const u = uIdx ? rawMap[uIdx.poolIdx ?? -1] : null;
+
+      const isDead = !u || !u.isActive || u.hp <= 0 || u.position[1] < -50;
+      const isTooFar = (u?.dSq ?? 0) > HUD_DETAIL_DIST_SQ;
+
+      if (isDead || isTooFar || isPotato) {
+        const group = nameGroupRefs.current[slot];
+        if (group) {
+          group.visible = false;
+          group.position.set(0, -200, 0);
+        }
+        if (nameTextRefs.current[slot]) nameTextRefs.current[slot].visible = false;
+        if (nameImageRefs.current[slot]) nameImageRefs.current[slot].visible = false;
+        if (nameBorderRefs.current[slot]) nameBorderRefs.current[slot].visible = false;
+        nameAvailableSlots.current.push(slot);
+        namePoolMap.current.delete(uid);
+        nameSlotImage.current[slot] = '';
+      }
+    }
+
     if (frameCountRef.current % 4 === 0) {
       lastNameCullTime.current = time;
 
-      // Cleanup names
-      for (const [uid, slot] of namePoolMap.current.entries()) {
-        const u = unitIndex.current.get(uid);
-        // DEAD if: removed from unitIndex, hp=0, inactive, sunk, or too far
-        const gone = !u
-          || !u.isActive
-          || u.hp <= 0
-          || (u.position && u.position[1] < -50)
-          || (u.dSq || 0) > HUD_DETAIL_DIST_SQ
-          || isPotato;
-        
-        if (gone) {
-          if (nameTextRefs.current[slot]) nameTextRefs.current[slot].visible = false;
-          if (nameImageRefs.current[slot]) nameImageRefs.current[slot].visible = false;
-          if (nameBorderRefs.current[slot]) nameBorderRefs.current[slot].visible = false;
-          if (nameGroupRefs.current[slot]) {
-            nameGroupRefs.current[slot].position.set(0, -200, 0); // hide below world
-            nameGroupRefs.current[slot].visible = false;
-          }
-          nameAvailableSlots.current.push(slot);
-          namePoolMap.current.delete(uid);
-          nameSlotImage.current[slot] = '';
-        }
-      }
-
-      // Assign slots to new near units (starting from closest)
+      // Assign slots ke unit baru yang dekat (dari yang paling dekat)
       if (!isPotato) {
         let updatesThisFrame = 0;
-        const MAX_UPDATES_PER_FRAME = 2; // Strict budget to prevent frame drops from mesh.sync()
+        const MAX_UPDATES_PER_FRAME = 2;
 
-        const assignCount = Math.min(activeUnits.length, 60); 
+        const assignCount = Math.min(activeUnits.length, 60);
         for (let i = 0; i < assignCount; i++) {
           const u = activeUnits[i];
           const id = u.id;
-          
+
           if (namePoolMap.current.has(id)) continue;
           if (namePoolMap.current.size >= NAME_POOL_SIZE || nameAvailableSlots.current.length === 0) break;
-          
-          // FRUSTUM CULLING: Don't assign slots to units behind the camera
+
+          // FRUSTUM CULLING: Jangan assign slot ke unit di balik kamera
           const pos = _vec.set(u.position[0], u.position[1] + 2, u.position[2]);
           if (frustum && !frustum.containsPoint(pos)) continue;
-
           if ((u.dSq || 0) > HUD_DETAIL_DIST_SQ) continue;
 
           const slot = nameAvailableSlots.current.shift()!;
           namePoolMap.current.set(id, slot);
           const mesh = nameTextRefs.current[slot];
           const group = nameGroupRefs.current[slot];
-          
+
           if (mesh) {
             const badge = getRarityBadge(u.rarity);
             const label = badge + (u.userName || 'Guest');
-            
+
             let needsSync = false;
-            if (nameSlotContent.current[slot] !== label) { 
-              mesh.text = label; 
+            if (nameSlotContent.current[slot] !== label) {
+              mesh.text = label;
               nameSlotContent.current[slot] = label;
               needsSync = true;
             }
 
             const rawCol = u.type === 'player' ? towerConfig.player.color : towerConfig.enemy.color;
-            // Use scratch object and getStyle() to avoid reference sharing
             _col.set(rawCol).offsetHSL(0, 0, 0.2);
             const teamStyle = _col.getStyle();
-            
-            if (nameSlotColor.current[slot] !== teamStyle) { 
-              mesh.color = teamStyle; 
-              nameSlotColor.current[slot] = teamStyle; 
-              
-              // Update border color too
+
+            if (nameSlotColor.current[slot] !== teamStyle) {
+              mesh.color = teamStyle;
+              nameSlotColor.current[slot] = teamStyle;
               const borderMesh = nameBorderRefs.current[slot];
               if (borderMesh) {
                 (borderMesh.material as THREE.MeshBasicMaterial).color.copy(_col);
                 (borderMesh.material as THREE.MeshBasicMaterial).opacity = 1.0;
               }
-              
               needsSync = true;
             }
 
@@ -521,10 +519,10 @@ const BattleArmyComponent = ({
               mesh.fontSize = targetFontSize;
               needsSync = true;
             }
-            
+
             mesh.outlineWidth = 0.08;
             mesh.outlineColor = "#000000";
-            
+
             if (needsSync && updatesThisFrame < MAX_UPDATES_PER_FRAME) {
               mesh.sync();
               updatesThisFrame++;
@@ -534,8 +532,8 @@ const BattleArmyComponent = ({
             // Handle Profile Image
             const imgMesh = nameImageRefs.current[slot];
             if (imgMesh) {
-              const imgUrl = (gameMode === "TRAINING" || !u.profileImage) 
-                ? TEST_IMAGE_URL 
+              const imgUrl = (gameMode === "TRAINING" || !u.profileImage)
+                ? TEST_IMAGE_URL
                 : `/api/proxy-image?url=${encodeURIComponent(u.profileImage)}`;
               if (nameSlotImage.current[slot] !== imgUrl) {
                 nameSlotImage.current[slot] = imgUrl;
@@ -554,26 +552,15 @@ const BattleArmyComponent = ({
                     if (namePoolMap.current.get(id) === slot && mat) {
                       mat.uniforms.tDiffuse.value = tex;
                     }
-                    
-                    // Cache Cleanup: prevent memory leak if thousands of users join
                     if (textureCache.size > 200) {
                       let oldestKey = "";
                       let oldestTime = Infinity;
                       for (const [key, val] of textureCache.entries()) {
-                        if (val.lastUsed < oldestTime) {
-                          oldestTime = val.lastUsed;
-                          oldestKey = key;
-                        }
+                        if (val.lastUsed < oldestTime) { oldestTime = val.lastUsed; oldestKey = key; }
                       }
-                      if (oldestKey) {
-                        const old = textureCache.get(oldestKey);
-                        old?.tex.dispose();
-                        textureCache.delete(oldestKey);
-                      }
+                      if (oldestKey) { textureCache.get(oldestKey)?.tex.dispose(); textureCache.delete(oldestKey); }
                     }
-                  }, undefined, () => {
-                    textureLoading.delete(imgUrl);
-                  });
+                  }, undefined, () => { textureLoading.delete(imgUrl); });
                 }
               }
               imgMesh.visible = true;
@@ -585,20 +572,15 @@ const BattleArmyComponent = ({
             if (borderMesh) {
               const rCol = getRarityColor(u.rarity);
               (borderMesh.material as THREE.MeshBasicMaterial).color.set(rCol);
-              
-              // Legendary/Epic Pulse effect
               let pulse = 1.0;
               if (u.rarity === 'legendary') pulse = 1.0 + Math.sin(time * 6) * 0.1;
               else if (u.rarity === 'epic') pulse = 1.0 + Math.sin(time * 4) * 0.05;
-              
               borderMesh.scale.setScalar((u.isBoss ? 2.2 : 1.4) * 1.15 * pulse);
               borderMesh.visible = true;
             }
 
             if (group) {
               group.visible = true;
-              group.position.set(u.position[0], 2.2, u.position[2]);
-              group.quaternion.copy(state.camera.quaternion);
             }
           }
         }

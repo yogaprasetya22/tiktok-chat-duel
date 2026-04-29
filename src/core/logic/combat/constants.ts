@@ -39,7 +39,7 @@ export let CLASS_CONFIG: ClassConfig = {
         },
     },
     tank: {
-        hp: 15.0,
+        hp: 10.0,
         hp_regen: 0.35,
         atk: 1.3,
         physical_defense: 95,
@@ -55,7 +55,7 @@ export let CLASS_CONFIG: ClassConfig = {
         range: 3.0,
         tenacity: 0.5,
         cooldown_reduction: 0.15,
-        skill_cooldown: 8000,
+        skill_cooldown: 30000,
         skill_range: 0.0,
         skill_duration: 3500,
         ai_behavior: {
@@ -69,7 +69,7 @@ export let CLASS_CONFIG: ClassConfig = {
     mage: {
         hp: 3.2, // Nerfed from 3.5
         hp_regen: 0.08,
-        atk: 3.5,
+        atk: 4.5,
         physical_defense: 12, // Nerfed from 25
         magic_defense: 25, // Nerfed from 35
         physical_pen: 0,
@@ -139,7 +139,7 @@ export let CLASS_CONFIG: ClassConfig = {
         range: 2.2, // Buffed from 2.0
         tenacity: 0.1,
         cooldown_reduction: 0.2,
-        skill_cooldown: 10000,
+        skill_cooldown: 1500,
         skill_range: 17.0,
         skill_duration: 600,
         ai_behavior: {
@@ -157,9 +157,9 @@ export let INITIAL_SETTINGS: SimulationSettings = {
     // Military & Stats
     globalHpMultiplier: 1.0,
     globalSpeedMultiplier: 1.0,
-    globalDamageMultiplier: 1.0,
+    globalDamageMultiplier: 2.4,
     globalAttackCooldown: 800,
-    critChance: 0.15,
+    critChance: 0.55,
 
     // Perception
     perceptionRadiusSq: 60 * 60,

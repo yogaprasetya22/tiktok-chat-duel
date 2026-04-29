@@ -7,6 +7,21 @@ import * as THREE from 'three';
 import { applyPainterlyStyle } from "../systems/effects/PainterlyMaterials";
 
 const _obj = new THREE.Object3D();
+const _rot = new THREE.Euler();
+const _q = new THREE.Quaternion();
+
+// ─── Assets Configuration ──────────────────────────────────────────────────────
+const ENV_ASSETS = {
+  crate: '/assets-env/crate.glb',
+  barrel: '/assets-env/barrel.glb',
+  chest: '/assets-env/chest.glb',
+  flag: '/assets-env/flag.glb',
+  fence: '/assets-env/fence-straight.glb',
+  fenceBroken: '/assets-env/fence-broken.glb',
+  rock: '/assets-env/rocks.glb',
+  tree: '/assets-env/tree-pine-small.glb',
+  hedge: '/assets-env/hedge.glb',
+};
 
 // ─── Module-level cache ────────────────────────────────────────────────────────
 // Geometry dan material hanya diproses SEKALI selama session, bukan per-render.
@@ -105,6 +120,31 @@ const TOWER_LAYOUT = [
   { file: '/kingdom/tower-hexagon-top-wood.glb', y: 4.6, s: 3.2, rot: 0 },
   { file: '/kingdom/tower-hexagon-top.glb', y: 6.1, s: 3.2, rot: 0 },
   { file: '/kingdom/tower-hexagon-roof.glb', y: 6.6, s: 3.2, rot: 0 },
+];
+
+const PLAYER_PROPS = [
+  { file: ENV_ASSETS.fence, p: [-4, 0, -2], r: [0, Math.PI/2, 0], s: 1.5 },
+  { file: ENV_ASSETS.fence, p: [4, 0, -2], r: [0, -Math.PI/2, 0], s: 1.5 },
+  { file: ENV_ASSETS.fence, p: [-4, 0, 2], r: [0, Math.PI/2, 0], s: 1.5 },
+  { file: ENV_ASSETS.fence, p: [4, 0, 2], r: [0, -Math.PI/2, 0], s: 1.5 },
+  { file: ENV_ASSETS.flag, p: [-3, 0, 4], r: [0, 0, 0], s: 2 },
+  { file: ENV_ASSETS.flag, p: [3, 0, 4], r: [0, 0, 0], s: 2 },
+  { file: ENV_ASSETS.crate, p: [-3.5, 0, 0], r: [0, 0.4, 0], s: 1.2 },
+  { file: ENV_ASSETS.crate, p: [-3.5, 1, 0], r: [0, -0.2, 0], s: 1.2 },
+  { file: ENV_ASSETS.chest, p: [3.5, 0, 0], r: [0, -0.5, 0], s: 1.5 },
+  { file: ENV_ASSETS.hedge, p: [0, 0, 5], r: [0, 0, 0], s: 1.5 },
+];
+
+const ENEMY_PROPS = [
+  { file: ENV_ASSETS.fenceBroken, p: [-4, 0, -1], r: [0, 1.2, 0.2], s: 1.5 },
+  { file: ENV_ASSETS.fenceBroken, p: [3.5, 0, 2], r: [0, -0.8, -0.1], s: 1.5 },
+  { file: ENV_ASSETS.barrel, p: [-3, 0, 3], r: [0, 0, 0], s: 1.2 },
+  { file: ENV_ASSETS.barrel, p: [-2.2, 0, 3.5], r: [Math.PI/2, 0, 0.5], s: 1.2 },
+  { file: ENV_ASSETS.rock, p: [4, 0, -3], r: [0, 2.1, 0], s: 2.5 },
+  { file: ENV_ASSETS.rock, p: [-5, 0, -4], r: [0, 0.5, 0], s: 3 },
+  { file: ENV_ASSETS.tree, p: [5, 0, 5], r: [0, 0, 0], s: 2 },
+  { file: ENV_ASSETS.tree, p: [-6, 0, 6], r: [0, 1.1, 0], s: 1.8 },
+  { file: ENV_ASSETS.barrel, p: [3, 0, -1], r: [0, 0, 0], s: 1.2 },
 ];
 
 const GLBTowers = React.memo(({ distance }: { distance: number }) => {
@@ -208,6 +248,221 @@ const TowerPart = React.memo(({
   );
 });
 
+// ─── Environment Props Renderer ──────────────────────────────────────────────
+const BaseEnvironment = React.memo(({ type, distance }: { type: 'player' | 'enemy'; distance: number }) => {
+  const props = type === 'player' ? PLAYER_PROPS : ENEMY_PROPS;
+  
+  // Collect all unique files
+  const uniqueFiles = Array.from(new Set(props.map(p => p.file)));
+  
+  // We need to call useGLTF for each unique file to ensure they are loaded
+  // This is a bit tricky with hooks, but since the list is static, it's safe.
+  const gltfs = uniqueFiles.map(file => useGLTF(file, true, true, (l) => l.setMeshoptDecoder(MeshoptDecoder)) as any);
+
+  const fullMeshData = useMemo(() => {
+    return uniqueFiles.map((file, idx) => {
+      const scene = gltfs[idx]?.scene;
+      if (!scene) return [];
+      
+      const meshData = getOrBuildMeshData(scene, file);
+      
+      // Find all instances of this file in the props layout
+      const instances = props.filter(p => p.file === file);
+      
+      return meshData.map(m => ({
+        ...m,
+        file,
+        instances: instances.map(inst => ({
+          pos: inst.p,
+          rot: inst.r,
+          scale: inst.s
+        }))
+      }));
+    }).flat();
+  }, [gltfs]);
+
+  if (fullMeshData.length === 0) return null;
+
+  return (
+    <group position={[0, -0.4, type === 'player' ? distance : -distance]} rotation={[0, type === 'player' ? 0 : Math.PI, 0]}>
+      {fullMeshData.map((m, i) => (
+        <EnvPart
+          key={`${type}-${i}`}
+          geometry={m.geometry}
+          material={m.material}
+          instances={m.instances}
+        />
+      ))}
+    </group>
+  );
+});
+
+const EnvPart = React.memo(({
+  geometry,
+  material,
+  instances,
+}: {
+  geometry: THREE.BufferGeometry;
+  material: THREE.Material;
+  instances: { pos: number[]; rot: number[]; scale: number }[];
+}) => {
+  const meshRef = useRef<THREE.InstancedMesh>(null!);
+
+  useEffect(() => {
+    if (!meshRef.current) return;
+
+    instances.forEach((inst, i) => {
+      _obj.position.set(inst.pos[0], inst.pos[1], inst.pos[2]);
+      _rot.set(inst.rot[0], inst.rot[1], inst.rot[2]);
+      _q.setFromEuler(_rot);
+      _obj.quaternion.copy(_q);
+      _obj.scale.setScalar(inst.scale);
+      _obj.updateMatrix();
+      meshRef.current.setMatrixAt(i, _obj.matrix);
+    });
+
+    meshRef.current.instanceMatrix.needsUpdate = true;
+    meshRef.current.count = instances.length;
+  }, [instances]);
+
+  return (
+    <instancedMesh ref={meshRef} args={[geometry, material, instances.length]} receiveShadow frustumCulled={false} />
+  );
+});
+
+// ─── Tower Flag with Waving Shader ───────────────────────────────────────────
+const TowerFlag = React.memo(({ url, color, rotation = 0, invert = false }: { url?: string; color: string; rotation?: number; invert?: boolean }) => {
+  const meshRef = useRef<THREE.Mesh>(null!);
+  
+  const uniforms = useMemo(() => ({
+    uTime: { value: 0 },
+    uTexture: { value: null as THREE.Texture | null },
+    uColor: { value: new THREE.Color(color) },
+    uInvert: { value: invert ? 1 : 0 },
+  }), [color, invert]);
+
+  // Load texture if URL exists
+  useEffect(() => {
+    if (url) {
+      const loader = new THREE.TextureLoader();
+      loader.load(url, (tex) => {
+        tex.colorSpace = THREE.SRGBColorSpace;
+        uniforms.uTexture.value = tex;
+      });
+    }
+  }, [url, uniforms]);
+
+  useFrame((state) => {
+    if (meshRef.current) {
+      uniforms.uTime.value = state.clock.elapsedTime;
+    }
+  });
+
+  return (
+    <group position={[6.1, 0, 0]} rotation={[0, rotation, 0]}>
+      {/* Flag Pole - Standing from ground (y=0) up to the sky */}
+      <mesh position={[invert ? 2.1 : -2.1, 2.2, 0]} castShadow>
+        <cylinderGeometry args={[0.12, 0.18, 17, 12]} />
+        <meshStandardMaterial color="#222" metalness={0.9} roughness={0.1} />
+      </mesh>
+      
+      {/* Waving Flag - Positioned near the top of the pole */}
+      <mesh ref={meshRef} position={[0, 8.8, 0]}>
+        <planeGeometry args={[4, 2.5, 32, 32]} />
+        <shaderMaterial
+          transparent
+          side={THREE.DoubleSide}
+          uniforms={uniforms}
+          vertexShader={`
+            varying vec2 vUv;
+            uniform float uTime;
+            uniform float uInvert;
+            void main() {
+              vUv = uv;
+              vec3 pos = position;
+              
+              // If inverted, use (1.0 - uv.x) for anchoring and wave math
+              float xPos = (uInvert > 0.5) ? (1.0 - uv.x) : uv.x;
+              float anchor = pow(xPos, 1.5); 
+              
+              // Primary wave (Horizontal)
+              float wave = sin(xPos * 6.0 - uTime * 5.0) * 0.45 * anchor;
+              // Secondary wave (Vertical noise)
+              wave += cos(uv.y * 3.0 + uTime * 3.0) * 0.15 * anchor;
+              
+              pos.z += wave;
+              pos.y += sin(xPos * 2.0 + uTime * 2.0) * 0.2 * anchor;
+              
+              gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+            }
+          `}
+          fragmentShader={`
+            varying vec2 vUv;
+            uniform sampler2D uTexture;
+            uniform vec3 uColor;
+            uniform float uTime;
+            uniform float uInvert;
+            
+            void main() {
+              vec4 tex = texture2D(uTexture, vUv);
+              
+              vec3 base = uColor;
+              vec3 finalCol = (tex.a > 0.1) ? tex.rgb : base;
+              
+              float xPos = (uInvert > 0.5) ? (1.0 - vUv.x) : vUv.x;
+              float folds = sin(xPos * 12.0 - uTime * 5.0) * 0.25;
+              float verticalFolds = cos(vUv.y * 5.0 + uTime * 2.0) * 0.1;
+              
+              finalCol *= (0.8 + folds + verticalFolds);
+              
+              float b = 0.02;
+              if (vUv.x < b || vUv.x > 1.0-b || vUv.y < b || vUv.y > 1.0-b) {
+                finalCol = mix(finalCol, vec3(1.0), 0.3);
+              }
+              
+              gl_FragColor = vec4(finalCol, 1.0);
+            }
+          `}
+        />
+      </mesh>
+    </group>
+  );
+});
+
+const WinStars = React.memo(({ count, color }: { count: number; color: string }) => {
+  const stars = useMemo(() => Array.from({ length: count }), [count]);
+  const groupRef = useRef<THREE.Group>(null!);
+
+  useFrame((state) => {
+    if (!groupRef.current) return;
+    groupRef.current.position.y = Math.sin(state.clock.elapsedTime * 2) * 0.2;
+    groupRef.current.rotation.y = state.clock.elapsedTime * 0.5;
+  });
+
+  if (count <= 0) return null;
+
+  return (
+    <group ref={groupRef} position={[0, 11.8, 0]}>
+      {stars.map((_, i) => {
+        const angle = (i / count) * Math.PI * 2;
+        const radius = 1.2 + (count * 0.1);
+        return (
+          <mesh key={i} position={[Math.cos(angle) * radius, 0, Math.sin(angle) * radius]}>
+            <octahedronGeometry args={[0.4, 0]} />
+            <meshStandardMaterial 
+              color={color} 
+              emissive={color} 
+              emissiveIntensity={2} 
+              metalness={0.8}
+              roughness={0.2}
+            />
+          </mesh>
+        );
+      })}
+    </group>
+  );
+});
+
 // ─── Base: HP bar + light ──────────────────────────────────────────────────────
 interface BaseProps {
   maxHp: number;
@@ -215,9 +470,10 @@ interface BaseProps {
   type: "player" | "enemy";
   name: string;
   customColor: string;
+  flagUrl?: string;
 }
 
-export const Base = React.memo(({ maxHp, position, type, name, customColor }: BaseProps) => {
+export const Base = React.memo(({ maxHp, position, type, name, customColor, flagUrl }: BaseProps) => {
   const hpBarRef = useRef<THREE.Mesh>(null!);
   const textRef = useRef<any>(null!);
   const gameState = useStore(s => s.gameState);
@@ -250,9 +506,27 @@ export const Base = React.memo(({ maxHp, position, type, name, customColor }: Ba
     }
   });
 
+  const wins = useStore(s => type === 'player' ? s.playerWins : s.enemyWins);
+
   return (
     <group position={position}>
       <pointLight position={[0, 4.5, 0]} intensity={2.5} color="#ffaa00" distance={30} />
+      
+      {/* Environment Props */}
+      {gameState !== 'SETUP' && <BaseEnvironment type={type} distance={0} />}
+
+      {/* Large Waving Flag */}
+      {gameState !== 'SETUP' && (
+        <TowerFlag 
+          url={flagUrl || useStore.getState().liveStats.profileImages[name]} 
+          color={customColor} 
+          rotation={type === 'player' ? Math.PI : 0}
+          invert={type === 'player'}
+        />
+      )}
+
+      {/* Win Indicators (Stars) */}
+      <WinStars count={wins} color={customColor} />
 
       {gameState !== 'SETUP' && (
         <Billboard position={[0, 10.5, 0]}>
@@ -297,4 +571,7 @@ export const Base = React.memo(({ maxHp, position, type, name, customColor }: Ba
 // Preload all parts
 TOWER_LAYOUT.forEach(config => {
   useGLTF.preload(config.file, true, true, (l: any) => l.setMeshoptDecoder(MeshoptDecoder));
+});
+Object.values(ENV_ASSETS).forEach(file => {
+  useGLTF.preload(file, true, true, (l: any) => l.setMeshoptDecoder(MeshoptDecoder));
 });

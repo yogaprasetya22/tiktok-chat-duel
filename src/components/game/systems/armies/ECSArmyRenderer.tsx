@@ -298,12 +298,21 @@ const ECSArmyRendererInner = ({
   };
 
   // ── HUD helper: hide a slot's HUD ──
-  const hideHUD = (hIdx: number) => {
+  const hideHUD = (hIdx: number, uid?: string) => {
     _hudTemp.position.set(0, -100, 0);
     _hudTemp.updateMatrix();
     shadowRef.current?.setMatrixAt(hIdx, _hudTemp.matrix);
     healthBarRef.current?.setMatrixAt(hIdx, _hudTemp.matrix);
     cooldownRef.current?.setMatrixAt(hIdx, _hudTemp.matrix);
+    
+    if (uid && namePoolMap.current.has(uid)) {
+      const slot = namePoolMap.current.get(uid)!;
+      const group = nameGroupRefs.current[slot];
+      if (group) {
+        group.position.set(0, -200, 0);
+        group.visible = false;
+      }
+    }
   };
 
 // ─── Constants ──────────────────────────────────────────────────────────────
@@ -469,7 +478,7 @@ const CLASS_KEYS: ClassKey[] = ['fighter', 'tank', 'mage', 'marksman', 'assassin
             const vPos = item.group.position;
             const totalVisualScale = baseScale * settings.unitScale * rScale;
             
-            const by  = (uData.isBoss ? 2.8 : 3.4) * totalVisualScale;
+            const by  = (uData.isBoss ? 3.6 : 4.0) * totalVisualScale;
             const bs  = (uData.isBoss ? 0.7 : 0.8) * totalVisualScale;
             const ss  = 1.1 * totalVisualScale;
 
@@ -528,9 +537,9 @@ const CLASS_KEYS: ClassKey[] = ['fighter', 'tank', 'mage', 'marksman', 'assassin
               const nameSlot = namePoolMap.current.get(id)!;
               const nameGroup = nameGroupRefs.current[nameSlot];
               if (nameGroup) {
-                // Perfect Stack: Names sit exactly 0.55 units above the health bar
+                // Perfect Stack: Names sit exactly 0.8 units above the health bar
                 // FIX: Use vPos instead of cp to sync with visual model
-                nameGroup.position.set(vPos.x, vPos.y + by + 0.55, vPos.z);
+                nameGroup.position.set(vPos.x, vPos.y + by + 0.8, vPos.z);
                 nameGroup.quaternion.copy(camQ); 
               }
             }
@@ -570,7 +579,7 @@ const CLASS_KEYS: ClassKey[] = ['fighter', 'tank', 'mage', 'marksman', 'assassin
           if (item) item.group.visible = false;
 
           const hIdx = hudBase + slotIdx;
-          hideHUD(hIdx);
+          hideHUD(hIdx, _uid);
 
           pool.available.push(slotIdx);
           pool.assigned.delete(_uid);

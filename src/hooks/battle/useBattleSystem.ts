@@ -6,35 +6,35 @@
 // ============================================================
 
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
-import * as THREE from 'three';
+import * as THREE from "three";
 import * as YUKA from "yuka";
 import { useStore } from "@/src/state/useStore";
-import { 
-    createWorld, 
-    defineComponent, 
-    Types, 
-    addEntity, 
-    addComponent, 
-} from 'bitecs';
-import { 
-    RARITY_WEIGHTS, 
-    RARITY_BONUS_MATRIX, 
-    applyClassSpecialization 
+import {
+    createWorld,
+    defineComponent,
+    Types,
+    addEntity,
+    addComponent,
+} from "bitecs";
+import {
+    RARITY_WEIGHTS,
+    RARITY_BONUS_MATRIX,
+    applyClassSpecialization,
 } from "../../core/logic/battle/combatSpecs";
-import { 
-    calculateProcessedDamage, 
-    applySustain 
+import {
+    calculateProcessedDamage,
+    applySustain,
 } from "../../core/logic/battle/combatProcessor";
-import { 
-    UnitRarity, 
-    ActiveUnit, 
-    UnitRuntimeData, 
+import {
+    UnitRarity,
+    ActiveUnit,
+    UnitRuntimeData,
     ClassKey,
     TowerConfig,
     BattleStats,
     KillEvent,
     MapObstacle,
-    SimulationSettings
+    SimulationSettings,
 } from "../../core/domain/unit.types";
 export type { TowerConfig };
 
@@ -46,7 +46,11 @@ import {
     WEATHER_CONFIG,
 } from "@/src/core/logic/combat/constants";
 
-import { getUnitStats, pickRandom, pickWeightedRandom } from "@/src/core/logic/combat/battleUtils";
+import {
+    getUnitStats,
+    pickRandom,
+    pickWeightedRandom,
+} from "@/src/core/logic/combat/battleUtils";
 
 import { WORLD_UNIT_POOL_SIZE } from "@/src/core/domain/unit.types";
 import { battleGrid } from "@/src/core/logic/combat/spatialGrid";
@@ -123,44 +127,69 @@ export const useBattleSystem = () => {
 
     const spellsRef = useRef<any[]>(
         Array.from({ length: 300 }, () => ({
-            fromX: 0, fromY: 1, fromZ: 0,
-            toX: 0, toY: 1, toZ: 0,
-            progress: 0, startTime: 0, active: false,
-            rarity: 'common'
+            fromX: 0,
+            fromY: 1,
+            fromZ: 0,
+            toX: 0,
+            toY: 1,
+            toZ: 0,
+            progress: 0,
+            startTime: 0,
+            active: false,
+            rarity: "common",
         })),
     );
     const mmSpellsRef = useRef<any[]>(
         Array.from({ length: 800 }, () => ({
-            fromX: 0, fromY: 1, fromZ: 0,
-            toX: 0, toY: 1, toZ: 0,
-            progress: 0, startTime: 0, active: false,
-            rarity: 'common'
+            fromX: 0,
+            fromY: 1,
+            fromZ: 0,
+            toX: 0,
+            toY: 1,
+            toZ: 0,
+            progress: 0,
+            startTime: 0,
+            active: false,
+            rarity: "common",
         })),
     );
     const fighterSpellsRef = useRef<any[]>(
         Array.from({ length: 200 }, () => ({
-            x: 0, y: 0, z: 0,
-            targetX: 0, targetZ: 0,
-            rotation: 0, progress: 0,
-            startTime: 0, active: false,
+            x: 0,
+            y: 0,
+            z: 0,
+            targetX: 0,
+            targetZ: 0,
+            rotation: 0,
+            progress: 0,
+            startTime: 0,
+            active: false,
             color: "#ffffff",
-            rarity: 'common'
+            rarity: "common",
         })),
     );
     const tankSpellsRef = useRef<any[]>(
         Array.from({ length: 150 }, () => ({
-            x: 0, y: 0, z: 0,
-            progress: 0, startTime: 0, active: false,
+            x: 0,
+            y: 0,
+            z: 0,
+            progress: 0,
+            startTime: 0,
+            active: false,
             color: "#ffffff",
-            rarity: 'common'
+            rarity: "common",
         })),
     );
     const assassinSpellsRef = useRef<any[]>(
         Array.from({ length: 150 }, () => ({
-            x: 0, y: 0, z: 0,
-            progress: 0, startTime: 0, active: false,
+            x: 0,
+            y: 0,
+            z: 0,
+            progress: 0,
+            startTime: 0,
+            active: false,
             color: "#ffffff",
-            rarity: 'common'
+            rarity: "common",
         })),
     );
 
@@ -171,15 +200,25 @@ export const useBattleSystem = () => {
     // --- BITECS ECS ARCHITECTURE ---
     const world = useMemo(() => createWorld(), []);
     const frameCountRef = useRef(0);
-    const Position = useMemo(() => defineComponent({ x: Types.f32, y: Types.f32, z: Types.f32 }), []);
-    const Health = useMemo(() => defineComponent({ current: Types.f32, max: Types.f32 }), []);
-    const Status = useMemo(() => defineComponent({ 
-        type: Types.ui8, 
-        classIdx: Types.ui8,
-        state: Types.ui8,
-        active: Types.ui8,
-        isBuffed: Types.ui8
-    }), []);
+    const Position = useMemo(
+        () => defineComponent({ x: Types.f32, y: Types.f32, z: Types.f32 }),
+        [],
+    );
+    const Health = useMemo(
+        () => defineComponent({ current: Types.f32, max: Types.f32 }),
+        [],
+    );
+    const Status = useMemo(
+        () =>
+            defineComponent({
+                type: Types.ui8,
+                classIdx: Types.ui8,
+                state: Types.ui8,
+                active: Types.ui8,
+                isBuffed: Types.ui8,
+            }),
+        [],
+    );
 
     // Entity mapping for pool management
     const eidMap = useRef<number[]>(new Array(WORLD_UNIT_POOL_SIZE).fill(-1));
@@ -323,8 +362,8 @@ export const useBattleSystem = () => {
             giftKeyword: "coffee",
         },
         baseHp: 100000,
-        baseDistance: 32,
-        maxUnits: 20,
+        baseDistance: 40,
+        maxUnits: 15,
         unitConfig: {
             hpMultiplier: 1.0,
             speedMultiplier: 1.0,
@@ -355,18 +394,36 @@ export const useBattleSystem = () => {
         [],
     );
 
-    const updateStats = useCallback((userName: string, type: "player" | "enemy", dmg: number, isKill: boolean = false) => {
-        const stats = statsRef.current;
-        if (type === "player") {
-            stats.playerDamage[userName] = (stats.playerDamage[userName] || 0) + dmg;
-            if (isKill) stats.playerKills[userName] = (stats.playerKills[userName] || 0) + 1;
-            if (dmg > 0) stats.playerHits[userName] = (stats.playerHits[userName] || 0) + 1;
-        } else {
-            stats.enemyDamage[userName] = (stats.enemyDamage[userName] || 0) + dmg;
-            if (isKill) stats.enemyKills[userName] = (stats.enemyKills[userName] || 0) + 1;
-            if (dmg > 0) stats.enemyHits[userName] = (stats.enemyHits[userName] || 0) + 1;
-        }
-    }, []);
+    const updateStats = useCallback(
+        (
+            userName: string,
+            type: "player" | "enemy",
+            dmg: number,
+            isKill: boolean = false,
+        ) => {
+            const stats = statsRef.current;
+            if (type === "player") {
+                stats.playerDamage[userName] =
+                    (stats.playerDamage[userName] || 0) + dmg;
+                if (isKill)
+                    stats.playerKills[userName] =
+                        (stats.playerKills[userName] || 0) + 1;
+                if (dmg > 0)
+                    stats.playerHits[userName] =
+                        (stats.playerHits[userName] || 0) + 1;
+            } else {
+                stats.enemyDamage[userName] =
+                    (stats.enemyDamage[userName] || 0) + dmg;
+                if (isKill)
+                    stats.enemyKills[userName] =
+                        (stats.enemyKills[userName] || 0) + 1;
+                if (dmg > 0)
+                    stats.enemyHits[userName] =
+                        (stats.enemyHits[userName] || 0) + 1;
+            }
+        },
+        [],
+    );
 
     const resetBattle = useCallback(() => {
         gameStateRef.current = "PLAYING";
@@ -374,6 +431,30 @@ export const useBattleSystem = () => {
         enemyBaseHpRef.current = towerConfigRef.current.baseHp;
         useStore.getState().setGameState("PLAYING");
         useStore.getState().resetStore(towerConfigRef.current);
+
+        // Clear internal simulation stats
+        statsRef.current = {
+            damageDealt: {},
+            playerDamage: {},
+            enemyDamage: {},
+            playerKills: {},
+            enemyKills: {},
+            unitsSpawned: {},
+            playerHits: {},
+            enemyHits: {},
+            profileImages: statsRef.current.profileImages, // Preserve textures
+            classStats: {
+                fighter: { damageDealt: 0, damageTaken: 0, kills: 0, unitsSpawned: 0, healing: 0 },
+                tank: { damageDealt: 0, damageTaken: 0, kills: 0, unitsSpawned: 0, healing: 0 },
+                mage: { damageDealt: 0, damageTaken: 0, kills: 0, unitsSpawned: 0, healing: 0 },
+                marksman: { damageDealt: 0, damageTaken: 0, kills: 0, unitsSpawned: 0, healing: 0 },
+                assassin: { damageDealt: 0, damageTaken: 0, kills: 0, unitsSpawned: 0, healing: 0 },
+            },
+            teamSummary: {
+                player: { totalDamage: 0, totalKills: 0, unitsLost: 0 },
+                enemy: { totalDamage: 0, totalKills: 0, unitsLost: 0 },
+            }
+        };
 
         for (let i = 0; i < WORLD_UNIT_POOL_SIZE; i++) {
             unitPoolRef.current[i].isActive = false;
@@ -402,10 +483,13 @@ export const useBattleSystem = () => {
                 towerConfigRef.current.maxUnits ||
                 settingsRef.current.maxUnits ||
                 20;
-                
+
             let sideActiveCount = 0;
             for (let i = 0; i < WORLD_UNIT_POOL_SIZE; i++) {
-                if (unitPoolRef.current[i].isActive && unitPoolRef.current[i].type === type) {
+                if (
+                    unitPoolRef.current[i].isActive &&
+                    unitPoolRef.current[i].type === type
+                ) {
                     sideActiveCount++;
                 }
             }
@@ -427,17 +511,28 @@ export const useBattleSystem = () => {
                     ["fighter", "tank", "assassin", "marksman", "mage"],
                     [35, 35, 7, 11, 12],
                 );
-            
+
             // --- MODULAR GACHA SYSTEM ---
             const rarity = pickWeightedRandom(
                 ["common", "elite", "epic", "legendary"],
-                [RARITY_WEIGHTS.common, RARITY_WEIGHTS.elite, RARITY_WEIGHTS.epic, RARITY_WEIGHTS.legendary]
+                [
+                    RARITY_WEIGHTS.common,
+                    RARITY_WEIGHTS.elite,
+                    RARITY_WEIGHTS.epic,
+                    RARITY_WEIGHTS.legendary,
+                ],
             ) as UnitRarity;
 
             const rarityBonus = RARITY_BONUS_MATRIX[rarity];
 
-            const stats = getUnitStats(level, towerConfigRef.current.unitConfig, settingsRef.current);
-            const c = CLASS_CONFIG[unitClass as keyof typeof CLASS_CONFIG] || CLASS_CONFIG.fighter;
+            const stats = getUnitStats(
+                level,
+                towerConfigRef.current.unitConfig,
+                settingsRef.current,
+            );
+            const c =
+                CLASS_CONFIG[unitClass as keyof typeof CLASS_CONFIG] ||
+                CLASS_CONFIG.fighter;
 
             const u = unitPoolRef.current[poolIdx];
             const uData = unitDataPoolRef.current[poolIdx];
@@ -450,17 +545,27 @@ export const useBattleSystem = () => {
             u.userName = name;
             u.unitClass = unitClass;
             u.rarity = rarity;
-            
+
             // --- MODULAR STAT SCALING ---
             u.hp = stats.hp * c.hp;
             u.attack = stats.attack * c.atk;
-            
+
             // Apply specialized scaling from modular logic
-            applyClassSpecialization(u, unitClass as ClassKey, rarityBonus, c, settingsRef.current);
+            applyClassSpecialization(
+                u,
+                unitClass as ClassKey,
+                rarityBonus,
+                c,
+                settingsRef.current,
+            );
 
             u.maxHp = u.hp;
             u.range = c.range;
-            u.speed = stats.speed * c.move_speed_mult * (1 + rarityBonus.as * 0.2) * (0.9 + Math.random() * 0.2);
+            u.speed =
+                stats.speed *
+                c.move_speed_mult *
+                (1 + rarityBonus.as * 0.2) *
+                (0.9 + Math.random() * 0.2);
             u.isDying = false;
             u.isBoss = isBoss;
             u.isShield = false;
@@ -468,7 +573,9 @@ export const useBattleSystem = () => {
             u.hpRegen = c.hp_regen;
             u.targetId = undefined;
             u.lastThinkTime = 0;
-            u.attackCooldown = (settingsRef.current.globalAttackCooldown || 800) / (c.attack_speed_mult || 1.0);
+            u.attackCooldown =
+                (settingsRef.current.globalAttackCooldown || 800) /
+                (c.attack_speed_mult || 1.0);
 
             const dist = towerConfigRef.current.baseDistance ?? 24;
             const spawnZ = type === "player" ? dist - 2 : -dist + 2;
@@ -480,7 +587,7 @@ export const useBattleSystem = () => {
                 spawnZ + (Math.random() - 0.5) * 4,
             );
             v.maxSpeed = u.speed;
-            v.maxForce = (unitClass === "assassin") ? 20 : 10; // Reduced from 100/30 to prevent zipping
+            v.maxForce = unitClass === "assassin" ? 20 : 10; // Reduced from 100/30 to prevent zipping
             v.velocity.set(0, 0, 0);
             v.steering.behaviors.length = 0;
 
@@ -513,12 +620,13 @@ export const useBattleSystem = () => {
             uData.rarity = rarity;
             uData.laneOffset = laneOffset;
             uData.jitterOffset = Math.random() * Math.PI * 2;
-            uData.encirclementRadius = (c.ai_behavior?.encirclement || 1.2) * 1.25;
-            uData.lastSkillTime = (unitClass === 'marksman') ? -30000 : 0; // Ready immediately
+            uData.encirclementRadius =
+                (c.ai_behavior?.encirclement || 1.2) * 1.25;
+            uData.lastSkillTime = unitClass === "marksman" ? -30000 : 0; // Ready immediately
             uData.lastAttackTime = 0;
             uData.isBuffed = false;
             uData.isRolling = false;
-            uData.isShield = unitClass === 'tank';
+            uData.isShield = unitClass === "tank";
             if (uData.isShield) {
                 u.isShield = true;
                 (uData as any).shieldEndTime = simulationTimeRef.current + 5000;
@@ -529,7 +637,8 @@ export const useBattleSystem = () => {
             if (profileImage) {
                 statsRef.current.profileImages[name] = profileImage;
             }
-            statsRef.current.unitsSpawned[name] = (statsRef.current.unitsSpawned[name] || 0) + 1;
+            statsRef.current.unitsSpawned[name] =
+                (statsRef.current.unitsSpawned[name] || 0) + 1;
 
             let eid = eidMap.current[poolIdx];
             if (eid === -1) {
@@ -540,14 +649,14 @@ export const useBattleSystem = () => {
                 eidMap.current[poolIdx] = eid;
             }
 
-            _px[eid] = v.position.x;
-            _py[eid] = -0.4;
-            _pz[eid] = v.position.z;
-            _vh[eid] = u.hp;
-            _vmh[eid] = u.maxHp;
-            _vType[eid] = type === "player" ? 0 : 1;
-            _vActive[eid] = 1;
-            _vState[eid] = 1;
+            _px[poolIdx] = v.position.x;
+            _py[poolIdx] = -0.4;
+            _pz[poolIdx] = v.position.z;
+            _vh[poolIdx] = u.hp;
+            _vmh[poolIdx] = u.maxHp;
+            _vType[poolIdx] = type === "player" ? 0 : 1;
+            _vActive[poolIdx] = 1;
+            _vState[poolIdx] = 1;
 
             if (!activeIndicesRef.current.includes(poolIdx)) {
                 activeIndicesRef.current.push(poolIdx);
@@ -583,26 +692,32 @@ export const useBattleSystem = () => {
             const activeArr = _vActive;
             for (let i = 0; i < WORLD_UNIT_POOL_SIZE; i++) {
                 const eid = eidArr[i];
-                if (eid !== -1 && activeArr[eid]) activeCount++;
+                if (eid !== -1 && activeArr[i]) activeCount++;
             }
             if (activeCount === 0 && gameStateRef.current !== "PLAYING") return;
 
             // OPTIMIZATION: Reduce grid update frequency to once every 5 frames (was 2).
             // This reclaim CPU time for VFX while maintaining accurate targeting.
             if (frameCountRef.current % 5 === 0) {
-                battleGrid.update(unitDataPoolRef.current, activeIndicesRef.current);
+                battleGrid.update(
+                    unitDataPoolRef.current,
+                    activeIndicesRef.current,
+                );
             }
 
-            const PHYSICS_STEP = 0.016; 
+            const PHYSICS_STEP = 0.016;
             physicsAccumulatorRef.current += simDelta;
 
             if (physicsAccumulatorRef.current > 0.2) {
-                physicsAccumulatorRef.current = 0.2; 
+                physicsAccumulatorRef.current = 0.2;
             }
-            
+
             let steps = 0;
-            const MAX_STEPS_PER_FRAME = 3; 
-            while (physicsAccumulatorRef.current >= PHYSICS_STEP && steps < MAX_STEPS_PER_FRAME) {
+            const MAX_STEPS_PER_FRAME = 3;
+            while (
+                physicsAccumulatorRef.current >= PHYSICS_STEP &&
+                steps < MAX_STEPS_PER_FRAME
+            ) {
                 entityManager.update(PHYSICS_STEP);
                 physicsAccumulatorRef.current -= PHYSICS_STEP;
                 steps++;
@@ -617,31 +732,33 @@ export const useBattleSystem = () => {
             const activeIdxArray = activeIndicesRef.current;
 
             if (frameCountRef.current % 30 === 0) {
-              activeIndicesRef.current = activeIdxArray.filter(idx => uPool[idx].isActive);
+                activeIndicesRef.current = activeIdxArray.filter(
+                    (idx) => uPool[idx].isActive,
+                );
             }
 
             for (let k = 0; k < activeIdxArray.length; k++) {
                 const i = activeIdxArray[k];
                 const eid = eids[i];
-                if (eid === -1 || !activeStates[eid]) continue;
+                if (eid === -1 || !activeStates[i]) continue;
 
                 const u = uPool[i];
                 const uData = uiPool[i];
                 const v = vPool[i];
 
                 // PRIMARY DEATH CHECK: use eid-indexed buffer for instant cleanup
-                if (_vh[eid] <= 0) {
+                if (_vh[i] <= 0) {
                     uData.position[1] = -100;
-                    _py[eid] = -100;
+                    _py[i] = -100;
                     v.velocity.set(0, 0, 0);
-                    _vActive[eid] = 0;
+                    _vActive[i] = 0;
                     u.isActive = false;
                     uData.isActive = false;
                     continue;
                 }
 
                 // SECONDARY: trigger dying animation on first frame at 0 HP
-                if (_vh[eid] <= 0 && !u.isDying) {
+                if (_vh[i] <= 0 && !u.isDying) {
                     u.isDying = true;
                     u.deathTime = simNow;
                     uData.isDying = true;
@@ -665,21 +782,31 @@ export const useBattleSystem = () => {
                     continue;
                 }
 
-                // PERFORMANCE: Spread 'Thinking' logic across 16 frames instead of 8. 
+                // PERFORMANCE: Spread 'Thinking' logic across 16 frames instead of 8.
                 // This reduces the per-frame cost of spatial queries by 50% in high-density combat.
-                const thinkThrottle = u.unitClass === "fighter" ? 120 : (u.unitClass === "assassin" ? 60 : 180); 
-                const phaseOffset = i % 16; 
-                const frameCheck = (Math.floor(simNow / 16) + phaseOffset) % 16 === 0;
+                const thinkThrottle =
+                    u.unitClass === "fighter"
+                        ? 120
+                        : u.unitClass === "assassin"
+                          ? 60
+                          : 180;
+                const phaseOffset = i % 16;
+                const frameCheck =
+                    (Math.floor(simNow / 16) + phaseOffset) % 16 === 0;
 
-                if (frameCheck && (!u.lastThinkTime || simNow - u.lastThinkTime > thinkThrottle)) {
+                if (
+                    frameCheck &&
+                    (!u.lastThinkTime ||
+                        simNow - u.lastThinkTime > thinkThrottle)
+                ) {
                     u.lastThinkTime = simNow;
                     const isFighter = u.unitClass === "fighter";
                     const isAssassin = u.unitClass === "assassin";
-                    
+
                     let bestScore = -1;
                     let bestTargetId: string | undefined = undefined;
 
-                    const dist = towerConfig.baseDistance ?? 24;
+                    const dist = towerConfigRef.current.baseDistance ?? 34;
                     const targetBaseZ = u.type === "player" ? -dist : dist;
                     const dxB = uData.position[0];
                     const dzB = uData.position[2] - targetBaseZ;
@@ -687,22 +814,30 @@ export const useBattleSystem = () => {
 
                     const towerWeight = 0.01;
                     bestScore = towerWeight / (distToBaseSq + 0.1);
-                    const targetedBaseId = u.type === "player" ? "enemy-base" : "player-base";
+                    const targetedBaseId =
+                        u.type === "player" ? "enemy-base" : "player-base";
 
-                    const neighbors = battleGrid.queryRadius(uData.position[0], uData.position[2], (isFighter || isAssassin) ? 32 : 12);
+                    const neighbors = battleGrid.queryRadius(
+                        uData.position[0],
+                        uData.position[2],
+                        isFighter || isAssassin ? 32 : 12,
+                    );
                     for (let j = 0; j < neighbors.length; j++) {
                         const potential = neighbors[j];
                         if (potential.id === u.id) continue;
                         if (potential.type === u.type) continue;
                         if (potential.hp <= 0 || potential.isDying) continue;
 
-                        const dx = _px[eid] - potential.position[0];
-                        const dz = _pz[eid] - potential.position[2];
+                        const dx = _px[i] - potential.position[0];
+                        const dz = _pz[i] - potential.position[2];
                         const dSq = dx * dx + dz * dz;
 
                         let weight = 1.0;
                         if (isAssassin) {
-                            if (potential.unitClass === 'mage' || potential.unitClass === 'marksman') {
+                            if (
+                                potential.unitClass === "mage" ||
+                                potential.unitClass === "marksman"
+                            ) {
                                 weight = 15.0;
                             } else {
                                 weight = 0.05;
@@ -729,17 +864,21 @@ export const useBattleSystem = () => {
                     }
                 }
 
-                const simFrame = Math.floor(simNow * 60); 
+                const simFrame = Math.floor(simNow * 60);
                 // PERFORMANCE: Spread collision/separation logic over 12 frames instead of 6.
                 const moveCheck = (simFrame + i) % 12 === 0;
 
                 if (moveCheck && !u.isDying) {
                     const sepWeight = 0.5;
-                    const neighbors = battleGrid.queryRadius(_px[i], _pz[i], 1.2);
+                    const neighbors = battleGrid.queryRadius(
+                        _px[i],
+                        _pz[i],
+                        1.2,
+                    );
                     for (let j = 0; j < neighbors.length; j++) {
                         const potential = neighbors[j];
                         if (potential.id === u.id) continue;
-                        
+
                         const dx = _px[i] - potential.position[0];
                         const dz = _pz[i] - potential.position[2];
                         const dSq = dx * dx + dz * dz;
@@ -752,14 +891,14 @@ export const useBattleSystem = () => {
                     }
                 }
 
-                const dist = towerConfig.baseDistance ?? 24;
+                const dist = towerConfigRef.current.baseDistance ?? 24;
                 const targetBaseZ = u.type === "player" ? -dist : dist;
                 const isBaseTarget =
                     u.targetId === "player-base" || u.targetId === "enemy-base";
 
                 const isRanged =
                     u.unitClass === "mage" || u.unitClass === "marksman";
-                
+
                 // --- Skill/Buff Range Adjustment ---
                 const skillRange = uData.isBuffed ? u.range * 1.5 : u.range;
                 const rangeMult = isBaseTarget && isRanged ? 0.82 : 1.0;
@@ -784,111 +923,174 @@ export const useBattleSystem = () => {
                 }
 
                 const tIdx = currentTarget ? currentTarget.poolIdx : -1;
-                const tData = tIdx >= 0 ? unitDataPoolRef.current[tIdx] : undefined;
+                const tData =
+                    tIdx >= 0 ? unitDataPoolRef.current[tIdx] : undefined;
 
                 // ============================================================
                 // ACTIVE SKILL SYSTEM (INNOVATION)
                 // ============================================================
                 const cfg = CLASS_CONFIG[u.unitClass];
                 const cooldown = cfg.skill_cooldown * (1 - u.cooldownReduction);
-                const skillReady = !uData.lastSkillTime || (simNow - uData.lastSkillTime > cooldown);
+                const skillReady =
+                    !uData.lastSkillTime ||
+                    simNow - uData.lastSkillTime > cooldown;
 
                 if (skillReady && !u.isDying) {
                     // 1. FIGHTER: Cyclone Slash (AOE around self)
-                    if (u.unitClass === 'fighter') {
-                        const neighbors = battleGrid.queryRadius(_px[i], _pz[i], cfg.skill_range);
+                    if (u.unitClass === "fighter") {
+                        const neighbors = battleGrid.queryRadius(
+                            _px[i],
+                            _pz[i],
+                            cfg.skill_range,
+                        );
                         let enemyCount = 0;
-                        for(let n=0; n<neighbors.length; n++) {
-                            if (neighbors[n].type !== u.type && !neighbors[n].isDying) enemyCount++;
+                        for (let n = 0; n < neighbors.length; n++) {
+                            if (
+                                neighbors[n].type !== u.type &&
+                                !neighbors[n].isDying
+                            )
+                                enemyCount++;
                         }
-                        
+
                         if (enemyCount >= 1) {
                             uData.lastSkillTime = simNow;
                             const pool = fighterSpellsRef.current;
                             if (pool) {
                                 const s = pool[fighterSpellPtr.current];
-                                s.active = true; s.x = _px[i]; s.z = _pz[i]; s.startTime = simNow;
-                                s.color = u.type === 'player' ? '#ffd700' : '#ff4400';
-                                s.rarity = u.rarity; (s as any).isCyclone = true; (s as any)._tIdx = undefined;
-                                fighterSpellPtr.current = (fighterSpellPtr.current + 1) % pool.length;
+                                s.active = true;
+                                s.x = _px[i];
+                                s.z = _pz[i];
+                                s.startTime = simNow;
+                                s.color =
+                                    u.type === "player" ? "#ffd700" : "#ff4400";
+                                s.rarity = u.rarity;
+                                (s as any).isCyclone = true;
+                                (s as any)._tIdx = undefined;
+                                fighterSpellPtr.current =
+                                    (fighterSpellPtr.current + 1) % pool.length;
                             }
-                            for(let n=0; n<neighbors.length; n++) {
+                            for (let n = 0; n < neighbors.length; n++) {
                                 const tar = neighbors[n];
                                 if (tar.type !== u.type && !tar.isDying) {
                                     const tnIdx = tar.poolIdx;
-                                    const dmg = u.attack * 2.5; 
+                                    const dmg = u.attack * 2.5;
                                     if (tnIdx >= 0) {
-                                        const tarUnit = unitIndexRef.current.get(tar.id);
+                                        const tarUnit =
+                                            unitIndexRef.current.get(tar.id);
                                         if (tarUnit && tarUnit.isShield) {
-                                            accumulateDamage(tar.id, 0, tar.position, "#FFFFFF");
+                                            accumulateDamage(
+                                                tar.id,
+                                                0,
+                                                tar.position,
+                                                "#FFFFFF",
+                                            );
                                         } else {
                                             _vh[tnIdx] -= dmg;
-                                            accumulateDamage(tar.id, dmg, tar.position, "#fff");
+                                            accumulateDamage(
+                                                tar.id,
+                                                dmg,
+                                                tar.position,
+                                                "#fff",
+                                            );
                                         }
                                     }
                                 }
                             }
                         }
-                    } 
+                    }
                     // 2. MAGE: Meteor Rain (Targeted AOE)
-                    else if (u.unitClass === 'mage' && (currentTarget || baseInRange)) {
+                    else if (
+                        u.unitClass === "mage" &&
+                        (currentTarget || baseInRange)
+                    ) {
                         uData.lastSkillTime = simNow;
                         const pool = spellsRef.current;
                         if (pool) {
-                            const tx = currentTarget ? tData!.position[0] : (u.type === 'player' ? 0 : 0);
-                            const tz = currentTarget ? tData!.position[2] : targetBaseZ;
-                            const iceRainCount = 15; // LUXURY: 15 ice shards instead of 3 meteors
-                            for(let m=0; m<iceRainCount; m++) {
+                            const tx = currentTarget
+                                ? tData!.position[0]
+                                : u.type === "player"
+                                  ? 0
+                                  : 0;
+                            const tz = currentTarget
+                                ? tData!.position[2]
+                                : targetBaseZ;
+                            const iceRainCount = 20; // LUXURY: 20 high-fidelity 3D ice shards
+
+                            for (let m = 0; m < iceRainCount; m++) {
                                 const s = pool[mageSpellPtr.current];
-                                s.active = true; 
-                                // Randomized delay for "Rain" effect
-                                s.startTime = simNow + Math.random() * 1500; 
-                                s.fromX = tx + (Math.random()-0.5) * 8; 
-                                s.fromY = 20 + Math.random() * 10; 
-                                s.fromZ = tz + (Math.random()-0.5) * 8;
-                                
-                                // Target slightly randomized around the center
-                                s.toX = tx + (Math.random()-0.5) * 6; 
-                                s.toY = 0; 
-                                s.toZ = tz + (Math.random()-0.5) * 6;
-                                
-                                // Team-Based Icy Colors (Sync with Tower + subtle variation)
-                                const teamBaseCol = u.type === 'player' 
-                                    ? towerConfigRef.current.player.color 
-                                    : towerConfigRef.current.enemy.color;
-                                
+                                s.active = true;
+
+                                // Rhythmic Staggering: Shards fall in waves
+                                const waveIndex = Math.floor(m / 5);
+                                s.startTime =
+                                    simNow +
+                                    waveIndex * 300 +
+                                    Math.random() * 400;
+
+                                // High-altitude source
+                                s.fromX = tx + (Math.random() - 0.5) * 10;
+                                s.fromY = 25 + Math.random() * 15;
+                                s.fromZ = tz + (Math.random() - 0.5) * 10;
+
+                                // Precise landing with slight spread
+                                s.toX = tx + (Math.random() - 0.5) * 7;
+                                s.toY = 0;
+                                s.toZ = tz + (Math.random() - 0.5) * 7;
+
+                                // Team-Based Icy Colors
+                                const teamBaseCol =
+                                    u.type === "player"
+                                        ? towerConfigRef.current.player.color
+                                        : towerConfigRef.current.enemy.color;
+
                                 const col = new THREE.Color(teamBaseCol);
-                                if (Math.random() > 0.5) col.lerp(new THREE.Color('#ffffff'), 0.3); // Mix with white for "Ice" feel
+                                if (Math.random() > 0.4)
+                                    col.lerp(new THREE.Color("#ffffff"), 0.4);
                                 s.color = col.getStyle();
-                                
-                                s.rarity = u.rarity; 
+
+                                s.rarity = u.rarity;
                                 s.isMeteor = true;
                                 (s as any).attackPower = u.attack;
                                 (s as any).ownerType = u.type;
-                                (s as any).iceDmgMult = 1.8; // Per shard damage
-                                s.isBullet = false; (s as any).isTeleport = false; (s as any)._tIdx = undefined;
-                                mageSpellPtr.current = (mageSpellPtr.current + 1) % pool.length;
+                                (s as any).iceDmgMult = 2.0; // Buffed damage for refactored ult
+                                s.isBullet = false;
+                                (s as any).isTeleport = false;
+                                (s as any)._tIdx = undefined;
+
+                                mageSpellPtr.current =
+                                    (mageSpellPtr.current + 1) % pool.length;
                             }
                         }
                     }
                     // 2.2 MAGE: Base Attack Enhancement (Tower)
-                    else if (u.unitClass === 'mage' && baseInRange) {
-                         // Logic already handles tower attacks below
+                    else if (u.unitClass === "mage" && baseInRange) {
+                        // Logic already handles tower attacks below
                     }
                     // 3. MARKSMAN: Triple Threat Precision (Sniper Burst Initialization)
-                    else if (u.unitClass === 'marksman') {
-                        // Pick target (priority: lowest HP in range)
-                        const targets = battleGrid.queryRadius(_px[i], _pz[i], cfg.skill_range);
+                    else if (u.unitClass === "marksman") {
+                        // Pick target (priority: CLOSEST in range for better accuracy)
+                        const targets = battleGrid.queryRadius(
+                            _px[i],
+                            _pz[i],
+                            cfg.skill_range,
+                        );
                         let bestTarget = null;
-                        let minHp = Infinity;
-                        for(let t=0; t<targets.length; t++) {
+                        let minDSq = Infinity;
+                        for (let t = 0; t < targets.length; t++) {
                             const tar = targets[t];
-                            if (tar.type !== u.type && !tar.isDying && tar.hp < minHp) {
-                                minHp = tar.hp;
+                            const dx = _px[i] - tar.position[0];
+                            const dz = _pz[i] - tar.position[2];
+                            const dSq = dx * dx + dz * dz;
+                            if (
+                                tar.type !== u.type &&
+                                !tar.isDying &&
+                                dSq < minDSq
+                            ) {
+                                minDSq = dSq;
                                 bestTarget = tar;
                             }
                         }
-                        
+
                         if (bestTarget) {
                             uData.lastSkillTime = simNow;
                             uData.isBuffed = true;
@@ -901,11 +1103,12 @@ export const useBattleSystem = () => {
                             // buffEndTime set panjang agar tidak memotong rangkaian 5 tembakan
                             (uData as any).buffEndTime = simNow + 8000;
                             (uData as any).sniperTargetId = bestTarget.id;
-                            (uData as any).sniperTargetPoolIdx = bestTarget.poolIdx;
+                            (uData as any).sniperTargetPoolIdx =
+                                bestTarget.poolIdx;
                         }
                     }
                     // 4. TANK: Fortress Guard (Shield)
-                    else if (u.unitClass === 'tank' && u.hp < u.maxHp * 0.6) {
+                    else if (u.unitClass === "tank" && u.hp < u.maxHp * 0.6) {
                         uData.lastSkillTime = simNow;
                         u.isShield = true;
                         uData.isShield = true;
@@ -913,57 +1116,93 @@ export const useBattleSystem = () => {
                         const pool = tankSpellsRef.current;
                         if (pool) {
                             const s = pool[tankSpellPtr.current];
-                            s.active = true; s.x = _px[i]; s.z = _pz[i]; s.startTime = simNow;
-                            s.rarity = u.rarity; (s as any).isShield = true;
-                            tankSpellPtr.current = (tankSpellPtr.current + 1) % pool.length;
+                            s.active = true;
+                            s.x = _px[i];
+                            s.z = _pz[i];
+                            s.startTime = simNow;
+                            s.rarity = u.rarity;
+                            (s as any).isShield = true;
+                            tankSpellPtr.current =
+                                (tankSpellPtr.current + 1) % pool.length;
                         }
                     }
                     // 5. ASSASSIN: Shadow Step (Teleport to Squishy)
-                    else if (u.unitClass === 'assassin') {
-                        const targets = battleGrid.queryRadius(_px[i], _pz[i], cfg.skill_range);
+                    else if (u.unitClass === "assassin") {
+                        const targets = battleGrid.queryRadius(
+                            _px[i],
+                            _pz[i],
+                            cfg.skill_range,
+                        );
                         let bestTarget = null;
                         let minHp = Infinity;
-                        
+
                         for (let tj = 0; tj < targets.length; tj++) {
                             const t = targets[tj];
-                            if (t.type !== u.type && (t.unitClass === 'mage' || t.unitClass === 'marksman') && !t.isDying) {
+                            if (
+                                t.type !== u.type &&
+                                (t.unitClass === "mage" ||
+                                    t.unitClass === "marksman") &&
+                                !t.isDying
+                            ) {
                                 if (t.hp < minHp) {
                                     minHp = t.hp;
                                     bestTarget = t;
                                 }
                             }
                         }
-                        
+
                         if (bestTarget) {
-                            const targetU = unitIndexRef.current.get(bestTarget.id);
+                            const targetU = unitIndexRef.current.get(
+                                bestTarget.id,
+                            );
                             if (targetU) {
                                 uData.lastSkillTime = simNow;
-                                
+
                                 const pool = assassinSpellsRef.current;
                                 if (pool) {
                                     const s = pool[assassinSpellPtr.current];
-                                    s.active = true; s.x = _px[i]; s.y = 0.5; s.z = _pz[i]; s.startTime = simNow;
-                                    s.rarity = u.rarity; (s as any).isTeleport = true;
-                                    assassinSpellPtr.current = (assassinSpellPtr.current + 1) % pool.length;
+                                    s.active = true;
+                                    s.x = _px[i];
+                                    s.y = 0.5;
+                                    s.z = _pz[i];
+                                    s.startTime = simNow;
+                                    s.rarity = u.rarity;
+                                    (s as any).isTeleport = true;
+                                    assassinSpellPtr.current =
+                                        (assassinSpellPtr.current + 1) %
+                                        pool.length;
                                 }
 
-                                const tx = bestTarget.position[0] + (Math.random()-0.5)*0.5;
-                                const tz = bestTarget.position[2] + (u.type === 'player' ? 1.5 : -1.5);
-                                
+                                const tx =
+                                    bestTarget.position[0] +
+                                    (Math.random() - 0.5) * 0.5;
+                                const tz =
+                                    bestTarget.position[2] +
+                                    (u.type === "player" ? 1.5 : -1.5);
+
                                 v.position.set(tx, -0.4, tz);
-                                _px[i] = tx; _pz[i] = tz;
-                                uData.position[0] = tx; uData.position[2] = tz;
+                                _px[i] = tx;
+                                _pz[i] = tz;
+                                uData.position[0] = tx;
+                                uData.position[2] = tz;
                                 u.targetId = bestTarget.id;
-                                
+
                                 if (pool) {
                                     const s = pool[assassinSpellPtr.current];
-                                    s.active = true; s.x = tx; s.y = 0.5; s.z = tz; s.startTime = simNow + 50;
-                                    s.rarity = u.rarity; (s as any).isTeleport = true;
-                                    assassinSpellPtr.current = (assassinSpellPtr.current + 1) % pool.length;
+                                    s.active = true;
+                                    s.x = tx;
+                                    s.y = 0.5;
+                                    s.z = tz;
+                                    s.startTime = simNow + 50;
+                                    s.rarity = u.rarity;
+                                    (s as any).isTeleport = true;
+                                    assassinSpellPtr.current =
+                                        (assassinSpellPtr.current + 1) %
+                                        pool.length;
                                 }
 
-                                u.untargetableUntil = simNow + 400; 
-                                u.isCriticalReady = true; 
+                                u.untargetableUntil = simNow + 400;
+                                u.isCriticalReady = true;
                                 uData.status = "attacking";
                             }
                         }
@@ -971,70 +1210,139 @@ export const useBattleSystem = () => {
                 }
 
                 // --- ACTIVE SKILL UPDATES (Post-Initiation) ---
-                if (uData.isBuffed && u.unitClass === 'marksman' && !u.isDying) {
-                    uData.status = "attacking"; 
+                if (
+                    uData.isBuffed &&
+                    u.unitClass === "marksman" &&
+                    !u.isDying
+                ) {
+                    uData.status = "attacking";
                     u.isBuffed = true;
                     const sCount = (uData as any).sniperCount || 0;
                     const lastS = (uData as any).lastSniperTime || 0;
                     const delay = sCount === 4 ? 1500 : 800; // Increased delay from 1000/500
-                    
+
                     if (simNow - lastS > delay && sCount < 5) {
                         (uData as any).sniperCount = sCount + 1;
                         (uData as any).lastSniperTime = simNow;
                         uData.lastAttackTime = simNow;
-                            
-                        const targetPoolIdx = (uData as any).sniperTargetPoolIdx;
-                        const targetData = (targetPoolIdx !== undefined && targetPoolIdx >= 0)
-                            ? unitDataPoolRef.current[targetPoolIdx]
-                            : null;
-                        
+
+                        const targetPoolIdx = (uData as any)
+                            .sniperTargetPoolIdx;
+                        const targetData =
+                            targetPoolIdx !== undefined && targetPoolIdx >= 0
+                                ? unitDataPoolRef.current[targetPoolIdx]
+                                : null;
+
                         // Update target jika masih aktif, atau cari target baru
-                        let tPos: [number,number,number] | null = null;
+                        let tPos: [number, number, number] | null = null;
                         let tId = (uData as any).sniperTargetId;
-                        if (targetData && targetData.isActive && !targetData.isDying && targetData.id === tId) {
-                            tPos = targetData.position as [number,number,number];
+                        if (
+                            targetData &&
+                            targetData.isActive &&
+                            !targetData.isDying &&
+                            targetData.id === tId
+                        ) {
+                            tPos = targetData.position as [
+                                number,
+                                number,
+                                number,
+                            ];
                         } else {
                             // Target mati, cari target baru terdekat
-                            const newTargets = battleGrid.queryRadius(_px[i], _pz[i], 60);
-                            for (let t2=0; t2<newTargets.length; t2++) {
+                            const newTargets = battleGrid.queryRadius(
+                                _px[i],
+                                _pz[i],
+                                60,
+                            );
+                            for (let t2 = 0; t2 < newTargets.length; t2++) {
                                 const nt = newTargets[t2];
-                                if (nt.type !== u.type && nt.isActive && !nt.isDying) {
+                                if (
+                                    nt.type !== u.type &&
+                                    nt.isActive &&
+                                    !nt.isDying
+                                ) {
                                     tId = nt.id;
+                                    u.targetId = nt.id;
+                                    uData.targetId = nt.id;
                                     (uData as any).sniperTargetId = nt.id;
-                                    (uData as any).sniperTargetPoolIdx = nt.poolIdx;
-                                    const ntData = unitDataPoolRef.current[nt.poolIdx];
-                                    if (ntData) tPos = ntData.position as [number,number,number];
+                                    (uData as any).sniperTargetPoolIdx =
+                                        nt.poolIdx;
+                                    const ntData =
+                                        unitDataPoolRef.current[nt.poolIdx];
+                                    if (ntData)
+                                        tPos = ntData.position as [
+                                            number,
+                                            number,
+                                            number,
+                                        ];
                                     break;
                                 }
                             }
                         }
 
                         if (tPos) {
-                            const pool = mmSpellsRef.current;
-                            const color = u.type === 'player' ? towerConfigRef.current.player.color : towerConfigRef.current.enemy.color;
-                            const s = pool[mmSpellPtr.current];
-                            s.active = true; s.startTime = simNow;
-                            s.fromX = _px[i]; s.fromY = 1.2; s.fromZ = _pz[i];
-                            s.toX = tPos[0]; s.toY = tPos[1] + 1.2; s.toZ = tPos[2];
-                            s.color = color;
-                            s.rarity = u.rarity; s.isBullet = true;
-                            (s as any).isSniper = true;
-                            (s as any).isFinisher = (sCount + 1 === 5);
-                            (s as any).sniperSpeed = 40.0;
-                            (s as any)._tIdx = undefined;
-                            mmSpellPtr.current = (mmSpellPtr.current + 1) % pool.length;
-
                             const tPoolIdx = (uData as any).sniperTargetPoolIdx;
+
+                            // Lead Shooting (Predictive Aiming)
+                            let txP = tPos[0];
+                            let tzP = tPos[2];
+                            const tVeh =
+                                tPoolIdx !== undefined
+                                    ? vehiclePoolRef.current[tPoolIdx]
+                                    : null;
+                            const bSpeed = 55.0; // Sniper speed
+                            if (tVeh && tVeh.velocity.squaredLength() > 0.05) {
+                                const dist = Math.sqrt(
+                                    (_px[i] - txP) ** 2 + (_pz[i] - tzP) ** 2,
+                                );
+                                const tHit = dist / bSpeed;
+                                txP += tVeh.velocity.x * tHit;
+                                tzP += tVeh.velocity.z * tHit;
+                            }
+
+                            const pool = mmSpellsRef.current;
+                            const color =
+                                u.type === "player"
+                                    ? towerConfigRef.current.player.color
+                                    : towerConfigRef.current.enemy.color;
+                            const s = pool[mmSpellPtr.current];
+                            s.active = true;
+                            s.startTime = simNow;
+                            s.fromX = _px[i];
+                            s.fromY = 1.2;
+                            s.fromZ = _pz[i];
+                            s.toX = txP;
+                            s.toY = tPos[1] + 1.2;
+                            s.toZ = tzP;
+                            s.color = color;
+                            s.rarity = u.rarity;
+                            s.isBullet = true;
+                            (s as any).isSniper = true;
+                            (s as any).targetId = tId;
+                            (s as any).targetPoolIdx = tPoolIdx;
+                            (s as any).isFinisher = sCount + 1 === 5;
+                            (s as any).sniperSpeed = 55.0; // Snappier sniper
+                            (s as any)._tIdx = undefined;
+                            mmSpellPtr.current =
+                                (mmSpellPtr.current + 1) % pool.length;
+
                             if (tPoolIdx !== undefined && tPoolIdx >= 0) {
-                                const targetUnit = unitIndexRef.current.get(tId);
-                                const targetData = unitDataPoolRef.current[tPoolIdx];
+                                const targetUnit =
+                                    unitIndexRef.current.get(tId);
+                                const targetData =
+                                    unitDataPoolRef.current[tPoolIdx];
                                 if (targetUnit && targetUnit.isShield) {
                                     // IMMUNE — do NOT show damage number for clean UI
                                 } else if (targetUnit && targetData) {
                                     // Balanced: 1.8x normal, 5.0x finisher
-                                    const dmg = u.attack * (sCount + 1 === 5 ? 5.0 : 1.8);
+                                    const dmg =
+                                        u.attack *
+                                        (sCount + 1 === 5 ? 5.0 : 1.8);
                                     // Sync _vh, u.hp, uData.hp all at once
-                                    const newHp = Math.max(0, _vh[tPoolIdx] - dmg);
+                                    const newHp = Math.max(
+                                        0,
+                                        _vh[tPoolIdx] - dmg,
+                                    );
                                     _vh[tPoolIdx] = newHp;
                                     targetUnit.hp = newHp;
                                     targetData.hp = newHp;
@@ -1051,12 +1359,22 @@ export const useBattleSystem = () => {
                     }
                 }
 
-                if (uData.isBuffed && simNow > ((uData as any).buffEndTime || 0)) {
+                if (
+                    uData.isBuffed &&
+                    simNow > ((uData as any).buffEndTime || 0)
+                ) {
                     uData.isBuffed = false;
                     u.isBuffed = false; // CRITICAL SYNC
                 }
-                if (uData.isRolling && simNow > ((uData as any).rollEndTime || 0)) uData.isRolling = false;
-                if (uData.isShield && simNow > ((uData as any).shieldEndTime || 0)) {
+                if (
+                    uData.isRolling &&
+                    simNow > ((uData as any).rollEndTime || 0)
+                )
+                    uData.isRolling = false;
+                if (
+                    uData.isShield &&
+                    simNow > ((uData as any).shieldEndTime || 0)
+                ) {
                     uData.isShield = false;
                     u.isShield = false;
                 }
@@ -1073,7 +1391,11 @@ export const useBattleSystem = () => {
                             simNow - (uData.lastAttackTime || 0) >
                             u.attackCooldown
                         ) {
-                            const { dmg, isCrit } = calculateProcessedDamage(u, currentTarget, !!uData.pendingCrit);
+                            const { dmg, isCrit } = calculateProcessedDamage(
+                                u,
+                                currentTarget,
+                                !!uData.pendingCrit,
+                            );
                             if (isCrit) uData.pendingCrit = false;
 
                             applySustain(u, uData, dmg, _vh, i);
@@ -1089,7 +1411,12 @@ export const useBattleSystem = () => {
                                     tData.isActive = false;
                                     tData.position[1] = -100;
                                     _py[tIdx] = -100;
-                                    addKillEvent(u.userName, currentTarget.userName, "unit", u.profileImage);
+                                    addKillEvent(
+                                        u.userName,
+                                        currentTarget.userName,
+                                        "unit",
+                                        u.profileImage,
+                                    );
                                     updateStats(u.userName, u.type, 0, true);
                                 }
                                 updateStats(u.userName, u.type, dmg);
@@ -1097,31 +1424,57 @@ export const useBattleSystem = () => {
                                     currentTarget.id,
                                     dmg,
                                     tData.position,
-                                    isCrit ? "#FFDD00" : (u.type === "player" ? "#0066FF" : "#FF0033"),
+                                    isCrit
+                                        ? "#FFDD00"
+                                        : u.type === "player"
+                                          ? "#0066FF"
+                                          : "#FF0033",
                                 );
                                 hits++;
 
-                                const searchRadius = u.unitClass === "mage" ? 3.5 : 2.5;
-                                const neighbors = battleGrid.queryRadius(tData.position[0], tData.position[2], searchRadius);
+                                const searchRadius =
+                                    u.unitClass === "mage" ? 3.5 : 2.5;
+                                const neighbors = battleGrid.queryRadius(
+                                    tData.position[0],
+                                    tData.position[2],
+                                    searchRadius,
+                                );
                                 for (let j = 0; j < neighbors.length; j++) {
                                     if (hits >= 4) break;
                                     const p = neighbors[j];
-                                    if (p.id === currentTarget.id || p.type === u.type || p.isDying || !p.isActive) continue;
+                                    if (
+                                        p.id === currentTarget.id ||
+                                        p.type === u.type ||
+                                        p.isDying ||
+                                        !p.isActive
+                                    )
+                                        continue;
 
-                                    const dx = tData.position[0] - p.position[0];
-                                    const dz = tData.position[2] - p.position[2];
+                                    const dx =
+                                        tData.position[0] - p.position[0];
+                                    const dz =
+                                        tData.position[2] - p.position[2];
                                     const dSq = dx * dx + dz * dz;
 
                                     if (dSq < searchRadius * searchRadius) {
                                         const pIdx = p.poolIdx;
                                         if (pIdx >= 0) {
-                                            const pUnit = unitIndexRef.current.get(p.id);
+                                            const pUnit =
+                                                unitIndexRef.current.get(p.id);
                                             if (pUnit && pUnit.isShield) {
                                                 // IMMUNE
-                                                accumulateDamage(p.id, 0, p.position, "#FFFFFF");
+                                                accumulateDamage(
+                                                    p.id,
+                                                    0,
+                                                    p.position,
+                                                    "#FFFFFF",
+                                                );
                                             } else {
                                                 _vh[pIdx] -= dmg;
-                                                const pData = unitDataPoolRef.current[pIdx];
+                                                const pData =
+                                                    unitDataPoolRef.current[
+                                                        pIdx
+                                                    ];
                                                 if (pData && pUnit) {
                                                     pData.hp = _vh[pIdx];
                                                     pUnit.hp = _vh[pIdx];
@@ -1129,21 +1482,48 @@ export const useBattleSystem = () => {
                                                         _vActive[pIdx] = 0;
                                                         pUnit.isActive = false;
                                                         pData.isActive = false;
-                                                        pData.position[1] = -100;
+                                                        pData.position[1] =
+                                                            -100;
                                                         _py[pIdx] = -100;
-                                                        addKillEvent(u.userName, p.userName, "unit", u.profileImage);
-                                                        updateStats(u.userName, u.type, 0, true);
+                                                        addKillEvent(
+                                                            u.userName,
+                                                            p.userName,
+                                                            "unit",
+                                                            u.profileImage,
+                                                        );
+                                                        updateStats(
+                                                            u.userName,
+                                                            u.type,
+                                                            0,
+                                                            true,
+                                                        );
                                                     }
-                                                    updateStats(u.userName, u.type, dmg);
-                                                    accumulateDamage(p.id, dmg, pData.position, u.type === "player" ? "#0066FF" : "#FF0033");
+                                                    updateStats(
+                                                        u.userName,
+                                                        u.type,
+                                                        dmg,
+                                                    );
+                                                    accumulateDamage(
+                                                        p.id,
+                                                        dmg,
+                                                        pData.position,
+                                                        u.type === "player"
+                                                            ? "#0066FF"
+                                                            : "#FF0033",
+                                                    );
                                                     hits++;
                                                 }
                                             }
                                         }
                                     }
                                 }
-                            } else if (u.unitClass === "fighter" && (u.rarity === 'epic' || u.rarity === 'legendary')) {
-                                const cleavePerc = u.rarity === 'legendary' ? 0.5 : 0.3;
+                            } else if (
+                                u.unitClass === "fighter" &&
+                                (u.rarity === "epic" ||
+                                    u.rarity === "legendary")
+                            ) {
+                                const cleavePerc =
+                                    u.rarity === "legendary" ? 0.5 : 0.3;
                                 _vh[tIdx] -= dmg;
                                 tData.hp = _vh[tIdx];
                                 currentTarget.hp = _vh[tIdx];
@@ -1153,27 +1533,62 @@ export const useBattleSystem = () => {
                                     tData.isActive = false;
                                     tData.position[1] = -100;
                                     _py[tIdx] = -100;
-                                    addKillEvent(u.userName, currentTarget.userName, "unit", u.profileImage);
+                                    addKillEvent(
+                                        u.userName,
+                                        currentTarget.userName,
+                                        "unit",
+                                        u.profileImage,
+                                    );
                                     updateStats(u.userName, u.type, 0, true);
                                 }
                                 updateStats(u.userName, u.type, dmg);
-                                accumulateDamage(currentTarget.id, dmg, tData.position, isCrit ? "#FFDD00" : (u.type === "player" ? "#0066FF" : "#FF0033"));
+                                accumulateDamage(
+                                    currentTarget.id,
+                                    dmg,
+                                    tData.position,
+                                    isCrit
+                                        ? "#FFDD00"
+                                        : u.type === "player"
+                                          ? "#0066FF"
+                                          : "#FF0033",
+                                );
 
-                                const cleaveNearby = battleGrid.queryRadius(tData.position[0], tData.position[2], 2.0);
+                                const cleaveNearby = battleGrid.queryRadius(
+                                    tData.position[0],
+                                    tData.position[2],
+                                    2.0,
+                                );
                                 let cleaveCount = 0;
-                                for (let cj = 0; cj < cleaveNearby.length && cleaveCount < 4; cj++) {
+                                for (
+                                    let cj = 0;
+                                    cj < cleaveNearby.length && cleaveCount < 4;
+                                    cj++
+                                ) {
                                     const cp = cleaveNearby[cj];
-                                    if (!cp.isActive || cp.type === u.type || cp.id === currentTarget!.id) continue;
+                                    if (
+                                        !cp.isActive ||
+                                        cp.type === u.type ||
+                                        cp.id === currentTarget!.id
+                                    )
+                                        continue;
                                     const cIdx = cp.poolIdx;
                                     if (cIdx >= 0) {
-                                        const cpUnit = unitIndexRef.current.get(cp.id);
+                                        const cpUnit = unitIndexRef.current.get(
+                                            cp.id,
+                                        );
                                         if (cpUnit && cpUnit.isShield) {
                                             // IMMUNE
-                                            accumulateDamage(cp.id, 0, cp.position, "#FFFFFF");
+                                            accumulateDamage(
+                                                cp.id,
+                                                0,
+                                                cp.position,
+                                                "#FFFFFF",
+                                            );
                                         } else {
                                             const cDmg = dmg * cleavePerc;
                                             _vh[cIdx] -= cDmg;
-                                            const cpData = unitDataPoolRef.current[cIdx];
+                                            const cpData =
+                                                unitDataPoolRef.current[cIdx];
                                             if (cpData && cpUnit) {
                                                 cpData.hp = _vh[cIdx];
                                                 cpUnit.hp = _vh[cIdx];
@@ -1183,11 +1598,32 @@ export const useBattleSystem = () => {
                                                     cpData.isActive = false;
                                                     cpData.position[1] = -100;
                                                     _py[cIdx] = -100;
-                                                    addKillEvent(u.userName, cp.userName, "unit", u.profileImage);
-                                                    updateStats(u.userName, u.type, 0, true);
+                                                    addKillEvent(
+                                                        u.userName,
+                                                        cp.userName,
+                                                        "unit",
+                                                        u.profileImage,
+                                                    );
+                                                    updateStats(
+                                                        u.userName,
+                                                        u.type,
+                                                        0,
+                                                        true,
+                                                    );
                                                 }
-                                                updateStats(u.userName, u.type, cDmg);
-                                                accumulateDamage(cp.id, cDmg, cpData.position, u.type === "player" ? "#0066FF" : "#FF0033");
+                                                updateStats(
+                                                    u.userName,
+                                                    u.type,
+                                                    cDmg,
+                                                );
+                                                accumulateDamage(
+                                                    cp.id,
+                                                    cDmg,
+                                                    cpData.position,
+                                                    u.type === "player"
+                                                        ? "#0066FF"
+                                                        : "#FF0033",
+                                                );
                                                 cleaveCount++;
                                             }
                                         }
@@ -1203,7 +1639,12 @@ export const useBattleSystem = () => {
                                     tData.isActive = false;
                                     tData.position[1] = -100;
                                     _py[tIdx] = -100;
-                                    addKillEvent(u.userName, currentTarget.userName, "unit", u.profileImage);
+                                    addKillEvent(
+                                        u.userName,
+                                        currentTarget.userName,
+                                        "unit",
+                                        u.profileImage,
+                                    );
                                     updateStats(u.userName, u.type, 0, true);
                                 }
                                 updateStats(u.userName, u.type, dmg);
@@ -1211,139 +1652,275 @@ export const useBattleSystem = () => {
                                     currentTarget.id,
                                     dmg,
                                     tData.position,
-                                    isCrit ? "#FFDD00" : (u.type === "player" ? "#0066FF" : "#FF0033"),
+                                    isCrit
+                                        ? "#FFDD00"
+                                        : u.type === "player"
+                                          ? "#0066FF"
+                                          : "#FF0033",
                                 );
                             }
                             uData.lastAttackTime = simNow;
 
-                            const teamColor = u.type === 'player'
-                                ? towerConfigRef.current.player.color
-                                : towerConfigRef.current.enemy.color;
+                            const teamColor =
+                                u.type === "player"
+                                    ? towerConfigRef.current.player.color
+                                    : towerConfigRef.current.enemy.color;
                             const fwdX = Math.sin(uData.rotation[1] || 0);
                             const fwdZ = Math.cos(uData.rotation[1] || 0);
                             const launchY = uData.position[1] + 1.8;
 
                             switch (u.unitClass) {
-                                case 'fighter': {
+                                case "fighter": {
                                     const pool = fighterSpellsRef.current;
                                     if (pool) {
                                         const s = pool[fighterSpellPtr.current];
-                                        s.x = uData.position[0] + fwdX * 0.8; s.y = 1.2; s.z = uData.position[2] + fwdZ * 0.8;
-                                        s.targetX = tData.position[0]; s.targetZ = tData.position[2];
-                                        s.rotation = uData.rotation[1] || 0; s.startTime = simNow;
-                                        s.color = teamColor; s.active = true; s.progress = 0;
-                                        s.rarity = u.rarity || 'common';
-                                        (s as any).isCyclone = false; (s as any)._tIdx = undefined;
-                                        fighterSpellPtr.current = (fighterSpellPtr.current + 1) % pool.length;
+                                        s.x = uData.position[0] + fwdX * 0.8;
+                                        s.y = 1.2;
+                                        s.z = uData.position[2] + fwdZ * 0.8;
+                                        s.targetX = tData.position[0];
+                                        s.targetZ = tData.position[2];
+                                        s.rotation = uData.rotation[1] || 0;
+                                        s.startTime = simNow;
+                                        s.color = teamColor;
+                                        s.active = true;
+                                        s.progress = 0;
+                                        s.rarity = u.rarity || "common";
+                                        (s as any).isCyclone = false;
+                                        (s as any)._tIdx = undefined;
+                                        fighterSpellPtr.current =
+                                            (fighterSpellPtr.current + 1) %
+                                            pool.length;
                                     }
                                     break;
                                 }
-                                case 'tank': {
+                                case "tank": {
                                     const pool = tankSpellsRef.current;
                                     if (pool) {
                                         const s = pool[tankSpellPtr.current];
-                                        s.x = tData.position[0]; s.y = 0.2; s.z = tData.position[2];
-                                        s.startTime = simNow; s.color = teamColor; s.active = true;
-                                        s.progress = 0; s.rarity = u.rarity || 'common';
+                                        s.x = tData.position[0];
+                                        s.y = 0.2;
+                                        s.z = tData.position[2];
+                                        s.startTime = simNow;
+                                        s.color = teamColor;
+                                        s.active = true;
+                                        s.progress = 0;
+                                        s.rarity = u.rarity || "common";
                                         s.isShield = false;
-                                        tankSpellPtr.current = (tankSpellPtr.current + 1) % pool.length;
+                                        tankSpellPtr.current =
+                                            (tankSpellPtr.current + 1) %
+                                            pool.length;
                                     }
                                     break;
                                 }
-                                case 'mage': {
+                                case "mage": {
                                     const pool = spellsRef.current;
                                     if (pool) {
                                         const s = pool[mageSpellPtr.current];
-                                        s.fromX = uData.position[0]; s.fromY = launchY; s.fromZ = uData.position[2];
-                                        s.toX = tData.position[0]; s.toY = tData.position[1] + 1.0; s.toZ = tData.position[2];
-                                        s.targetId = currentTarget.id; s.startTime = simNow;
-                                        s.color = teamColor; s.active = true; s.progress = 0;
-                                        s.rarity = u.rarity || 'common';
-                                        s.isMeteor = false; s.isBullet = false; (s as any)._tIdx = undefined;
-                                        mageSpellPtr.current = (mageSpellPtr.current + 1) % pool.length;
+                                        s.fromX = uData.position[0];
+                                        s.fromY = launchY;
+                                        s.fromZ = uData.position[2];
+                                        s.toX = tData.position[0];
+                                        s.toY = tData.position[1] + 1.0;
+                                        s.toZ = tData.position[2];
+                                        s.targetId = currentTarget.id;
+                                        s.startTime = simNow;
+                                        s.color = teamColor;
+                                        s.active = true;
+                                        s.progress = 0;
+                                        s.rarity = u.rarity || "common";
+                                        s.isMeteor = false;
+                                        s.isBullet = false;
+                                        (s as any)._tIdx = undefined;
+                                        mageSpellPtr.current =
+                                            (mageSpellPtr.current + 1) %
+                                            pool.length;
 
-                                        const aoeNearby = battleGrid.queryRadius(tData.position[0], tData.position[2], 3.5);
+                                        const aoeNearby =
+                                            battleGrid.queryRadius(
+                                                tData.position[0],
+                                                tData.position[2],
+                                                3.5,
+                                            );
                                         let aoeCount = 0;
-                                        for (let aj = 0; aj < aoeNearby.length && aoeCount < 3; aj++) {
+                                        for (
+                                            let aj = 0;
+                                            aj < aoeNearby.length &&
+                                            aoeCount < 3;
+                                            aj++
+                                        ) {
                                             const ap = aoeNearby[aj];
-                                            if (!ap.isActive || ap.type === u.type || ap.id === currentTarget.id) continue;
-                                            const as = pool[mageSpellPtr.current];
-                                            as.fromX = uData.position[0]; as.fromY = launchY; as.fromZ = uData.position[2];
-                                            as.toX = ap.position[0]; as.toY = ap.position[1] + 1.0; as.toZ = ap.position[2];
-                                            as.targetId = ap.id; as.startTime = simNow;
-                                            as.color = teamColor; as.active = true; as.progress = 0;
-                                            as.rarity = u.rarity || 'common';
-                                            as.isMeteor = false; as.isBullet = false; (as as any)._tIdx = undefined;
-                                            mageSpellPtr.current = (mageSpellPtr.current + 1) % pool.length;
+                                            if (
+                                                !ap.isActive ||
+                                                ap.type === u.type ||
+                                                ap.id === currentTarget.id
+                                            )
+                                                continue;
+                                            const as =
+                                                pool[mageSpellPtr.current];
+                                            as.fromX = uData.position[0];
+                                            as.fromY = launchY;
+                                            as.fromZ = uData.position[2];
+                                            as.toX = ap.position[0];
+                                            as.toY = ap.position[1] + 1.0;
+                                            as.toZ = ap.position[2];
+                                            as.targetId = ap.id;
+                                            as.startTime = simNow;
+                                            as.color = teamColor;
+                                            as.active = true;
+                                            as.progress = 0;
+                                            as.rarity = u.rarity || "common";
+                                            as.isMeteor = false;
+                                            as.isBullet = false;
+                                            (as as any)._tIdx = undefined;
+                                            mageSpellPtr.current =
+                                                (mageSpellPtr.current + 1) %
+                                                pool.length;
                                             aoeCount++;
                                         }
                                     }
                                     break;
                                 }
-                                case 'marksman': {
-                                    if (uData.isBuffed) break; 
+                                case "marksman": {
+                                    if (uData.isBuffed) break;
                                     const pool = mmSpellsRef.current;
                                     if (pool) {
+                                        // Lead Shooting (Predictive Aiming)
+                                        let txP = tData.position[0];
+                                        let tzP = tData.position[2];
+                                        const tVeh =
+                                            tIdx !== undefined
+                                                ? vehiclePoolRef.current[tIdx]
+                                                : null;
+                                        const bSpeed = 110.0; // Basic bullet speed
+                                        if (
+                                            tVeh &&
+                                            tVeh.velocity.squaredLength() > 0.05
+                                        ) {
+                                            const dist = Math.sqrt(
+                                                (uData.position[0] - txP) ** 2 +
+                                                    (uData.position[2] - tzP) **
+                                                        2,
+                                            );
+                                            const tHit = dist / bSpeed;
+                                            txP += tVeh.velocity.x * tHit;
+                                            tzP += tVeh.velocity.z * tHit;
+                                        }
+
                                         const s = pool[mmSpellPtr.current];
-                                        s.fromX = uData.position[0] + fwdX * 2.5; s.fromY = launchY; s.fromZ = uData.position[2] + fwdZ * 2.5;
-                                        s.toX = tData.position[0]; s.toY = tData.position[1] + 1.2; s.toZ = tData.position[2];
-                                        s.targetId = currentTarget!.id; s.startTime = simNow;
-                                        s.color = teamColor; s.active = true; s.progress = 0;
-                                        s.isBullet = true; s.isMeteor = false; s.isCyclone = false; s.isShield = false; (s as any).isRolling = false; (s as any).isTeleport = false; s.rarity = u.rarity || 'common';
+                                        s.fromX =
+                                            uData.position[0] + fwdX * 2.5;
+                                        s.fromY = launchY;
+                                        s.fromZ =
+                                            uData.position[2] + fwdZ * 2.5;
+                                        s.toX = txP;
+                                        s.toY = tData.position[1] + 1.2;
+                                        s.toZ = tzP;
+                                        s.targetId = currentTarget!.id;
+                                        (s as any).targetPoolIdx = tIdx;
+                                        s.startTime = simNow;
+                                        s.color = teamColor;
+                                        s.active = true;
+                                        s.progress = 0;
+                                        s.isBullet = true;
+                                        s.isMeteor = false;
+                                        s.isCyclone = false;
+                                        s.isShield = false;
+                                        (s as any).isRolling = false;
+                                        (s as any).isTeleport = false;
+                                        s.rarity = u.rarity || "common";
+                                        (s as any).bulletSpeed = bSpeed; // High velocity
                                         (s as any)._tIdx = undefined;
-                                        mmSpellPtr.current = (mmSpellPtr.current + 1) % pool.length;
+                                        mmSpellPtr.current =
+                                            (mmSpellPtr.current + 1) %
+                                            pool.length;
                                     }
                                     break;
                                 }
-                                case 'assassin': {
+                                case "assassin": {
                                     const pool = assassinSpellsRef.current;
                                     if (pool) {
-                                        const s = pool[assassinSpellPtr.current];
-                                        s.x = tData.position[0]; s.y = 1.3; s.z = tData.position[2];
-                                        s.startTime = simNow; s.color = teamColor; s.active = true;
-                                        s.progress = 0; s.rarity = u.rarity || 'common';
-                                        assassinSpellPtr.current = (assassinSpellPtr.current + 1) % pool.length;
+                                        const s =
+                                            pool[assassinSpellPtr.current];
+                                        s.x = tData.position[0];
+                                        s.y = 1.3;
+                                        s.z = tData.position[2];
+                                        s.startTime = simNow;
+                                        s.color = teamColor;
+                                        s.active = true;
+                                        s.progress = 0;
+                                        s.rarity = u.rarity || "common";
+                                        assassinSpellPtr.current =
+                                            (assassinSpellPtr.current + 1) %
+                                            pool.length;
                                     }
                                     break;
                                 }
                             }
                         }
                     } else if (u.targetId) {
-                        if (!(uData.isBuffed && u.unitClass === 'marksman')) uData.status = "chasing";
-                        const classWeatherMult = weatherMults[u.unitClass]?.move_speed_mult || 1.0;
-                                v.maxSpeed = (u.speed * classWeatherMult) * (uData.isRolling ? 4.0 : (uData.isBuffed && u.unitClass === 'marksman' ? 0 : 1.0));
-                                const seek = v.steering.behaviors[0] as any;
-                                if (seek?.target && tData) {
-                                    if (u.unitClass === 'mage') {
-                                        const ddx = _px[i] - tData.position[0];
-                                        const ddz = _pz[i] - tData.position[2];
-                                        if (ddx * ddx + ddz * ddz < 49) {
-                                            const rDir = u.type === 'player' ? 1 : -1;
-                                            seek.target.set(_px[i] + ddx * 2, 0, _pz[i] + ddz * 2 + rDir * 5);
-                                        } else {
-                                            seek.target.set(tData.position[0], 0, tData.position[2]);
-                                        }
-                                    } else if (u.unitClass === 'marksman') {
-                                        const angleHash = ((i * 2654435761) >>> 0) % 360;
-                                        const angle = angleHash * (Math.PI / 180);
-                                        const orbitR = uData.encirclementRadius || 1.25;
-                                        const ddx = _px[i] - tData.position[0];
-                                        const ddz = _pz[i] - tData.position[2];
-                                        if (ddx * ddx + ddz * ddz < 80 * 80) {
-                                            seek.target.set(
-                                                tData.position[0] + Math.cos(angle) * orbitR,
-                                                0,
-                                                tData.position[2] + Math.sin(angle) * orbitR
-                                            );
-                                        } else {
-                                            seek.target.set(tData.position[0], 0, tData.position[2]);
-                                        }
-                                    } else {
-                                        const offsetX = ((i * 127) % 7 - 3) * 0.25;
-                                        const offsetZ = ((i * 53) % 7 - 3) * 0.25;
-                                        seek.target.set(tData.position[0] + offsetX, 0, tData.position[2] + offsetZ);
-                                    }
+                        if (!(uData.isBuffed && u.unitClass === "marksman"))
+                            uData.status = "chasing";
+                        const classWeatherMult =
+                            weatherMults[u.unitClass]?.move_speed_mult || 1.0;
+                        v.maxSpeed =
+                            u.speed *
+                            classWeatherMult *
+                            (uData.isRolling
+                                ? 4.0
+                                : uData.isBuffed && u.unitClass === "marksman"
+                                  ? 0
+                                  : 1.0);
+                        const seek = v.steering.behaviors[0] as any;
+                        if (seek?.target && tData) {
+                            if (u.unitClass === "mage") {
+                                const ddx = _px[i] - tData.position[0];
+                                const ddz = _pz[i] - tData.position[2];
+                                if (ddx * ddx + ddz * ddz < 49) {
+                                    const rDir = u.type === "player" ? 1 : -1;
+                                    seek.target.set(
+                                        _px[i] + ddx * 2,
+                                        0,
+                                        _pz[i] + ddz * 2 + rDir * 5,
+                                    );
+                                } else {
+                                    seek.target.set(
+                                        tData.position[0],
+                                        0,
+                                        tData.position[2],
+                                    );
                                 }
+                            } else if (u.unitClass === "marksman") {
+                                const angleHash =
+                                    ((i * 2654435761) >>> 0) % 360;
+                                const angle = angleHash * (Math.PI / 180);
+                                const orbitR = uData.encirclementRadius || 1.25;
+                                const ddx = _px[i] - tData.position[0];
+                                const ddz = _pz[i] - tData.position[2];
+                                if (ddx * ddx + ddz * ddz < 80 * 80) {
+                                    seek.target.set(
+                                        tData.position[0] +
+                                            Math.cos(angle) * orbitR,
+                                        0,
+                                        tData.position[2] +
+                                            Math.sin(angle) * orbitR,
+                                    );
+                                } else {
+                                    seek.target.set(
+                                        tData.position[0],
+                                        0,
+                                        tData.position[2],
+                                    );
+                                }
+                            } else {
+                                const offsetX = (((i * 127) % 7) - 3) * 0.25;
+                                const offsetZ = (((i * 53) % 7) - 3) * 0.25;
+                                seek.target.set(
+                                    tData.position[0] + offsetX,
+                                    0,
+                                    tData.position[2] + offsetZ,
+                                );
+                            }
+                        }
                     }
                 } else if (baseInRange) {
                     uData.status = "attacking";
@@ -1357,14 +1934,24 @@ export const useBattleSystem = () => {
                         if (u.type === "player") {
                             enemyBaseHpRef.current -= dmg;
                             if (enemyBaseHpRef.current <= 0) {
-                                addKillEvent(u.userName, "ENEMY BASE", "base", u.profileImage);
+                                addKillEvent(
+                                    u.userName,
+                                    "ENEMY BASE",
+                                    "base",
+                                    u.profileImage,
+                                );
                                 updateStats(u.userName, u.type, 0, true);
                                 freezeTimeRef.current = 100;
                             }
                         } else {
                             playerBaseHpRef.current -= dmg;
                             if (playerBaseHpRef.current <= 0) {
-                                addKillEvent(u.userName, "PLAYER BASE", "base", u.profileImage);
+                                addKillEvent(
+                                    u.userName,
+                                    "PLAYER BASE",
+                                    "base",
+                                    u.profileImage,
+                                );
                                 updateStats(u.userName, u.type, 0, true);
                                 freezeTimeRef.current = 100;
                             }
@@ -1379,83 +1966,131 @@ export const useBattleSystem = () => {
                         uData.lastAttackTime = simNow;
 
                         // COMBAT EFFECTS FOR TOWER ATTACK
-                        const teamColor = u.type === 'player'
-                            ? towerConfigRef.current.player.color
-                            : towerConfigRef.current.enemy.color;
+                        const teamColor =
+                            u.type === "player"
+                                ? towerConfigRef.current.player.color
+                                : towerConfigRef.current.enemy.color;
                         const fwdX = Math.sin(uData.rotation[1] || 0);
                         const fwdZ = Math.cos(uData.rotation[1] || 0);
                         const launchY = uData.position[1] + 1.8;
                         const tPos = [0, 1.0, targetBaseZ]; // Tower target point
 
                         switch (u.unitClass) {
-                            case 'fighter': {
+                            case "fighter": {
                                 const pool = fighterSpellsRef.current;
                                 if (pool) {
                                     const s = pool[fighterSpellPtr.current];
-                                    s.x = uData.position[0] + fwdX * 0.8; s.y = 1.2; s.z = uData.position[2] + fwdZ * 0.8;
-                                    s.targetX = tPos[0]; s.targetZ = tPos[2];
-                                    s.rotation = uData.rotation[1] || 0; s.startTime = simNow;
-                                    s.color = teamColor; s.active = true; s.progress = 0;
-                                    (s as any).isCyclone = false; (s as any)._tIdx = undefined;
-                                    fighterSpellPtr.current = (fighterSpellPtr.current + 1) % pool.length;
+                                    s.x = uData.position[0] + fwdX * 0.8;
+                                    s.y = 1.2;
+                                    s.z = uData.position[2] + fwdZ * 0.8;
+                                    s.targetX = tPos[0];
+                                    s.targetZ = tPos[2];
+                                    s.rotation = uData.rotation[1] || 0;
+                                    s.startTime = simNow;
+                                    s.color = teamColor;
+                                    s.active = true;
+                                    s.progress = 0;
+                                    (s as any).isCyclone = false;
+                                    (s as any)._tIdx = undefined;
+                                    fighterSpellPtr.current =
+                                        (fighterSpellPtr.current + 1) %
+                                        pool.length;
                                 }
                                 break;
                             }
-                            case 'tank': {
+                            case "tank": {
                                 const pool = tankSpellsRef.current;
                                 if (pool) {
                                     const s = pool[tankSpellPtr.current];
-                                    s.x = tPos[0]; s.y = 0.2; s.z = tPos[2]; s.startTime = simNow;
-                                    s.color = teamColor; s.active = true; s.progress = 0;
+                                    s.x = tPos[0];
+                                    s.y = 0.2;
+                                    s.z = tPos[2];
+                                    s.startTime = simNow;
+                                    s.color = teamColor;
+                                    s.active = true;
+                                    s.progress = 0;
                                     s.isShield = false;
-                                    tankSpellPtr.current = (tankSpellPtr.current + 1) % pool.length;
+                                    tankSpellPtr.current =
+                                        (tankSpellPtr.current + 1) %
+                                        pool.length;
                                 }
                                 break;
                             }
-                            case 'mage': {
+                            case "mage": {
                                 const pool = spellsRef.current;
                                 if (pool) {
                                     for (let m = 0; m < 3; m++) {
                                         const s = pool[mageSpellPtr.current];
-                                        s.fromX = uData.position[0]; s.fromY = launchY; s.fromZ = uData.position[2];
-                                        s.toX = tPos[0]; s.toY = tPos[1] + 2.0; s.toZ = tPos[2];
-                                        s.targetId = u.type === 'player' ? 'enemy-base' : 'player-base';
-                                        s.startTime = simNow; s.color = teamColor; s.active = true; s.progress = 0;
-                                        mageSpellPtr.current = (mageSpellPtr.current + 1) % pool.length;
+                                        s.fromX = uData.position[0];
+                                        s.fromY = launchY;
+                                        s.fromZ = uData.position[2];
+                                        s.toX = tPos[0];
+                                        s.toY = tPos[1] + 2.0;
+                                        s.toZ = tPos[2];
+                                        s.targetId =
+                                            u.type === "player"
+                                                ? "enemy-base"
+                                                : "player-base";
+                                        s.startTime = simNow;
+                                        s.color = teamColor;
+                                        s.active = true;
+                                        s.progress = 0;
+                                        mageSpellPtr.current =
+                                            (mageSpellPtr.current + 1) %
+                                            pool.length;
                                     }
                                 }
                                 break;
                             }
-                            case 'marksman': {
+                            case "marksman": {
                                 if (uData.isBuffed) break; // DON'T FIRE BASIC ATTACK IN SNIPER MODE
                                 const pool = mmSpellsRef.current;
                                 if (pool) {
                                     const s = pool[mmSpellPtr.current];
-                                    s.fromX = uData.position[0] + fwdX * 2.5; s.fromY = launchY; s.fromZ = uData.position[2] + fwdZ * 2.5;
-                                    s.toX = tPos[0]; s.toY = tPos[1] + 2.0; s.toZ = tPos[2];
-                                    s.targetId = u.type === 'player' ? 'enemy-base' : 'player-base';
-                                    s.startTime = simNow; s.color = teamColor; s.active = true; s.progress = 0;
+                                    s.fromX = uData.position[0] + fwdX * 2.5;
+                                    s.fromY = launchY;
+                                    s.fromZ = uData.position[2] + fwdZ * 2.5;
+                                    s.toX = tPos[0];
+                                    s.toY = tPos[1] + 2.0;
+                                    s.toZ = tPos[2];
+                                    s.targetId =
+                                        u.type === "player"
+                                            ? "enemy-base"
+                                            : "player-base";
+                                    s.startTime = simNow;
+                                    s.color = teamColor;
+                                    s.active = true;
+                                    s.progress = 0;
                                     s.isBullet = true;
                                     (s as any).isSniper = false; // RECYCLE
                                     (s as any).isFinisher = false;
-                                    mmSpellPtr.current = (mmSpellPtr.current + 1) % pool.length;
+                                    mmSpellPtr.current =
+                                        (mmSpellPtr.current + 1) % pool.length;
                                 }
                                 break;
                             }
-                            case 'assassin': {
+                            case "assassin": {
                                 const pool = assassinSpellsRef.current;
                                 if (pool) {
                                     const s = pool[assassinSpellPtr.current];
-                                    s.x = tPos[0]; s.y = 1.3; s.z = tPos[2]; s.startTime = simNow;
-                                    s.color = '#FFFF00'; s.active = true; s.progress = 0;
-                                    assassinSpellPtr.current = (assassinSpellPtr.current + 1) % pool.length;
+                                    s.x = tPos[0];
+                                    s.y = 1.3;
+                                    s.z = tPos[2];
+                                    s.startTime = simNow;
+                                    s.color = "#FFFF00";
+                                    s.active = true;
+                                    s.progress = 0;
+                                    assassinSpellPtr.current =
+                                        (assassinSpellPtr.current + 1) %
+                                        pool.length;
                                 }
                                 break;
                             }
                         }
                     }
                 } else {
-                    if (!(uData.isBuffed && u.unitClass === 'marksman')) uData.status = "marching";
+                    if (!(uData.isBuffed && u.unitClass === "marksman"))
+                        uData.status = "marching";
                     const classWeatherMult =
                         weatherMults[u.unitClass]?.move_speed_mult || 1.0;
                     const globalWeatherMult =
@@ -1479,59 +2114,99 @@ export const useBattleSystem = () => {
                 {
                     const rotSmooth = settings.rotationSmoothing || 0.12;
                     const velSq = v.velocity.x ** 2 + v.velocity.z ** 2;
-                    if ((uData.status === 'marching' || uData.status === 'chasing') && velSq > 0.05) {
-                        const targetRot = Math.atan2(v.velocity.x, v.velocity.z);
+                    if (
+                        (uData.status === "marching" ||
+                            uData.status === "chasing") &&
+                        velSq > 0.05
+                    ) {
+                        const targetRot = Math.atan2(
+                            v.velocity.x,
+                            v.velocity.z,
+                        );
                         let diff = targetRot - uData.rotation[1];
                         while (diff < -Math.PI) diff += Math.PI * 2;
-                        while (diff >  Math.PI) diff -= Math.PI * 2;
-                        uData.rotation[1] += diff * Math.min(rotSmooth * 2, 1.0);
-                    } else if (uData.status === 'attacking') {
-                        const tIdx2 = currentTarget ? currentTarget.poolIdx : -1;
+                        while (diff > Math.PI) diff -= Math.PI * 2;
+                        uData.rotation[1] +=
+                            diff * Math.min(rotSmooth * 2, 1.0);
+                    } else if (uData.status === "attacking") {
+                        const tIdx2 = currentTarget
+                            ? currentTarget.poolIdx
+                            : -1;
                         const td2 = tIdx2 !== -1 ? uiPool[tIdx2] : null;
-                        const tx2 = (td2 && td2.isActive && td2.id === u.targetId) ? td2.position[0] : 0;
-                        const tz2 = (td2 && td2.isActive && td2.id === u.targetId) ? td2.position[2] : targetBaseZ;
-                        const targetRot = Math.atan2(tx2 - _px[i], tz2 - _pz[i]);
+                        const tx2 =
+                            td2 && td2.isActive && td2.id === u.targetId
+                                ? td2.position[0]
+                                : 0;
+                        const tz2 =
+                            td2 && td2.isActive && td2.id === u.targetId
+                                ? td2.position[2]
+                                : targetBaseZ;
+                        const targetRot = Math.atan2(
+                            tx2 - _px[i],
+                            tz2 - _pz[i],
+                        );
                         let diff = targetRot - uData.rotation[1];
                         while (diff < -Math.PI) diff += Math.PI * 2;
-                        while (diff >  Math.PI) diff -= Math.PI * 2;
-                        uData.rotation[1] += diff * Math.min(rotSmooth, 1.0);
+                        while (diff > Math.PI) diff -= Math.PI * 2;
+
+                        const isSniper =
+                            u.unitClass === "marksman" && uData.isBuffed;
+                        const finalSmooth = isSniper ? 1.0 : rotSmooth;
+                        uData.rotation[1] +=
+                            diff * Math.min(finalSmooth, 1.0);
                     }
                 }
 
-                if (u.unitClass === 'assassin' && u.targetId && !isBaseTarget) {
+                if (u.unitClass === "assassin" && u.targetId && !isBaseTarget) {
                     const blinkCooldownS = 4000;
                     const lastBlink = uData.lastBlinkTime || 0;
-                    
+
                     if (simNow - lastBlink > blinkCooldownS) {
-                        const tIdx3 = currentTarget ? currentTarget.poolIdx : -1;
+                        const tIdx3 = currentTarget
+                            ? currentTarget.poolIdx
+                            : -1;
                         const td3 = tIdx3 !== -1 ? uiPool[tIdx3] : null;
-                        
-                        if (td3 && td3.isActive && td3.id === u.targetId &&
-                            (td3.unitClass === 'mage' || td3.unitClass === 'marksman')) {
-                            
+
+                        if (
+                            td3 &&
+                            td3.isActive &&
+                            td3.id === u.targetId &&
+                            (td3.unitClass === "mage" ||
+                                td3.unitClass === "marksman")
+                        ) {
                             const ddx = _px[i] - td3.position[0];
                             const ddz = _pz[i] - td3.position[2];
-                            const dSq2 = ddx*ddx + ddz*ddz;
-                            
+                            const dSq2 = ddx * ddx + ddz * ddz;
+
                             if (dSq2 < 36 && dSq2 > 4) {
-                                const targetForward = u.type === 'player' ? -1.8 : 1.8;
+                                const targetForward =
+                                    u.type === "player" ? -1.8 : 1.8;
                                 const bx = td3.position[0];
                                 const bz = td3.position[2] + targetForward;
-                                
+
                                 v.position.set(bx, 0, bz);
-                                _px[i] = bx; _pz[i] = bz;
-                                uData.position[0] = bx; uData.position[2] = bz;
-                                
+                                _px[i] = bx;
+                                _pz[i] = bz;
+                                uData.position[0] = bx;
+                                uData.position[2] = bz;
+
                                 uData.lastBlinkTime = simNow;
                                 uData.pendingCrit = true;
-                                uData.status = 'attacking';
-                                
+                                uData.status = "attacking";
+
                                 const pool = assassinSpellsRef.current;
                                 if (pool) {
                                     const s = pool[assassinSpellPtr.current];
-                                    s.x = bx; s.y = 1.3; s.z = bz; s.startTime = simNow;
-                                    s.color = '#ff00ff'; s.active = true; s.progress = 0;
-                                    assassinSpellPtr.current = (assassinSpellPtr.current + 1) % pool.length;
+                                    s.x = bx;
+                                    s.y = 1.3;
+                                    s.z = bz;
+                                    s.startTime = simNow;
+                                    s.color = "#ff00ff";
+                                    s.active = true;
+                                    s.progress = 0;
+                                    assassinSpellPtr.current =
+                                        (assassinSpellPtr.current + 1) %
+                                        pool.length;
                                 }
                             }
                         }
@@ -1539,9 +2214,13 @@ export const useBattleSystem = () => {
                 }
 
                 v.velocity.multiplyScalar(Math.pow(0.1, simDelta));
-                
-                if (uData.status === "attacking" || u.isDying || (uData.isBuffed && u.unitClass === 'marksman')) {
-                    v.velocity.set(0, 0, 0); 
+
+                if (
+                    uData.status === "attacking" ||
+                    u.isDying ||
+                    (uData.isBuffed && u.unitClass === "marksman")
+                ) {
+                    v.velocity.set(0, 0, 0);
                     v.maxSpeed = 0;
                 }
 
@@ -1554,7 +2233,7 @@ export const useBattleSystem = () => {
                 const dz = newZ - oldZ;
                 const moveDistSq = dx * dx + dz * dz;
 
-                const maxStepDist = (v.maxSpeed * simDelta * 1.2) + 0.02;
+                const maxStepDist = v.maxSpeed * simDelta * 1.2 + 0.02;
                 const maxStepDistSq = maxStepDist * maxStepDist;
 
                 if (moveDistSq > maxStepDistSq) {
@@ -1566,7 +2245,7 @@ export const useBattleSystem = () => {
                     _px[i] = newX;
                     _pz[i] = newZ;
                 }
-                
+
                 uData.position[0] = _px[i];
                 uData.position[2] = _pz[i];
             }
@@ -1576,25 +2255,34 @@ export const useBattleSystem = () => {
             for (let si = 0; si < sPool.length; si++) {
                 const s = sPool[si];
                 if (!s.active || !s.isMeteor) continue;
-                
+
                 const age = simNow - s.startTime;
                 if (age >= 800) {
                     s.active = false;
-                    
+
                     const aoeRadius = 3.0; // Optimized for "Rain" density
-                    const aoeTargets = battleGrid.queryRadius(s.toX, s.toZ, aoeRadius);
+                    const aoeTargets = battleGrid.queryRadius(
+                        s.toX,
+                        s.toZ,
+                        aoeRadius,
+                    );
                     const attackPower = (s as any).attackPower || 100;
                     const dmg = attackPower * ((s as any).iceDmgMult || 5.5); // Use ice mult or fallback
-                    
+
                     for (let ti = 0; ti < aoeTargets.length; ti++) {
                         const target = aoeTargets[ti];
                         if (target.type === (s as any).ownerType) continue;
-                        
+
                         const tIdx = target.poolIdx;
                         if (tIdx >= 0) {
                             const tUnit = unitIndexRef.current.get(target.id);
                             if (tUnit && tUnit.isShield) {
-                                accumulateDamage(target.id, 0, target.position, "#FFFFFF");
+                                accumulateDamage(
+                                    target.id,
+                                    0,
+                                    target.position,
+                                    "#FFFFFF",
+                                );
                             } else {
                                 _vh[tIdx] -= dmg;
                                 const td = unitDataPoolRef.current[tIdx];
@@ -1602,7 +2290,12 @@ export const useBattleSystem = () => {
                                     td.hp = _vh[tIdx];
                                     tUnit.hp = _vh[tIdx];
                                     // Visual feedback for impact
-                                    accumulateDamage(target.id, dmg, target.position, s.color || "#FFDD00");
+                                    accumulateDamage(
+                                        target.id,
+                                        dmg,
+                                        target.position,
+                                        s.color || "#FFDD00",
+                                    );
                                 }
                             }
                         }
@@ -1615,27 +2308,54 @@ export const useBattleSystem = () => {
                 gameStateRef.current === "PLAYING"
             ) {
                 gameStateRef.current = "LOST";
-                setTowerConfig(prev => ({
+                setTowerConfig((prev) => ({
                     ...prev,
-                    enemy: { ...prev.enemy, score: (prev.enemy.score || 0) + 1 }
+                    enemy: {
+                        ...prev.enemy,
+                        score: (prev.enemy.score || 0) + 1,
+                    },
                 }));
+                
+                const currentWins = useStore.getState().enemyWins;
+                useStore.getState().setWins(useStore.getState().playerWins, currentWins + 1);
                 useStore.getState().setGameState("LOST");
+
+                // Auto-reset stats after 10 seconds of glory
+                setTimeout(() => {
+                  if (gameStateRef.current === "LOST") {
+                    resetBattle();
+                  }
+                }, 10000);
             }
             if (
                 enemyBaseHpRef.current <= 0 &&
                 gameStateRef.current === "PLAYING"
             ) {
                 gameStateRef.current = "WON";
-                setTowerConfig(prev => ({
+                setTowerConfig((prev) => ({
                     ...prev,
-                    player: { ...prev.player, score: (prev.player.score || 0) + 1 }
+                    player: {
+                        ...prev.player,
+                        score: (prev.player.score || 0) + 1,
+                    },
                 }));
+                
+                const currentWins = useStore.getState().playerWins;
+                useStore.getState().setWins(currentWins + 1, useStore.getState().enemyWins);
                 useStore.getState().setGameState("WON");
+
+                // Auto-reset stats after 10 seconds of glory
+                setTimeout(() => {
+                  if (gameStateRef.current === "WON") {
+                    resetBattle();
+                  }
+                }, 10000);
             }
 
             if (simNow - lastStateUpdate.current > 100) {
                 lastStateUpdate.current = simNow;
-                let pC = 0, eC = 0;
+                let pC = 0,
+                    eC = 0;
                 const activeIndices = activeIndicesRef.current;
                 const uPool = unitPoolRef.current;
                 for (let k = 0; k < activeIndices.length; k++) {
@@ -1647,7 +2367,9 @@ export const useBattleSystem = () => {
                     }
                 }
                 useStore.getState().setArmyCounts(pC, eC);
-                useStore.getState().setBaseHp(playerBaseHpRef.current, enemyBaseHpRef.current);
+                useStore
+                    .getState()
+                    .setBaseHp(playerBaseHpRef.current, enemyBaseHpRef.current);
                 useStore.getState().setLiveStats({ ...statsRef.current });
             }
         },
@@ -1675,32 +2397,51 @@ export const useBattleSystem = () => {
                         maxUser = user;
                     }
                 });
-                return maxValue > 0 ? { username: maxUser, value: maxValue } : null;
+                return maxValue > 0
+                    ? { username: maxUser, value: maxValue }
+                    : null;
             };
 
             const allUsers = new Set([
                 ...Object.keys(stats.playerKills),
                 ...Object.keys(stats.enemyKills),
                 ...Object.keys(stats.playerDamage),
-                ...Object.keys(stats.enemyDamage)
+                ...Object.keys(stats.enemyDamage),
             ]);
 
             const top5 = Array.from(allUsers)
-                .map(username => {
-                    const kills = (stats.playerKills[username] || 0) + (stats.enemyKills[username] || 0);
-                    const damage = (stats.playerDamage[username] || 0) + (stats.enemyDamage[username] || 0);
+                .map((username) => {
+                    const kills =
+                        (stats.playerKills[username] || 0) +
+                        (stats.enemyKills[username] || 0);
+                    const damage =
+                        (stats.playerDamage[username] || 0) +
+                        (stats.enemyDamage[username] || 0);
                     const spawns = stats.unitsSpawned[username] || 0;
-                    return { username, kills, damage, spawns, profileImage: stats.profileImages[username] };
+                    return {
+                        username,
+                        kills,
+                        damage,
+                        spawns,
+                        profileImage: stats.profileImages[username],
+                    };
                 })
-                .sort((a, b) => b.kills !== a.kills ? b.kills - a.kills : b.damage - a.damage)
+                .sort((a, b) =>
+                    b.kills !== a.kills
+                        ? b.kills - a.kills
+                        : b.damage - a.damage,
+                )
                 .slice(0, 5);
 
             const result = {
-                topDamage: getMax({ ...stats.playerDamage, ...stats.enemyDamage }),
+                topDamage: getMax({
+                    ...stats.playerDamage,
+                    ...stats.enemyDamage,
+                }),
                 topSpawner: getMax(stats.unitsSpawned),
                 playerTopHit: getMax(stats.playerHits),
                 enemyTopHit: getMax(stats.enemyHits),
-                top5
+                top5,
             };
 
             cachedMvpRef.current = result;
@@ -1733,7 +2474,12 @@ export const useBattleSystem = () => {
                 if (u.isActive && u.type === side && !u.isDying) {
                     u.hp -= u.maxHp * 0.4;
                     uiPool[i].hp = u.hp;
-                    accumulateDamage(u.id, u.maxHp * 0.4, uiPool[i].position, "#FFFFFF");
+                    accumulateDamage(
+                        u.id,
+                        u.maxHp * 0.4,
+                        uiPool[i].position,
+                        "#FFFFFF",
+                    );
                 }
             }
         },
@@ -1741,13 +2487,13 @@ export const useBattleSystem = () => {
         damageQueue: damageQueueRef,
         settingsRef,
         simTimeRef: simulationTimeRef,
-        compBuffers: { 
-            px: _px, 
-            py: _py, 
-            pz: _pz, 
-            vHealth: _vh, 
-            vMaxHealth: _vmh, 
-            vType: _vType, 
+        compBuffers: {
+            px: _px,
+            py: _py,
+            pz: _pz,
+            vHealth: _vh,
+            vMaxHealth: _vmh,
+            vType: _vType,
             vActive: _vActive,
             eidMap: eidMap.current,
             activeIndices: activeIndicesRef,
