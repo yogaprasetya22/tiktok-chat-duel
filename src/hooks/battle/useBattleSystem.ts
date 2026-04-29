@@ -9,10 +9,6 @@ import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import * as THREE from "three";
 import * as YUKA from "yuka";
 import { useStore } from "@/src/state/useStore";
-
-// --- Zero-Allocation Scratch Objects ---
-const _scratchCol = new THREE.Color();
-const _white = new THREE.Color("#ffffff");
 import {
     createWorld,
     defineComponent,
@@ -348,7 +344,7 @@ export const useBattleSystem = () => {
             name: "Pihak A",
             color: "#0066FF",
             active: true,
-            commentKeyword: "indo",
+            commentKeyword: "1",
             commentType: "contains",
             giftKeyword: "rose",
         },
@@ -356,7 +352,7 @@ export const useBattleSystem = () => {
             name: "Pihak B",
             color: "#FF0033",
             active: true,
-            commentKeyword: "malay",
+            commentKeyword: "2",
             commentType: "contains",
             giftKeyword: "coffee",
         },
@@ -1031,9 +1027,9 @@ export const useBattleSystem = () => {
                             const tz = currentTarget
                                 ? tData!.position[2]
                                 : targetBaseZ;
-                            const shardCount = 12; // LUXURY: 20 high-fidelity 3D ice shards
+                            const iceRainCount = 20; // LUXURY: 20 high-fidelity 3D ice shards
 
-                            for (let m = 0; m < shardCount; m++) {
+                            for (let m = 0; m < iceRainCount; m++) {
                                 const s = pool[mageSpellPtr.current];
                                 s.active = true; // Rhythmic Staggering: Shards fall in waves
 
@@ -1056,12 +1052,10 @@ export const useBattleSystem = () => {
                                         ? towerConfigRef.current.player.color
                                         : towerConfigRef.current.enemy.color;
 
-                                // PERFORMANCE: Reuse scratch color objects instead of creating new ones in a loop
-                                _scratchCol.set(teamBaseCol);
-                                if (Math.random() > 0.4) {
-                                    _scratchCol.lerp(_white, 0.4);
-                                }
-                                s.color = _scratchCol.getStyle();
+                                const col = new THREE.Color(teamBaseCol);
+                                if (Math.random() > 0.4)
+                                    col.lerp(new THREE.Color("#ffffff"), 0.4);
+                                s.color = col.getStyle();
 
                                 s.rarity = u.rarity;
                                 s.isMeteor = true;

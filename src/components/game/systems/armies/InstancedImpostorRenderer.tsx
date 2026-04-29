@@ -50,8 +50,6 @@ const _hidePos = new THREE.Matrix4().compose(
 // Team color cache to avoid re-creating Color objects
 const _playerColor = new THREE.Color();
 const _enemyColor = new THREE.Color();
-const _white = new THREE.Color('#ffffff');
-const _black = new THREE.Color('#000000');
 
 // Class-specific impostor colors (slightly tinted to differentiate)
 const CLASS_TINT: Record<string, [number, number, number]> = {
@@ -152,7 +150,7 @@ export function InstancedImpostorRenderer({
     if (!meshRef.current) return;
     for (let i = 0; i < LOD_IMPOSTOR_MAX; i++) {
       meshRef.current.setMatrixAt(i, _hidePos);
-      meshRef.current.setColorAt(i, _black);
+      meshRef.current.setColorAt(i, new THREE.Color('#000000'));
     }
     meshRef.current.instanceMatrix.needsUpdate = true;
     if (meshRef.current.instanceColor) meshRef.current.instanceColor.needsUpdate = true;
@@ -210,7 +208,7 @@ export function InstancedImpostorRenderer({
       const flashAge = now - (u.lastDamageTime || 0);
       if (flashAge < 120) {
         const t = 1.0 - flashAge / 120;
-        _color.lerp(_white, t * 0.6);
+        _color.lerp(new THREE.Color('#ffffff'), t * 0.6);
       }
 
       mesh.setColorAt(idx, _color);

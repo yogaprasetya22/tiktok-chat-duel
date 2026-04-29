@@ -504,7 +504,7 @@ export const UIOverlay = ({
                       <label className="text-[8px] font-black text-zinc-500 uppercase tracking-widest flex items-center gap-1"><MessageSquare className="w-2.5 h-2.5" /> Keyword</label>
                       <input type="text" value={towerConfig.player.commentKeyword}
                         onChange={(e) => setTowerConfig(prev => ({ ...prev, player: { ...prev.player, commentKeyword: e.target.value } }))}
-                        className="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2.5 text-xs font-bold focus:outline-none focus:border-blue-500/30" placeholder="indo" />
+                        className="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2.5 text-xs font-bold focus:outline-none focus:border-blue-500/30" placeholder="1" />
                     </div>
                     <div className="space-y-1">
                       <label className="text-[8px] font-black text-zinc-500 uppercase tracking-widest flex items-center gap-1"><Gift className="w-2.5 h-2.5" /> Gift</label>
@@ -564,7 +564,7 @@ export const UIOverlay = ({
                       <label className="text-[8px] font-black text-zinc-500 uppercase tracking-widest flex items-center gap-1"><MessageSquare className="w-2.5 h-2.5" /> Keyword</label>
                       <input type="text" value={towerConfig.enemy.commentKeyword}
                         onChange={(e) => setTowerConfig(prev => ({ ...prev, enemy: { ...prev.enemy, commentKeyword: e.target.value } }))}
-                        className="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2.5 text-xs font-bold focus:outline-none focus:border-red-500/30" placeholder="malay" />
+                        className="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2.5 text-xs font-bold focus:outline-none focus:border-red-500/30" placeholder="2" />
                     </div>
                     <div className="space-y-1">
                       <label className="text-[8px] font-black text-zinc-500 uppercase tracking-widest flex items-center gap-1"><Gift className="w-2.5 h-2.5" /> Gift</label>
