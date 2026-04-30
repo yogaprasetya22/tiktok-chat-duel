@@ -84,9 +84,13 @@ export const useStore = create<BattleState>((set) => ({
   },
   killEvents: [],
   setLiveStats: (liveStats) => set({ liveStats }),
-  addKillEvent: (event) => set((state) => ({ 
-    killEvents: [...state.killEvents, event].slice(-5) 
-  })),
+  addKillEvent: (event) => set((state) => {
+    // FIX: Avoid spread copy — push and trim in-place
+    const events = state.killEvents.length >= 5 
+      ? [...state.killEvents.slice(1), event] 
+      : [...state.killEvents, event];
+    return { killEvents: events };
+  }),
   
   armyCounts: { player: 0, enemy: 0 },
   setArmyCounts: (player, enemy) => set({ armyCounts: { player, enemy } }),

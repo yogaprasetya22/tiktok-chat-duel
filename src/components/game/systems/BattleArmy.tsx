@@ -38,7 +38,7 @@ interface BattleArmyProps {
 
 
 import { WORLD_UNIT_POOL_SIZE as MAX_UNITS } from '@/src/core/domain/unit.types';
-const NAME_POOL_SIZE = 60; 
+const NAME_POOL_SIZE = 120;
 const TEST_IMAGE_URL = 'https://t3.ftcdn.net/jpg/13/11/22/86/360_F_1311228699_YoiLc5aJ3RWz3uRfdEtlV0UYSQjqf7RW.jpg';
 
 const textureLoader = new THREE.TextureLoader();
@@ -277,7 +277,7 @@ const BattleArmyComponent = ({
 
   useEffect(() => {
     tempObject.position.set(0, -1000, 0);
-    tempObject.scale.set(0.001, 0.001, 0.001); 
+    tempObject.scale.set(0.001, 0.001, 0.001);
     tempObject.updateMatrix();
     if (shadowRef.current) {
       for (let i = 0; i < 1500; i++) {
@@ -294,9 +294,9 @@ const BattleArmyComponent = ({
   const healthGeo = useMemo(() => {
     const geo = new THREE.PlaneGeometry(1.2, 0.18);
     const healthInfoArray = new Float32Array(MAX_UNITS * 2);
-    for(let i=0; i<MAX_UNITS; i++) {
-        healthInfoArray[i*2] = 250;
-        healthInfoArray[i*2+1] = 250;
+    for (let i = 0; i < MAX_UNITS; i++) {
+      healthInfoArray[i * 2] = 250;
+      healthInfoArray[i * 2 + 1] = 250;
     }
     const attr = new THREE.InstancedBufferAttribute(healthInfoArray, 2);
     attr.setUsage(THREE.DynamicDrawUsage);
@@ -318,26 +318,26 @@ const BattleArmyComponent = ({
     return geo;
   }, []);
   const cooldownMat = useMemo(() => new THREE.ShaderMaterial({
-      ...RadialCooldownShader,
-      transparent: true,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-      vertexColors: true,
-      defines: { USE_INSTANCING: '', USE_INSTANCING_COLOR: '' }
+    ...RadialCooldownShader,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    vertexColors: true,
+    defines: { USE_INSTANCING: '', USE_INSTANCING_COLOR: '' }
   }), []);
 
   const shadowMat = useMemo(() => new THREE.ShaderMaterial({
-      ...AuraShadowShader,
-      transparent: true,
-      depthWrite: false,
-      vertexColors: true,
+    ...AuraShadowShader,
+    transparent: true,
+    depthWrite: false,
+    vertexColors: true,
   }), []);
-  const healthBarMat = useMemo(() => new THREE.ShaderMaterial({ 
-      ...MLHealthBarShader, 
-      transparent: true, 
-      depthWrite: false,
-      vertexColors: true,
-      defines: { USE_INSTANCING: '', USE_INSTANCING_COLOR: '' }
+  const healthBarMat = useMemo(() => new THREE.ShaderMaterial({
+    ...MLHealthBarShader,
+    transparent: true,
+    depthWrite: false,
+    vertexColors: true,
+    defines: { USE_INSTANCING: '', USE_INSTANCING_COLOR: '' }
   }), []);
 
 
@@ -356,6 +356,7 @@ const BattleArmyComponent = ({
   const lastNameCullTime = useRef(0);
   const cachedActiveUnits = useRef<any[]>([]);
   const frameCountRef = useRef(0);
+  const hudDirtyRef = useRef(true); // FIX: Track if HUD needs GPU upload
   useFrame((state, delta) => {
     // 0. Update Frustum for class animators
     _projMatrix.multiplyMatrices(state.camera.projectionMatrix, state.camera.matrixWorldInverse);
@@ -371,14 +372,14 @@ const BattleArmyComponent = ({
     const time = state.clock.elapsedTime;
     const camPos = state.camera.position;
     frameCountRef.current++;
-    
+
     // PERFORMANCE: Use consistent constants at the top
     const HUD_DETAIL_DIST_SQ = 4900; // 70 * 70
     const HUD_MAX_RANGE_SQ = 7350; // 4900 * 1.5
 
     // PERFORMANCE: Throttle sorting and unit filtering to every 12 frames
     const shouldSort = frameCountRef.current % 12 === 0 || cachedActiveUnits.current.length === 0;
-    
+
     const indices = compBuffers?.activeIndices?.current || [];
     for (let k = 0; k < indices.length; k++) {
       const i = indices[k];
@@ -393,7 +394,7 @@ const BattleArmyComponent = ({
       // Zero-allocation bucket clearing using persistent state
       const b = (state as any)._persBuckets ||= { fighter: [], tank: [], mage: [], marksman: [], assassin: [] };
       b.fighter.length = 0; b.tank.length = 0; b.mage.length = 0; b.marksman.length = 0; b.assassin.length = 0;
-      
+
       const nearUnits = (state as any)._persNearUnits ||= [];
       nearUnits.length = 0;
 
@@ -401,7 +402,7 @@ const BattleArmyComponent = ({
         const i = indices[k];
         const u = rawMap[i];
         if (!u || !u.isActive || u.hp <= 0 || u.position[1] < -50) continue;
-        
+
         if (b[u.unitClass]) b[u.unitClass].push(u);
         if ((u.dSq || 0) < HUD_MAX_RANGE_SQ) {
           nearUnits.push(u);
@@ -413,8 +414,8 @@ const BattleArmyComponent = ({
         if (a.isBoss !== b.isBoss) return a.isBoss ? -1 : 1;
         return (a.dSq || 0) - (b.dSq || 0);
       });
-      
-      cachedActiveUnits.current = nearUnits; 
+
+      cachedActiveUnits.current = nearUnits;
       (state as any).unitBuckets = b;
     }
 
@@ -552,7 +553,7 @@ const BattleArmyComponent = ({
                     if (namePoolMap.current.get(id) === slot && mat) {
                       mat.uniforms.tDiffuse.value = tex;
                     }
-                    if (textureCache.size > 200) {
+                    if (textureCache.size > 80) {
                       let oldestKey = "";
                       let oldestTime = Infinity;
                       for (const [key, val] of textureCache.entries()) {
@@ -589,22 +590,25 @@ const BattleArmyComponent = ({
 
 
 
-    // 3. Signal Updates
-    if (shadowRef.current) {
-      shadowRef.current.instanceMatrix.needsUpdate = true;
-      if (shadowRef.current.instanceColor) shadowRef.current.instanceColor.needsUpdate = true;
-    }
-    if (healthBarRef.current) {
-      healthBarRef.current.instanceMatrix.needsUpdate = true;
-      if (healthBarRef.current.instanceColor) healthBarRef.current.instanceColor.needsUpdate = true;
-      const attr = healthBarRef.current.geometry.getAttribute('aHealthInfo');
-      if (attr) attr.needsUpdate = true;
-    }
-    if (cooldownRef.current) {
-      cooldownRef.current.instanceMatrix.needsUpdate = true;
-      if (cooldownRef.current.instanceColor) cooldownRef.current.instanceColor.needsUpdate = true;
-      const attr = cooldownRef.current.geometry.getAttribute('aProgress');
-      if (attr) attr.needsUpdate = true;
+    // 3. Signal Updates — Only upload GPU buffers when data actually changed
+    hudDirtyRef.current = true; // Mark dirty on any frame with active units
+    if (hudDirtyRef.current) {
+      if (shadowRef.current) {
+        shadowRef.current.instanceMatrix.needsUpdate = true;
+        if (shadowRef.current.instanceColor) shadowRef.current.instanceColor.needsUpdate = true;
+      }
+      if (healthBarRef.current) {
+        healthBarRef.current.instanceMatrix.needsUpdate = true;
+        if (healthBarRef.current.instanceColor) healthBarRef.current.instanceColor.needsUpdate = true;
+        const attr = healthBarRef.current.geometry.getAttribute('aHealthInfo');
+        if (attr) attr.needsUpdate = true;
+      }
+      if (cooldownRef.current) {
+        cooldownRef.current.instanceMatrix.needsUpdate = true;
+        if (cooldownRef.current.instanceColor) cooldownRef.current.instanceColor.needsUpdate = true;
+        const attr = cooldownRef.current.geometry.getAttribute('aProgress');
+        if (attr) attr.needsUpdate = true;
+      }
     }
   });
 
@@ -639,13 +643,13 @@ const BattleArmyComponent = ({
       />
 
       {/* GLSL Combat Effects */}
-      <ShieldEffect 
+      <ShieldEffect
         unitRegistry={unitRegistry}
         activeIndicesRef={compBuffers?.activeIndices}
         settingsRef={settingsRef}
         simTimeRef={simTimeRef}
       />
-      
+
       {/* Mage GLSL Spell Projectiles */}
       <MageSpellEffect spellsRef={spellsRef} unitRegistry={unitRegistry} simTimeRef={simTimeRef} />
 

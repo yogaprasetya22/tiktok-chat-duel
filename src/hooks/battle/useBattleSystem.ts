@@ -301,8 +301,11 @@ export const useBattleSystem = () => {
     >(new Map());
 
     const flushDamageBuffer = useCallback((now: number) => {
-        damageBufferRef.current.forEach((data, targetId) => {
-            if (now - data.lastHit > 150) {
+        // FIX: Cap buffer size to prevent unbounded growth during intense combat
+        if (damageBufferRef.current.size > 200) {
+            const toDelete: string[] = [];
+            for (const [targetId, data] of damageBufferRef.current) {
+                toDelete.push(targetId);
                 if (damageQueueRef.current.length < 500) {
                     damageQueueRef.current.push({
                         value: Math.round(data.total),
@@ -312,9 +315,26 @@ export const useBattleSystem = () => {
                         timestamp: now,
                     });
                 }
-                damageBufferRef.current.delete(targetId);
             }
-        });
+            for (let d = 0; d < toDelete.length; d++) damageBufferRef.current.delete(toDelete[d]);
+            return;
+        }
+        const toFlush: string[] = [];
+        for (const [targetId, data] of damageBufferRef.current) {
+            if (now - data.lastHit > 150) {
+                toFlush.push(targetId);
+                if (damageQueueRef.current.length < 500) {
+                    damageQueueRef.current.push({
+                        value: Math.round(data.total),
+                        position: data.position,
+                        isCrit: data.total > 150,
+                        color: data.color,
+                        timestamp: now,
+                    });
+                }
+            }
+        }
+        for (let d = 0; d < toFlush.length; d++) damageBufferRef.current.delete(toFlush[d]);
     }, []);
 
     const accumulateDamage = useCallback(
@@ -755,10 +775,15 @@ export const useBattleSystem = () => {
             const vPool = vehiclePoolRef.current;
             const activeIdxArray = activeIndicesRef.current;
 
+            // FIX: Zero-allocation in-place compaction instead of .filter() which creates new array
             if (frameCountRef.current % 30 === 0) {
-                activeIndicesRef.current = activeIdxArray.filter(
-                    (idx) => uPool[idx].isActive,
-                );
+                let writeIdx = 0;
+                for (let ri = 0; ri < activeIdxArray.length; ri++) {
+                    if (uPool[activeIdxArray[ri]].isActive) {
+                        activeIdxArray[writeIdx++] = activeIdxArray[ri];
+                    }
+                }
+                activeIdxArray.length = writeIdx;
             }
 
             for (let k = 0; k < activeIdxArray.length; k++) {
@@ -777,6 +802,7 @@ export const useBattleSystem = () => {
                     _vActive[i] = 0;
                     u.isActive = false;
                     uData.isActive = false;
+                    unitIndexRef.current.delete(u.id); // FIX: Cleanup unitIndex on fast death path
                     continue;
                 } // SECONDARY: trigger dying animation on first frame at 0 HP
 

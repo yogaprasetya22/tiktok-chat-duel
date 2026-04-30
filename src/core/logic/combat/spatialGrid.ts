@@ -30,9 +30,15 @@ export class SpatialHashGrid {
     /**
      * Rebuilds the grid. Reuses the arrays in the pool.
      */
+    private activeKeys: number[] = [];
+
     update(units: UnitRuntimeData[], activeIndices?: number[]) {
-        // Reset all active arrays in the map without disposing them
-        this.grid.forEach(arr => arr.length = 0);
+        // FIX: Clear used cells by tracking active keys instead of forEach
+        for (let k = 0; k < this.activeKeys.length; k++) {
+            const cell = this.grid.get(this.activeKeys[k]);
+            if (cell) cell.length = 0;
+        }
+        this.activeKeys.length = 0;
         this.grid.clear();
         this.poolIdx = 0;
 
@@ -63,6 +69,7 @@ export class SpatialHashGrid {
                 this.poolIdx = this.cellPool.length;
             }
             this.grid.set(key, cell);
+            this.activeKeys.push(key); // Track for fast clear
         }
         cell.push(u);
     }

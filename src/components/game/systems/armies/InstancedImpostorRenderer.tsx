@@ -229,7 +229,7 @@ export function InstancedImpostorRenderer({
 
     mesh.instanceMatrix.needsUpdate = true;
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-    mesh.count = LOD_IMPOSTOR_MAX;
+    mesh.count = idx; // FIX: Only draw visible instances, not full 1200 buffer
     
     // Clear for next frame so armies can repopulate
     renderedIdsRef.current.clear();

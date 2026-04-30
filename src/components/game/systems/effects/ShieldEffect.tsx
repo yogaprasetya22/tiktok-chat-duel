@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 import React, { useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { UnitRuntimeData, WORLD_UNIT_POOL_SIZE, ClassKey, SimulationSettings } from '@/src/core/domain/unit.types';
+import { UnitRuntimeData, ClassKey, SimulationSettings } from '@/src/core/domain/unit.types';
 
 function getBaseScale(classKey: ClassKey, level: number, isBoss: boolean): number {
   if (isBoss) {
@@ -172,7 +172,7 @@ export function ShieldEffect({ unitRegistry, activeIndicesRef, settingsRef, simT
     });
 
     return (
-        <instancedMesh ref={meshRef} args={[geo, mat, WORLD_UNIT_POOL_SIZE]} frustumCulled={false}>
+        <instancedMesh ref={meshRef} args={[geo, mat, 60]} frustumCulled={false}>
             <primitive object={mat} ref={matRef} attach="material" />
         </instancedMesh>
     );

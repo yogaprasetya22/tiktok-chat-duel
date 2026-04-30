@@ -223,6 +223,11 @@ const ECSArmyRendererInner = ({
           });
         });
       });
+      // FIX: Clear shared material cache to free GPU memory on unmount
+      for (const [_, mat] of _materialCache) {
+        mat.dispose();
+      }
+      _materialCache.clear();
     };
   }, []);
 
@@ -574,18 +579,20 @@ const CLASS_KEYS: ClassKey[] = ['fighter', 'tank', 'mage', 'marksman', 'assassin
         }
       }
 
-      // ── Return inactive slots to pool (Optimized For-In loop) ──
-      for (const [_uid, slotIdx] of pool.assigned.entries()) {
+      // ── Return inactive slots to pool (Optimized: collect-then-delete to avoid iterator invalidation) ──
+      const toRelease: string[] = [];
+      for (const [_uid, slotIdx] of pool.assigned) {
         if (!pool.activeSet.has(_uid)) {
           const item = pool.items[slotIdx];
           if (item) item.group.visible = false;
-
           const hIdx = hudBase + slotIdx;
           hideHUD(hIdx, _uid);
-
           pool.available.push(slotIdx);
-          pool.assigned.delete(_uid);
+          toRelease.push(_uid);
         }
+      }
+      for (let r = 0; r < toRelease.length; r++) {
+        pool.assigned.delete(toRelease[r]);
       }
     } // closes classKey loop
 
