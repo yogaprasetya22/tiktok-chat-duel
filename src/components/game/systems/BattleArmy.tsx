@@ -38,7 +38,7 @@ interface BattleArmyProps {
 
 
 import { WORLD_UNIT_POOL_SIZE as MAX_UNITS } from '@/src/core/domain/unit.types';
-const NAME_POOL_SIZE = 400; // Increased from 120 to handle high density usernames
+const NAME_POOL_SIZE = 120;
 const TEST_IMAGE_URL = 'https://t3.ftcdn.net/jpg/13/11/22/86/360_F_1311228699_YoiLc5aJ3RWz3uRfdEtlV0UYSQjqf7RW.jpg';
 
 const textureLoader = new THREE.TextureLoader();
@@ -353,6 +353,7 @@ const BattleArmyComponent = ({
   const nameSlotImage = useRef<string[]>(Array(NAME_POOL_SIZE).fill(''));
 
 
+  const lastNameCullTime = useRef(0);
   const cachedActiveUnits = useRef<any[]>([]);
   const frameCountRef = useRef(0);
   const hudDirtyRef = useRef(true); // FIX: Track if HUD needs GPU upload
@@ -369,18 +370,15 @@ const BattleArmyComponent = ({
     if (!rawMap) return;
 
     const time = state.clock.elapsedTime;
-    // CRITICAL FIX: Clear renderedIdsRef every frame so InstancedImpostorRenderer knows what's left
-    renderedIdsRef.current?.clear();
-
     const camPos = state.camera.position;
     frameCountRef.current++;
 
     // PERFORMANCE: Use consistent constants at the top
-    const HUD_DETAIL_DIST_SQ = 2500; // 50m (Optimized from 70m)
-    const HUD_MAX_RANGE_SQ = 3600;   // 60m (Optimized from 85m)
+    const HUD_DETAIL_DIST_SQ = 4900; // 70 * 70
+    const HUD_MAX_RANGE_SQ = 7350; // 4900 * 1.5
 
-    // PERFORMANCE: Throttle sorting and unit filtering to every 30 frames
-    const shouldSort = frameCountRef.current % 30 === 0 || cachedActiveUnits.current.length === 0;
+    // PERFORMANCE: Throttle sorting and unit filtering to every 12 frames
+    const shouldSort = frameCountRef.current % 12 === 0 || cachedActiveUnits.current.length === 0;
 
     const indices = compBuffers?.activeIndices?.current || [];
     for (let k = 0; k < indices.length; k++) {
@@ -424,11 +422,7 @@ const BattleArmyComponent = ({
     const activeUnits = cachedActiveUnits.current;
     (state as any).sortedActiveUnits = activeUnits;
     const isPotato = !!settingsRef.current.potatoMode;
-    // PERF: Cache gameMode - don't call getState() every frame
-    if (frameCountRef.current % 60 === 0) {
-      (state as any)._cachedGameMode = useStore.getState().gameMode;
-    }
-    const gameMode = (state as any)._cachedGameMode || 'TRAINING';
+    const gameMode = (state as any)._cachedGameMode ||= useStore.getState().gameMode;
     const frustum = (state as any).battleFrustum as THREE.Frustum;
 
     if (isPotato) {
@@ -445,42 +439,39 @@ const BattleArmyComponent = ({
 
     // ─── 2. Name Labels Lifecycle ─────────────────────────────────────────────
 
-    // FIX B: Cleanup dead/far name labels — throttled to every 3 frames
-    if (frameCountRef.current % 3 === 0) {
-      const toReleaseName: string[] = [];
-      for (const [uid, slot] of namePoolMap.current.entries()) {
-        const uIdx = unitIndex.current.get(uid);
-        const u = uIdx ? rawMap[uIdx.poolIdx ?? -1] : null;
+    // FIX B: Immediate cleanup tiap frame — jangan tunggu 4 frame
+    // Cek kematian, jauh dari kamera, atau inactive langsung
+    for (const [uid, slot] of namePoolMap.current.entries()) {
+      const uIdx = unitIndex.current.get(uid);
+      const u = uIdx ? rawMap[uIdx.poolIdx ?? -1] : null;
 
-        const isDead = !uIdx || !u || !u.isActive || u.hp <= 0 || u.position[1] < -50;
-        const isTooFar = (u?.dSq ?? 0) > HUD_DETAIL_DIST_SQ * 1.5; // Added buffer
+      const isDead = !u || !u.isActive || u.hp <= 0 || u.position[1] < -50;
+      const isTooFar = (u?.dSq ?? 0) > HUD_DETAIL_DIST_SQ;
 
-        if (isDead || isTooFar || isPotato) {
-          const group = nameGroupRefs.current[slot];
-          if (group) {
-            group.visible = false;
-            group.position.set(0, -200, 0);
-          }
-          if (nameTextRefs.current[slot]) nameTextRefs.current[slot].visible = false;
-          if (nameImageRefs.current[slot]) nameImageRefs.current[slot].visible = false;
-          if (nameBorderRefs.current[slot]) nameBorderRefs.current[slot].visible = false;
-          nameAvailableSlots.current.push(slot);
-          toReleaseName.push(uid);
-          nameSlotImage.current[slot] = '';
-          nameSlotContent.current[slot] = ''; // Clear content to force re-sync
+      if (isDead || isTooFar || isPotato) {
+        const group = nameGroupRefs.current[slot];
+        if (group) {
+          group.visible = false;
+          group.position.set(0, -200, 0);
         }
-      }
-      for (let nr = 0; nr < toReleaseName.length; nr++) {
-        namePoolMap.current.delete(toReleaseName[nr]);
+        if (nameTextRefs.current[slot]) nameTextRefs.current[slot].visible = false;
+        if (nameImageRefs.current[slot]) nameImageRefs.current[slot].visible = false;
+        if (nameBorderRefs.current[slot]) nameBorderRefs.current[slot].visible = false;
+        nameAvailableSlots.current.push(slot);
+        namePoolMap.current.delete(uid);
+        nameSlotImage.current[slot] = '';
       }
     }
 
-    // Assign slots ke unit baru yang dekat (dari yang paling dekat)
-    if (!isPotato) {
-        let updatesThisFrame = 0;
-        const MAX_UPDATES_PER_FRAME = 16; // Increased from 2 to handle density
+    if (frameCountRef.current % 4 === 0) {
+      lastNameCullTime.current = time;
 
-        const assignCount = Math.min(activeUnits.length, 80);
+      // Assign slots ke unit baru yang dekat (dari yang paling dekat)
+      if (!isPotato) {
+        let updatesThisFrame = 0;
+        const MAX_UPDATES_PER_FRAME = 2;
+
+        const assignCount = Math.min(activeUnits.length, 60);
         for (let i = 0; i < assignCount; i++) {
           const u = activeUnits[i];
           const id = u.id;
@@ -593,8 +584,11 @@ const BattleArmyComponent = ({
               group.visible = true;
             }
           }
+        }
       }
     }
+
+
 
     // 3. Signal Updates — Only upload GPU buffers when data actually changed
     hudDirtyRef.current = true; // Mark dirty on any frame with active units

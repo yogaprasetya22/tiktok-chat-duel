@@ -20,7 +20,7 @@ export let CLASS_CONFIG: ClassConfig = {
         magic_pen: 0,
         lifesteal: 0.25,
         spell_vamp: 0.1,
-        move_speed_mult: 1.6, // Buffed from 1.15
+        move_speed_mult: 1.15, // Buffed from 1.05
         attack_speed_mult: 1.1,
         crit_chance: 0.15,
         crit_damage: 2.0,
@@ -48,7 +48,7 @@ export let CLASS_CONFIG: ClassConfig = {
         magic_pen: 0,
         lifesteal: 0.0,
         spell_vamp: 0.0,
-        move_speed_mult: 1.35, // Buffed from 1.05
+        move_speed_mult: 1.05, // Buffed from 0.95
         attack_speed_mult: 0.8,
         crit_chance: 0.05,
         crit_damage: 1.5,
@@ -76,7 +76,7 @@ export let CLASS_CONFIG: ClassConfig = {
         magic_pen: 35,
         lifesteal: 0.0,
         spell_vamp: 0.25,
-        move_speed_mult: 1.3, // Buffed from 0.95
+        move_speed_mult: 0.95, // Nerfed from 1.0
         attack_speed_mult: 0.31,
         crit_chance: 0.05,
         crit_damage: 1.5,
@@ -104,7 +104,7 @@ export let CLASS_CONFIG: ClassConfig = {
         magic_pen: 0,
         lifesteal: 0.2,
         spell_vamp: 0.0,
-        move_speed_mult: 1.4, // Buffed from 1.0
+        move_speed_mult: 1.0, // Nerfed from 1.05
         attack_speed_mult: 1.5,
         crit_chance: 0.35,
         crit_damage: 2.5,
@@ -132,7 +132,7 @@ export let CLASS_CONFIG: ClassConfig = {
         magic_pen: 0,
         lifesteal: 2.15,
         spell_vamp: 1.2,
-        move_speed_mult: 2.1, // Buffed from 1.3
+        move_speed_mult: 1.3, // Buffed from 1.25
         attack_speed_mult: 1.25,
         crit_chance: 0.3,
         crit_damage: 3.5,
@@ -156,7 +156,7 @@ export let CLASS_CONFIG: ClassConfig = {
 export let INITIAL_SETTINGS: SimulationSettings = {
     // Military & Stats
     globalHpMultiplier: 1.0,
-    globalSpeedMultiplier: 1.6, // Buffed from 1.0
+    globalSpeedMultiplier: 1.0,
     globalDamageMultiplier: 2.4,
     globalAttackCooldown: 800,
     critChance: 0.55,
@@ -194,7 +194,7 @@ export let INITIAL_SETTINGS: SimulationSettings = {
     timeScale: 1.0,
     unitScale: 0.5,
     vfxIntensity: 1.0,
-    maxUnits: 80, // Optimized from 100
+    maxUnits: 20,
 
     // Performance & Diagnostics
     potatoMode: false,
@@ -218,8 +218,8 @@ export const LOD_IMPOSTOR_SCALE = 1.8;
 export const LOD_IMPOSTOR_BOSS_SCALE = 5.0;
 
 // --- CENTRALIZED PERFORMANCE CONFIG ---
-export const ARMY_POOL_SIZE = 25; // Optimized from 30
-export const ANIM_CULL_DIST_SQ = 3600; // Bone processing stops at 60m (Optimized for performance)
+export const ARMY_POOL_SIZE = 30; // Number of high-detail 3D models per class
+export const ANIM_CULL_DIST_SQ = 350 * 350; // Distance where bone animations stop (150m)
 
 // --- WEATHER SYSTEM CONFIG ---
 export const WEATHER_CONFIG = {

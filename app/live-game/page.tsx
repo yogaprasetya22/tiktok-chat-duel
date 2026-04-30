@@ -53,8 +53,6 @@ export default function GamePage() {
 
   // --- Auto-Spawn Logic (Testing Mode) ---
   const countsRef = useRef({ player: 0, enemy: 0 });
-  const totalSpawnedRef = useRef(0);
-
   useEffect(() => {
     const unsub = useStore.subscribe((state) => {
       countsRef.current = state.armyCounts;
@@ -63,33 +61,26 @@ export default function GamePage() {
   }, []);
 
   useEffect(() => {
-    if (!testingMode || gameState !== "PLAYING" || gameMode === "TRAINING") {
-        totalSpawnedRef.current = 0;
-        return;
-    }
-
+    if (!testingMode || gameState !== "PLAYING" || gameMode === "TRAINING") return;
     const intervalId = setInterval(() => {
       const { player, enemy } = countsRef.current;
-      
-      // OPTIMIZED BRUTAL MODE: 500 session limit to prevent overflow
-      if (totalSpawnedRef.current >= 500) return; 
+      const isPlayerUnderdog = player < enemy - 10;
+      const isEnemyUnderdog = enemy < player - 10;
 
       const spawnForTeam = (side: "player" | "enemy") => {
         const config = side === "player" ? towerConfig.player : towerConfig.enemy;
         if (!config.active) return;
-        
-        // BALANCED BRUTAL LIMIT: 80 units per side for smooth 60fps
-        const currentCount = side === "player" ? player : enemy;
-        if (currentCount >= 80) return; 
-
-        spawnUnit(1, config.name, side);
-        totalSpawnedRef.current++;
+        if (side === "player" && isEnemyUnderdog && player > 25) return;
+        if (side === "enemy" && isPlayerUnderdog && enemy > 25) return;
+        const isUnderdog = (side === "player" && isPlayerUnderdog) || (side === "enemy" && isEnemyUnderdog);
+        const count = isUnderdog ? 2 : 1;
+        for (let i = 0; i < count; i++) spawnUnit(1, config.name, side);
       };
 
-      spawnForTeam("player");
-      spawnForTeam("enemy");
-    }, 250); // 250ms interval: still fast, but much more stable than 100ms
-    
+      const now = Date.now();
+      if (Math.floor(now / 200) % 2 === 0) spawnForTeam("player");
+      else spawnForTeam("enemy");
+    }, 200);
     return () => clearInterval(intervalId);
   }, [testingMode, gameState, spawnUnit, towerConfig, gameMode]);
 

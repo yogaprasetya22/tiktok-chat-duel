@@ -238,10 +238,6 @@ export const useBattleSystem = () => {
     const unitDataPoolRef = useRef<UnitRuntimeData[]>([]);
     const vehiclePoolRef = useRef<YUKA.Vehicle[]>([]);
     const activeIndicesRef = useRef<number[]>([]);
-    const activeSetRef = useRef<Set<number>>(new Set()); // O(1) companion for .has() checks
-    const availablePoolIndicesRef = useRef<number[]>(Array.from({ length: 1500 }, (_, i) => i)); // O(1) free slot pool
-    const playerUnitCountRef = useRef(0);
-    const enemyUnitCountRef = useRef(0);
     const lastMvpTimeRef = useRef(0);
     const cachedMvpRef = useRef<any>(null); // --- OPTIMIZATION: Spell Pool Pointers ---
 
@@ -386,7 +382,7 @@ export const useBattleSystem = () => {
         },
         baseHp: 100000,
         baseDistance: 40,
-        maxUnits: 80, // Optimized from 100
+        maxUnits: 15,
         unitConfig: {
             hpMultiplier: 1.0,
             speedMultiplier: 1.0,
@@ -519,10 +515,6 @@ export const useBattleSystem = () => {
         spellsRef.current.forEach((s) => (s.active = false));
         mmSpellsRef.current.forEach((s) => (s.active = false));
         activeIndicesRef.current = [];
-        activeSetRef.current.clear();
-        availablePoolIndicesRef.current = Array.from({ length: WORLD_UNIT_POOL_SIZE }, (_, i) => i);
-        playerUnitCountRef.current = 0;
-        enemyUnitCountRef.current = 0;
     }, [entityManager]);
 
     const spawnUnit = useCallback(
@@ -540,11 +532,25 @@ export const useBattleSystem = () => {
                 settingsRef.current.maxUnits ||
                 20;
 
-            const sideCount = type === "player" ? playerUnitCountRef.current : enemyUnitCountRef.current;
-            if (sideCount >= maxUnitsPerSide) return;
+            let sideActiveCount = 0;
+            for (let i = 0; i < WORLD_UNIT_POOL_SIZE; i++) {
+                if (
+                    unitPoolRef.current[i].isActive &&
+                    unitPoolRef.current[i].type === type
+                ) {
+                    sideActiveCount++;
+                }
+            }
+            if (sideActiveCount >= maxUnitsPerSide) return;
 
-            if (availablePoolIndicesRef.current.length === 0) return;
-            const poolIdx = availablePoolIndicesRef.current.shift()!; // O(1) retrieval
+            let poolIdx = -1;
+            for (let i = 0; i < WORLD_UNIT_POOL_SIZE; i++) {
+                if (!unitPoolRef.current[i].isActive) {
+                    poolIdx = i;
+                    break;
+                }
+            }
+            if (poolIdx === -1) return;
 
             const name = userName.trim().substring(0, 16);
             const unitClass =
@@ -697,15 +703,11 @@ export const useBattleSystem = () => {
             _vActive[poolIdx] = 1;
             _vState[poolIdx] = 1;
 
-            // FIX: O(1) check instead of O(n) .includes()
-            if (!activeSetRef.current.has(poolIdx)) {
+            if (!activeIndicesRef.current.includes(poolIdx)) {
                 activeIndicesRef.current.push(poolIdx);
-                activeSetRef.current.add(poolIdx);
             }
 
             unitIndexRef.current.set(u.id, u);
-            if (type === "player") playerUnitCountRef.current++;
-            else enemyUnitCountRef.current++;
         },
         [entityManager],
     );
@@ -722,7 +724,8 @@ export const useBattleSystem = () => {
                 return;
             }
 
-            const simDelta = delta * (settingsRef.current.timeScale || 1.0);
+            let simDelta = delta * (settingsRef.current.timeScale || 1.0);
+            if (simDelta > 0.064) simDelta = 0.064; // FIX: Cap maximum delta to prevent teleporting and fast-forward catch up
             simulationTimeRef.current += simDelta * 1000;
             const simNow = simulationTimeRef.current;
             const settings = settingsRef.current;
@@ -730,8 +733,13 @@ export const useBattleSystem = () => {
             const weatherCfg = (WEATHER_CONFIG as any)[weather] || {};
             const weatherMults = weatherCfg.multipliers || {};
 
-            // FIX: Use activeIndicesRef.length instead of scanning all 1500 slots every frame
-            const activeCount = activeIndicesRef.current.length;
+            let activeCount = 0;
+            const eidArr = eidMap.current;
+            const activeArr = _vActive;
+            for (let i = 0; i < WORLD_UNIT_POOL_SIZE; i++) {
+                const eid = eidArr[i];
+                if (eid !== -1 && activeArr[i]) activeCount++;
+            }
             if (activeCount === 0 && gameStateRef.current !== "PLAYING") return; // OPTIMIZATION: Reduce grid update frequency to once every 5 frames (was 2).
             // This reclaim CPU time for VFX while maintaining accurate targeting.
 
@@ -745,19 +753,20 @@ export const useBattleSystem = () => {
             const PHYSICS_STEP = 0.016;
             physicsAccumulatorRef.current += simDelta;
 
-            if (physicsAccumulatorRef.current > 0.2) {
-                physicsAccumulatorRef.current = 0.2;
-            }
-
-            // FIX: Cap physics to 1 step/frame max — YUKA EntityManager.update is O(n) vehicles
-            // 3 steps * 1500 vehicles = crushing CPU. 1 step is plenty for smooth movement.
-            if (physicsAccumulatorRef.current >= PHYSICS_STEP) {
+            let steps = 0;
+            const MAX_STEPS_PER_FRAME = 3;
+            while (
+                physicsAccumulatorRef.current >= PHYSICS_STEP &&
+                steps < MAX_STEPS_PER_FRAME
+            ) {
                 entityManager.update(PHYSICS_STEP);
                 physicsAccumulatorRef.current -= PHYSICS_STEP;
-                // Discard excess to prevent spiral of death
-                if (physicsAccumulatorRef.current > PHYSICS_STEP) {
-                    physicsAccumulatorRef.current = 0;
-                }
+                steps++;
+            }
+            
+            // FIX: Discard remaining accumulator if we hit the limit, prevents "fast forward" visual catch-up
+            if (physicsAccumulatorRef.current >= PHYSICS_STEP) {
+                physicsAccumulatorRef.current = physicsAccumulatorRef.current % PHYSICS_STEP;
             }
             flushDamageBuffer(now);
 
@@ -771,12 +780,9 @@ export const useBattleSystem = () => {
             // FIX: Zero-allocation in-place compaction instead of .filter() which creates new array
             if (frameCountRef.current % 30 === 0) {
                 let writeIdx = 0;
-                activeSetRef.current.clear(); // Rebuild set
                 for (let ri = 0; ri < activeIdxArray.length; ri++) {
                     if (uPool[activeIdxArray[ri]].isActive) {
-                        activeIdxArray[writeIdx] = activeIdxArray[ri];
-                        activeSetRef.current.add(activeIdxArray[writeIdx]);
-                        writeIdx++;
+                        activeIdxArray[writeIdx++] = activeIdxArray[ri];
                     }
                 }
                 activeIdxArray.length = writeIdx;
@@ -790,31 +796,38 @@ export const useBattleSystem = () => {
                 const u = uPool[i];
                 const uData = uiPool[i];
                 const v = vPool[i]; // PRIMARY DEATH CHECK: use eid-indexed buffer for instant cleanup
-                if (_vh[i] <= 0) {
-                    if (!u.isDying) {
-                        u.isDying = true;
-                        u.deathTime = simNow;
-                        uData.isDying = true;
-                        v.maxSpeed = 0;
-                        v.velocity.set(0, 0, 0);
-                        v.steering.behaviors.length = 0;
-                        entityManager.remove(v); // CRITICAL: Remove from YUKA simulation
-                        if (u.isBoss) {
-                            freezeTimeRef.current = 200;
-                        }
-                    }
 
+                if (_vh[i] <= 0) {
+                    uData.position[1] = -100;
+                    _py[i] = -100;
+                    v.velocity.set(0, 0, 0);
+                    _vActive[i] = 0;
+                    u.isActive = false;
+                    uData.isActive = false;
+                    unitIndexRef.current.delete(u.id); // FIX: Cleanup unitIndex on fast death path
+                    continue;
+                } // SECONDARY: trigger dying animation on first frame at 0 HP
+
+                if (_vh[i] <= 0 && !u.isDying) {
+                    u.isDying = true;
+                    u.deathTime = simNow;
+                    uData.isDying = true;
+                    v.maxSpeed = 0;
+                    v.velocity.set(0, 0, 0);
+                    v.steering.behaviors.length = 0;
+                    entityManager.remove(v);
+
+                    if (u.isBoss) {
+                        freezeTimeRef.current = 200;
+                    }
+                    continue;
+                }
+
+                if (u.isDying) {
                     if (simNow - (u.deathTime || 0) > CORPSE_DESPAWN_MS) {
-                        uData.position[1] = -100;
-                        _py[i] = -100;
-                        _vActive[i] = 0;
                         u.isActive = false;
                         uData.isActive = false;
                         unitIndexRef.current.delete(u.id);
-                        activeSetRef.current.delete(i);
-                        if (u.type === "player") playerUnitCountRef.current--;
-                        else enemyUnitCountRef.current--;
-                        availablePoolIndicesRef.current.push(i); // Return to pool
                     }
                     continue;
                 } // PERFORMANCE: Spread 'Thinking' logic across 16 frames instead of 8.
@@ -1046,7 +1059,7 @@ export const useBattleSystem = () => {
                             const tz = currentTarget
                                 ? tData!.position[2]
                                 : targetBaseZ;
-                            const shardCount = 5; // PERF: Reduced from 12 — still visually impactful
+                            const shardCount = 12; // LUXURY: 20 high-fidelity 3D ice shards
 
                             for (let m = 0; m < shardCount; m++) {
                                 const s = pool[mageSpellPtr.current];
@@ -2339,7 +2352,7 @@ export const useBattleSystem = () => {
                 useStore.getState().setGameState("LOST"); // Auto-reset stats after 10 seconds of glory
 
                 setTimeout(() => {
-                    if (gameStateRef.current === "LOST" && useStore.getState().gameMode !== "TRAINING") {
+                    if (gameStateRef.current === "LOST") {
                         resetBattle();
                     }
                 }, 10000);
@@ -2363,7 +2376,7 @@ export const useBattleSystem = () => {
                 useStore.getState().setGameState("WON"); // Auto-reset stats after 10 seconds of glory
 
                 setTimeout(() => {
-                    if (gameStateRef.current === "WON" && useStore.getState().gameMode !== "TRAINING") {
+                    if (gameStateRef.current === "WON") {
                         resetBattle();
                     }
                 }, 10000);

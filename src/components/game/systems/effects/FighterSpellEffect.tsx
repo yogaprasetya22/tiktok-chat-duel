@@ -4,9 +4,9 @@ import React, { useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { VFX_TEXTURES } from './VFXAssets';
 
-const MAX_SLASHES = 300; // PERF: Reduced from 600
-const MAX_RINGS = 100;   // PERF: Reduced from 200
-const MAX_BURSTS = 80;   // PERF: Reduced from 150
+const MAX_SLASHES = 600; 
+const MAX_RINGS = 200;
+const MAX_BURSTS = 150;
 
 /**
  * INNOVATION: Kinetic Fracture Shader
@@ -103,7 +103,7 @@ export function FighterSpellEffect({ fighterSpellsRef, simTimeRef }: { fighterSp
     const burstRef = useRef<THREE.InstancedMesh>(null!);
     
     const vfxOrder = useRef(0);
-    const pool = useRef<FighterVFX[]>(Array.from({ length: 400 }, () => ({ x:0,y:0,z:0, startTime:0, color:'#fff', active:false, rot:0, scale:1, type:'impact' })));
+    const pool = useRef<FighterVFX[]>(Array.from({ length: 800 }, () => ({ x:0,y:0,z:0, startTime:0, color:'#fff', active:false, rot:0, scale:1, type:'impact' })));
     const activeIndices = useRef<number[]>([]);
     
     const quadGeo = useMemo(() => new THREE.PlaneGeometry(1, 1), []);
@@ -189,16 +189,15 @@ export function FighterSpellEffect({ fighterSpellsRef, simTimeRef }: { fighterSp
 
         let in_count = 0; let sl_count = 0; let bu_count = 0;
         const currentActive = activeIndices.current;
-        let wIdx = 0; // FIX: swap-remove instead of splice O(n²)
-        for (let j = 0; j < currentActive.length; j++) {
+        for (let j = currentActive.length - 1; j >= 0; j--) {
             const idx = currentActive[j];
             const v = pool.current[idx];
-            if (!v.active) continue;
+            if (!v.active) { currentActive.splice(j, 1); continue; }
             const age = simTime - v.startTime;
-            if (age < 0) { currentActive[wIdx++] = currentActive[j]; continue; }
+            if (age < 0) continue; 
             
             if (v.type === 'impact') {
-                const rt = age / 500; if (rt >= 1) { v.active = false; continue; }
+                const rt = age / 500; if (rt >= 1) { v.active = false; currentActive.splice(j, 1); continue; }
                 if (in_count < MAX_RINGS) {
                     const ease = 1.0 - Math.pow(rt, 3.0);
                     _obj.position.set(v.x, v.y, v.z);
@@ -212,7 +211,7 @@ export function FighterSpellEffect({ fighterSpellsRef, simTimeRef }: { fighterSp
                     in_count++;
                 }
             } else if (v.type === 'burst') {
-                const bt = age / 250; if (bt >= 1) { v.active = false; continue; }
+                const bt = age / 250; if (bt >= 1) { v.active = false; currentActive.splice(j, 1); continue; }
                 if (bu_count < MAX_BURSTS) {
                     _obj.position.set(v.x, v.y, v.z);
                     _obj.rotation.set(0, 0, age * 0.05);
@@ -225,7 +224,7 @@ export function FighterSpellEffect({ fighterSpellsRef, simTimeRef }: { fighterSp
                     bu_count++;
                 }
             } else if (v.type === 'cyclone') {
-                const ct = age / 600; if (ct >= 1) { v.active = false; continue; }
+                const ct = age / 600; if (ct >= 1) { v.active = false; currentActive.splice(j, 1); continue; }
                 if (sl_count < MAX_SLASHES) {
                     const ease = 1.0 - ct;
                     const rGlow = (v as any).rGlow || 15.0;
@@ -240,7 +239,7 @@ export function FighterSpellEffect({ fighterSpellsRef, simTimeRef }: { fighterSp
                     sl_count++;
                 }
             } else {
-                const dt = age / 300; if (dt >= 1) { v.active = false; continue; }
+                const dt = age / 300; if (dt >= 1) { v.active = false; currentActive.splice(j, 1); continue; }
                 if (sl_count < MAX_SLASHES) {
                     const ease = 1.0 - dt;
                     const rGlow = (v as any).rGlow || 15.0;
@@ -255,9 +254,7 @@ export function FighterSpellEffect({ fighterSpellsRef, simTimeRef }: { fighterSp
                     sl_count++;
                 }
             }
-            currentActive[wIdx++] = currentActive[j]; // keep alive
         }
-        currentActive.length = wIdx; // trim dead in-place
 
         impactRef.current.count = in_count;
         impactRef.current.instanceMatrix.needsUpdate = true;
