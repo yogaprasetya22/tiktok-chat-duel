@@ -71,17 +71,16 @@ export default function GamePage() {
     const intervalId = setInterval(() => {
       const { player, enemy } = countsRef.current;
       
-      // OPTIMIZATION: Limit total spawned in testing mode to prevent infinite unit replacement
-      // If the user wants "yang sudah mati tidak spawn lagi", we should stop after a limit.
-      if (totalSpawnedRef.current >= 40) return; // Stop after spawning 40 units per testing session
+      // RESTORE BRUTAL MODE: Higher session limit (1000 units)
+      if (totalSpawnedRef.current >= 1000) return; 
 
       const spawnForTeam = (side: "player" | "enemy") => {
         const config = side === "player" ? towerConfig.player : towerConfig.enemy;
         if (!config.active) return;
         
-        // Only spawn if below a certain density to maintain 60fps and clear testing
+        // BRUTAL LIMIT: Allow up to 150 units per side in testing mode
         const currentCount = side === "player" ? player : enemy;
-        if (currentCount >= 15) return; 
+        if (currentCount >= 150) return; 
 
         spawnUnit(1, config.name, side);
         totalSpawnedRef.current++;
@@ -89,7 +88,7 @@ export default function GamePage() {
 
       spawnForTeam("player");
       spawnForTeam("enemy");
-    }, 1000); // Slower, more deliberate spawning (1s instead of 0.2s)
+    }, 100); // Super fast 100ms interval for BRUTAL spawning
     
     return () => clearInterval(intervalId);
   }, [testingMode, gameState, spawnUnit, towerConfig, gameMode]);
