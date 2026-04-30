@@ -227,7 +227,7 @@ export const GameCanvas = React.memo(({
       >
       <PerformanceMonitor
         onIncline={() => setDpr(Math.min(dpr + 0.1, 1.0))}
-        onDecline={() => setDpr(Math.max(dpr - 0.15, 0.4))}
+        onDecline={() => setDpr(Math.max(dpr - 0.1, 0.75))} // Jangan sampai terlalu ngeblur, min 0.75
         threshold={0.85}
         flipflops={3}
       />

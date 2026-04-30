@@ -386,7 +386,7 @@ export const useBattleSystem = () => {
         },
         baseHp: 100000,
         baseDistance: 40,
-        maxUnits: 100, // Brutal by default
+        maxUnits: 80, // Optimized from 100
         unitConfig: {
             hpMultiplier: 1.0,
             speedMultiplier: 1.0,

@@ -194,7 +194,7 @@ export let INITIAL_SETTINGS: SimulationSettings = {
     timeScale: 1.0,
     unitScale: 0.5,
     vfxIntensity: 1.0,
-    maxUnits: 100, // Brutal by default
+    maxUnits: 80, // Optimized from 100
 
     // Performance & Diagnostics
     potatoMode: false,
@@ -219,7 +219,7 @@ export const LOD_IMPOSTOR_BOSS_SCALE = 5.0;
 
 // --- CENTRALIZED PERFORMANCE CONFIG ---
 export const ARMY_POOL_SIZE = 25; // Optimized from 30
-export const ANIM_CULL_DIST_SQ = 3600 * 3; // Bone processing stops at 60m (Optimized from 350m)
+export const ANIM_CULL_DIST_SQ = 3600; // Bone processing stops at 60m (Optimized for performance)
 
 // --- WEATHER SYSTEM CONFIG ---
 export const WEATHER_CONFIG = {

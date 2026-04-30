@@ -71,16 +71,16 @@ export default function GamePage() {
     const intervalId = setInterval(() => {
       const { player, enemy } = countsRef.current;
       
-      // RESTORE BRUTAL MODE: Higher session limit (1000 units)
-      if (totalSpawnedRef.current >= 1000) return; 
+      // OPTIMIZED BRUTAL MODE: 500 session limit to prevent overflow
+      if (totalSpawnedRef.current >= 500) return; 
 
       const spawnForTeam = (side: "player" | "enemy") => {
         const config = side === "player" ? towerConfig.player : towerConfig.enemy;
         if (!config.active) return;
         
-        // BRUTAL LIMIT: Allow up to 150 units per side in testing mode
+        // BALANCED BRUTAL LIMIT: 80 units per side for smooth 60fps
         const currentCount = side === "player" ? player : enemy;
-        if (currentCount >= 150) return; 
+        if (currentCount >= 80) return; 
 
         spawnUnit(1, config.name, side);
         totalSpawnedRef.current++;
@@ -88,7 +88,7 @@ export default function GamePage() {
 
       spawnForTeam("player");
       spawnForTeam("enemy");
-    }, 100); // Super fast 100ms interval for BRUTAL spawning
+    }, 250); // 250ms interval: still fast, but much more stable than 100ms
     
     return () => clearInterval(intervalId);
   }, [testingMode, gameState, spawnUnit, towerConfig, gameMode]);
