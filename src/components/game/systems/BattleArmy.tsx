@@ -376,8 +376,8 @@ const BattleArmyComponent = ({
     frameCountRef.current++;
 
     // PERFORMANCE: Use consistent constants at the top
-    const HUD_DETAIL_DIST_SQ = 4900; // 70 * 70
-    const HUD_MAX_RANGE_SQ = 7350; // 4900 * 1.5
+    const HUD_DETAIL_DIST_SQ = 2500; // 50m (Optimized from 70m)
+    const HUD_MAX_RANGE_SQ = 3600;   // 60m (Optimized from 85m)
 
     // PERFORMANCE: Throttle sorting and unit filtering to every 12 frames
     const shouldSort = frameCountRef.current % 12 === 0 || cachedActiveUnits.current.length === 0;

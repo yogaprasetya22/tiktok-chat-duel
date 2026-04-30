@@ -2339,7 +2339,7 @@ export const useBattleSystem = () => {
                 useStore.getState().setGameState("LOST"); // Auto-reset stats after 10 seconds of glory
 
                 setTimeout(() => {
-                    if (gameStateRef.current === "LOST") {
+                    if (gameStateRef.current === "LOST" && useStore.getState().gameMode !== "TRAINING") {
                         resetBattle();
                     }
                 }, 10000);
@@ -2363,7 +2363,7 @@ export const useBattleSystem = () => {
                 useStore.getState().setGameState("WON"); // Auto-reset stats after 10 seconds of glory
 
                 setTimeout(() => {
-                    if (gameStateRef.current === "WON") {
+                    if (gameStateRef.current === "WON" && useStore.getState().gameMode !== "TRAINING") {
                         resetBattle();
                     }
                 }, 10000);

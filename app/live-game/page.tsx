@@ -53,6 +53,8 @@ export default function GamePage() {
 
   // --- Auto-Spawn Logic (Testing Mode) ---
   const countsRef = useRef({ player: 0, enemy: 0 });
+  const totalSpawnedRef = useRef(0);
+
   useEffect(() => {
     const unsub = useStore.subscribe((state) => {
       countsRef.current = state.armyCounts;
@@ -61,26 +63,34 @@ export default function GamePage() {
   }, []);
 
   useEffect(() => {
-    if (!testingMode || gameState !== "PLAYING" || gameMode === "TRAINING") return;
+    if (!testingMode || gameState !== "PLAYING" || gameMode === "TRAINING") {
+        totalSpawnedRef.current = 0;
+        return;
+    }
+
     const intervalId = setInterval(() => {
       const { player, enemy } = countsRef.current;
-      const isPlayerUnderdog = player < enemy - 10;
-      const isEnemyUnderdog = enemy < player - 10;
+      
+      // OPTIMIZATION: Limit total spawned in testing mode to prevent infinite unit replacement
+      // If the user wants "yang sudah mati tidak spawn lagi", we should stop after a limit.
+      if (totalSpawnedRef.current >= 40) return; // Stop after spawning 40 units per testing session
 
       const spawnForTeam = (side: "player" | "enemy") => {
         const config = side === "player" ? towerConfig.player : towerConfig.enemy;
         if (!config.active) return;
-        if (side === "player" && isEnemyUnderdog && player > 25) return;
-        if (side === "enemy" && isPlayerUnderdog && enemy > 25) return;
-        const isUnderdog = (side === "player" && isPlayerUnderdog) || (side === "enemy" && isEnemyUnderdog);
-        const count = isUnderdog ? 2 : 1;
-        for (let i = 0; i < count; i++) spawnUnit(1, config.name, side);
+        
+        // Only spawn if below a certain density to maintain 60fps and clear testing
+        const currentCount = side === "player" ? player : enemy;
+        if (currentCount >= 15) return; 
+
+        spawnUnit(1, config.name, side);
+        totalSpawnedRef.current++;
       };
 
-      const now = Date.now();
-      if (Math.floor(now / 200) % 2 === 0) spawnForTeam("player");
-      else spawnForTeam("enemy");
-    }, 200);
+      spawnForTeam("player");
+      spawnForTeam("enemy");
+    }, 1000); // Slower, more deliberate spawning (1s instead of 0.2s)
+    
     return () => clearInterval(intervalId);
   }, [testingMode, gameState, spawnUnit, towerConfig, gameMode]);
 
