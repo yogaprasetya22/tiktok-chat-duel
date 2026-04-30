@@ -38,7 +38,7 @@ interface BattleArmyProps {
 
 
 import { WORLD_UNIT_POOL_SIZE as MAX_UNITS } from '@/src/core/domain/unit.types';
-const NAME_POOL_SIZE = 120;
+const NAME_POOL_SIZE = 400; // Increased from 120 to handle high density usernames
 const TEST_IMAGE_URL = 'https://t3.ftcdn.net/jpg/13/11/22/86/360_F_1311228699_YoiLc5aJ3RWz3uRfdEtlV0UYSQjqf7RW.jpg';
 
 const textureLoader = new THREE.TextureLoader();
@@ -353,7 +353,6 @@ const BattleArmyComponent = ({
   const nameSlotImage = useRef<string[]>(Array(NAME_POOL_SIZE).fill(''));
 
 
-  const lastNameCullTime = useRef(0);
   const cachedActiveUnits = useRef<any[]>([]);
   const frameCountRef = useRef(0);
   const hudDirtyRef = useRef(true); // FIX: Track if HUD needs GPU upload
@@ -370,6 +369,9 @@ const BattleArmyComponent = ({
     if (!rawMap) return;
 
     const time = state.clock.elapsedTime;
+    // CRITICAL FIX: Clear renderedIdsRef every frame so InstancedImpostorRenderer knows what's left
+    renderedIdsRef.current?.clear();
+
     const camPos = state.camera.position;
     frameCountRef.current++;
 
@@ -450,8 +452,8 @@ const BattleArmyComponent = ({
         const uIdx = unitIndex.current.get(uid);
         const u = uIdx ? rawMap[uIdx.poolIdx ?? -1] : null;
 
-        const isDead = !u || !u.isActive || u.hp <= 0 || u.position[1] < -50;
-        const isTooFar = (u?.dSq ?? 0) > HUD_DETAIL_DIST_SQ;
+        const isDead = !uIdx || !u || !u.isActive || u.hp <= 0 || u.position[1] < -50;
+        const isTooFar = (u?.dSq ?? 0) > HUD_DETAIL_DIST_SQ * 1.5; // Added buffer
 
         if (isDead || isTooFar || isPotato) {
           const group = nameGroupRefs.current[slot];
@@ -465,6 +467,7 @@ const BattleArmyComponent = ({
           nameAvailableSlots.current.push(slot);
           toReleaseName.push(uid);
           nameSlotImage.current[slot] = '';
+          nameSlotContent.current[slot] = ''; // Clear content to force re-sync
         }
       }
       for (let nr = 0; nr < toReleaseName.length; nr++) {
@@ -472,15 +475,12 @@ const BattleArmyComponent = ({
       }
     }
 
-    if (frameCountRef.current % 4 === 0) {
-      lastNameCullTime.current = time;
-
-      // Assign slots ke unit baru yang dekat (dari yang paling dekat)
-      if (!isPotato) {
+    // Assign slots ke unit baru yang dekat (dari yang paling dekat)
+    if (!isPotato) {
         let updatesThisFrame = 0;
-        const MAX_UPDATES_PER_FRAME = 2;
+        const MAX_UPDATES_PER_FRAME = 16; // Increased from 2 to handle density
 
-        const assignCount = Math.min(activeUnits.length, 60);
+        const assignCount = Math.min(activeUnits.length, 80);
         for (let i = 0; i < assignCount; i++) {
           const u = activeUnits[i];
           const id = u.id;
@@ -593,11 +593,8 @@ const BattleArmyComponent = ({
               group.visible = true;
             }
           }
-        }
       }
     }
-
-
 
     // 3. Signal Updates — Only upload GPU buffers when data actually changed
     hudDirtyRef.current = true; // Mark dirty on any frame with active units

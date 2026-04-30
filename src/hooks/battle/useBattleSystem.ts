@@ -239,6 +239,9 @@ export const useBattleSystem = () => {
     const vehiclePoolRef = useRef<YUKA.Vehicle[]>([]);
     const activeIndicesRef = useRef<number[]>([]);
     const activeSetRef = useRef<Set<number>>(new Set()); // O(1) companion for .has() checks
+    const availablePoolIndicesRef = useRef<number[]>(Array.from({ length: 1500 }, (_, i) => i)); // O(1) free slot pool
+    const playerUnitCountRef = useRef(0);
+    const enemyUnitCountRef = useRef(0);
     const lastMvpTimeRef = useRef(0);
     const cachedMvpRef = useRef<any>(null); // --- OPTIMIZATION: Spell Pool Pointers ---
 
@@ -517,6 +520,9 @@ export const useBattleSystem = () => {
         mmSpellsRef.current.forEach((s) => (s.active = false));
         activeIndicesRef.current = [];
         activeSetRef.current.clear();
+        availablePoolIndicesRef.current = Array.from({ length: WORLD_UNIT_POOL_SIZE }, (_, i) => i);
+        playerUnitCountRef.current = 0;
+        enemyUnitCountRef.current = 0;
     }, [entityManager]);
 
     const spawnUnit = useCallback(
@@ -534,25 +540,11 @@ export const useBattleSystem = () => {
                 settingsRef.current.maxUnits ||
                 20;
 
-            let sideActiveCount = 0;
-            for (let i = 0; i < WORLD_UNIT_POOL_SIZE; i++) {
-                if (
-                    unitPoolRef.current[i].isActive &&
-                    unitPoolRef.current[i].type === type
-                ) {
-                    sideActiveCount++;
-                }
-            }
-            if (sideActiveCount >= maxUnitsPerSide) return;
+            const sideCount = type === "player" ? playerUnitCountRef.current : enemyUnitCountRef.current;
+            if (sideCount >= maxUnitsPerSide) return;
 
-            let poolIdx = -1;
-            for (let i = 0; i < WORLD_UNIT_POOL_SIZE; i++) {
-                if (!unitPoolRef.current[i].isActive) {
-                    poolIdx = i;
-                    break;
-                }
-            }
-            if (poolIdx === -1) return;
+            if (availablePoolIndicesRef.current.length === 0) return;
+            const poolIdx = availablePoolIndicesRef.current.shift()!; // O(1) retrieval
 
             const name = userName.trim().substring(0, 16);
             const unitClass =
@@ -712,6 +704,8 @@ export const useBattleSystem = () => {
             }
 
             unitIndexRef.current.set(u.id, u);
+            if (type === "player") playerUnitCountRef.current++;
+            else enemyUnitCountRef.current++;
         },
         [entityManager],
     );
@@ -796,40 +790,31 @@ export const useBattleSystem = () => {
                 const u = uPool[i];
                 const uData = uiPool[i];
                 const v = vPool[i]; // PRIMARY DEATH CHECK: use eid-indexed buffer for instant cleanup
-
                 if (_vh[i] <= 0) {
-                    uData.position[1] = -100;
-                    _py[i] = -100;
-                    v.velocity.set(0, 0, 0);
-                    _vActive[i] = 0;
-                    u.isActive = false;
-                    uData.isActive = false;
-                    unitIndexRef.current.delete(u.id);
-                    activeSetRef.current.delete(i); // FIX: Also remove from O(1) set
-                    continue;
-                } // SECONDARY: trigger dying animation on first frame at 0 HP
-
-                if (_vh[i] <= 0 && !u.isDying) {
-                    u.isDying = true;
-                    u.deathTime = simNow;
-                    uData.isDying = true;
-                    v.maxSpeed = 0;
-                    v.velocity.set(0, 0, 0);
-                    v.steering.behaviors.length = 0;
-                    entityManager.remove(v);
-
-                    if (u.isBoss) {
-                        freezeTimeRef.current = 200;
+                    if (!u.isDying) {
+                        u.isDying = true;
+                        u.deathTime = simNow;
+                        uData.isDying = true;
+                        v.maxSpeed = 0;
+                        v.velocity.set(0, 0, 0);
+                        v.steering.behaviors.length = 0;
+                        entityManager.remove(v); // CRITICAL: Remove from YUKA simulation
+                        if (u.isBoss) {
+                            freezeTimeRef.current = 200;
+                        }
                     }
-                    continue;
-                }
 
-                if (u.isDying) {
                     if (simNow - (u.deathTime || 0) > CORPSE_DESPAWN_MS) {
+                        uData.position[1] = -100;
+                        _py[i] = -100;
+                        _vActive[i] = 0;
                         u.isActive = false;
                         uData.isActive = false;
                         unitIndexRef.current.delete(u.id);
                         activeSetRef.current.delete(i);
+                        if (u.type === "player") playerUnitCountRef.current--;
+                        else enemyUnitCountRef.current--;
+                        availablePoolIndicesRef.current.push(i); // Return to pool
                     }
                     continue;
                 } // PERFORMANCE: Spread 'Thinking' logic across 16 frames instead of 8.
