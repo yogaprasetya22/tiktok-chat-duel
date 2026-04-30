@@ -3,6 +3,7 @@ import { useFrame } from "@react-three/fiber";
 import { Environment } from "@react-three/drei";
 import * as THREE from "three";
 import { useStore } from "@/src/state/useStore";
+import { cinematicState } from "@/src/state/cinematicState";
 
 import { applyPainterlyStyle, PainterlyShaderUtils } from "../systems/effects/PainterlyMaterials";
 
@@ -141,29 +142,41 @@ const Rock = () => {
 
 // --- 3. Environment Trees ---
 const TREE_COUNT = 120;
+const _occRaycaster = new THREE.Raycaster();
+const _occDir = new THREE.Vector3();
+
 const Forest = ({ potatoMode }: { potatoMode?: boolean }) => {
-    const trunkRef = useRef<THREE.InstancedMesh>(null);
-    const topRef = useRef<THREE.InstancedMesh>(null);
-    const dummy = useMemo(() => new THREE.Object3D(), []);
+    const trunkRef    = useRef<THREE.InstancedMesh>(null);
+    const topRef      = useRef<THREE.InstancedMesh>(null);
+    const trunkMatRef = useRef<THREE.MeshStandardMaterial>(null);
+    const topMatRef   = useRef<THREE.MeshStandardMaterial>(null);
+    const dummy       = useMemo(() => new THREE.Object3D(), []);
+    const treeData    = useRef<{x: number, z: number, s: number}[]>([]);
+
+    useEffect(() => {
+        if (treeData.current.length === 0) {
+            for (let i = 0; i < TREE_COUNT; i++) {
+                const r = 45 + Math.random() * 100;
+                const angle = Math.random() * Math.PI * 2;
+                treeData.current.push({
+                    x: r * Math.cos(angle),
+                    z: r * Math.sin(angle),
+                    s: 1.0 + Math.random() * 2.0,
+                });
+            }
+        }
+    }, []);
 
     useEffect(() => {
         if (!trunkRef.current || !topRef.current) return;
         const count = potatoMode ? Math.floor(TREE_COUNT / 2) : TREE_COUNT;
         for (let i = 0; i < count; i++) {
-            const r = 45 + Math.random() * 100;
-            const angle = Math.random() * Math.PI * 2;
-            const x = r * Math.cos(angle);
-            const z = r * Math.sin(angle);
-            
+            const { x, z, s } = treeData.current[i];
             if (Math.abs(x) < 15) continue;
-
-            const s = 1.0 + Math.random() * 2.0;
-
             dummy.position.set(x, 1, z);
             dummy.scale.set(s, s, s);
             dummy.updateMatrix();
             trunkRef.current.setMatrixAt(i, dummy.matrix);
-
             dummy.position.set(x, 4 * s, z);
             dummy.scale.set(s * 2, s * 3, s * 2);
             dummy.updateMatrix();
@@ -173,23 +186,89 @@ const Forest = ({ potatoMode }: { potatoMode?: boolean }) => {
         topRef.current.instanceMatrix.needsUpdate = true;
         trunkRef.current.geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 150);
         topRef.current.geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 150);
-    }, []);
+    }, [potatoMode, dummy]);
+
+    // Per-frame occlusion — throttled + early exits for performance
+    const occFrameRef = useRef(0);
+    const occBlockedRef = useRef(false);
+
+    useFrame(({ camera }, delta) => {
+        const tMat = trunkMatRef.current;
+        const cMat = topMatRef.current;
+        if (!tMat || !cMat) return;
+
+        // Use module-level import (no runtime require())
+        const isActive = cinematicState.isActive;
+
+        if (!isActive) {
+            if (tMat.opacity < 0.99) {
+                const restored = Math.min(1, tMat.opacity + delta * 4);
+                tMat.opacity = restored; cMat.opacity = restored;
+            }
+            return;
+        }
+
+        // Early exit: camera overhead (Y > 28) — no side occlusion possible
+        if (camera.position.y > 28) {
+            if (tMat.opacity < 0.99) {
+                const restored = Math.min(1, tMat.opacity + delta * 3);
+                tMat.opacity = restored; cMat.opacity = restored;
+            }
+            return;
+        }
+
+        // Throttle raycast to every 12 frames — human eye can't see faster flicker
+        occFrameRef.current++;
+        if (occFrameRef.current % 12 === 0) {
+            const camPos = camera.position;
+            _occDir.set(
+                cinematicState.focusX - camPos.x,
+                cinematicState.focusY - camPos.y,
+                cinematicState.focusZ - camPos.z
+            );
+            const dist = _occDir.length();
+            if (dist > 0.1) {
+                _occDir.divideScalar(dist);
+                _occRaycaster.set(camPos, _occDir);
+                _occRaycaster.far = dist + 1;
+                // Only check top mesh (simpler cone > cylinder for trees)
+                const hits = topRef.current ? _occRaycaster.intersectObject(topRef.current) : [];
+                occBlockedRef.current = hits.length > 0;
+            }
+        }
+
+        // Apply cached occlusion result every frame (just an opacity lerp — cheap)
+        const target = occBlockedRef.current ? 0.1 : 1.0;
+        const speed  = occBlockedRef.current ? 10  : 3;
+        const next   = tMat.opacity + (target - tMat.opacity) * Math.min(1, delta * speed);
+        tMat.opacity = next; cMat.opacity = next;
+    });
 
     return (
         <group>
             <instancedMesh ref={trunkRef} args={[null as any, null as any, TREE_COUNT]} castShadow frustumCulled={false}>
                 <cylinderGeometry args={[0.2, 0.4, 4, 6]} />
-                <meshStandardMaterial color="#4d2915" onBeforeCompile={(s: any) => applyPainterlyStyle(s as any)} />
+                <meshStandardMaterial
+                    ref={trunkMatRef}
+                    color="#4d2915"
+                    onBeforeCompile={(s: any) => applyPainterlyStyle(s as any)}
+                    transparent opacity={1} depthWrite={false}
+                />
             </instancedMesh>
             <instancedMesh ref={topRef} args={[null as any, null as any, TREE_COUNT]} castShadow frustumCulled={false}>
                 <coneGeometry args={[1, 2, 6]} />
-                <meshStandardMaterial color="#1a3d1a" onBeforeCompile={(s: any) => applyPainterlyStyle(s as any)} />
+                <meshStandardMaterial
+                    ref={topMatRef}
+                    color="#1a3d1a"
+                    onBeforeCompile={(s: any) => applyPainterlyStyle(s as any)}
+                    transparent opacity={1} depthWrite={false}
+                />
             </instancedMesh>
-
-
         </group>
     );
 };
+
+
 
 
 // --- 2. GPU Accelerated Rain ---
@@ -369,7 +448,7 @@ const Grass = ({ baseDistance }: { baseDistance: number }) => {
 
 
 // --- Main Export ---
-export const StormEnvironment = ({ baseDistance = 36, potatoMode = false }: { baseDistance?: number, potatoMode?: boolean }) => {
+export const StormEnvironment = ({ baseDistance = 36, potatoMode = false }: { baseDistance?: number, potatoMode?: boolean, isCinematic?: boolean }) => {
   const setWeather = useStore(s => s.setWeather);
   const gameState = useStore(s => s.gameState);
   
@@ -486,7 +565,7 @@ export const StormEnvironment = ({ baseDistance = 36, potatoMode = false }: { ba
       <Terrain baseDistance={baseDistance} />
       <Grass baseDistance={baseDistance} />
       <Rock />
-      <Forest />
+      <Forest potatoMode={potatoMode} />
       
       <RainManager active={weatherRef.current !== 'CLEAR'} />
       <LightningManager active={weatherRef.current === 'THUNDER'} />

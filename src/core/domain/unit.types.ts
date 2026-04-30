@@ -57,13 +57,19 @@ export interface ClassStatusStats {
 
 export type ClassConfig = Record<"fighter" | "tank" | "mage" | "marksman" | "assassin", ClassStatusStats>;
 
+export interface GiftBinding {
+    keyword: string;
+    formationId: string; // References GIFT_FORMATIONS
+}
+
 export interface TeamConfig {
     name: string;
     color: string;
     active: boolean;
     commentKeyword: string;
     commentType: "contains" | "exact";
-    giftKeyword: string;
+    giftKeyword?: string; // Kept for backwards compatibility
+    giftBindings: GiftBinding[];
     score?: number;
     flagUrl?: string;
 }

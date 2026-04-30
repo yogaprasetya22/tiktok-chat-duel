@@ -4,6 +4,7 @@ import { useEffect, useState, useRef, useMemo } from "react";
 import { useTikTokLive } from "@/src/lib/hooks";
 import { useBattleSystem } from "@/src/hooks/battle/useBattleSystem";
 import { useStore } from "@/src/state/useStore";
+import { GIFT_FORMATIONS } from "@/src/core/logic/gift/giftDictionary";
 import { GameCanvas } from "@/src/components/game/GameCanvas";
 import { UIOverlay } from "@/src/components/game/ui/UIOverlay";
 import { useControls, button, folder, Leva } from "leva";
@@ -96,35 +97,130 @@ export default function GamePage() {
     lastProcessedId.current = newMessages[newMessages.length - 1].id;
 
     newMessages.forEach((msg: any) => {
+      // 1. FEVER TIME LOGIC (Likes)
+      if (msg.type === "like") {
+        cumulativeLikesRef.current += (msg.likeCount || 1);
+        if (cumulativeLikesRef.current - likeCounterRef.current >= 500) {
+          likeCounterRef.current += 500;
+          // Trigger global fever time for 10s (handled in useStore later)
+          useStore.getState().triggerFeverTime();
+        }
+      }
+
+      // 2. SPAWN LOGIC VIA CHAT (Team specific)
       const processSpawn = (side: "player" | "enemy") => {
         const config = side === "player" ? towerConfig.player : towerConfig.enemy;
         if (!config.active) return;
-        const comment = msg.comment.toLowerCase();
-        const commentKey = config.commentKeyword.toLowerCase();
-        const giftKey = config.giftKeyword.toLowerCase();
+        
+        if (msg.type !== "chat") return;
+        // Anti-typo parser: remove all spaces, lowercase
+        const cleanComment = msg.comment.toLowerCase().replace(/\s+/g, "");
+        const baseKey = config.commentKeyword.toLowerCase().replace(/\s+/g, "");
+        
+        const ALL_CLASSES = ["fighter", "tank", "mage", "marksman", "assassin"] as const;
+        // 70% common, 30% elite for basic chat spawns
+        const randomRarity = () => Math.random() < 0.7 ? "common" : "elite";
+        
+        let spawnedClass: any = undefined;
+        let isMatch = false;
 
-        if (msg.type === "chat") {
-          const matches = config.commentType === "exact" ? comment === commentKey : comment.includes(commentKey);
-          if (matches) spawnUnit(1, msg.username, side, false, undefined, msg.profileImage);
-        } else if (msg.type === "gift") {
-          const giftName = msg.giftName?.toLowerCase() || "";
-          const isMegaGift = giftName.includes("lion") || giftName.includes("universe") || (msg.diamondCount || 0) >= 100;
-          if (isMegaGift) spawnUnit(5, msg.username, side, true, undefined, msg.profileImage);
-          else if (giftName.includes(giftKey)) spawnUnit(Math.min(5, Math.ceil((msg.diamondCount || 0) / 5) || 3), msg.username, side, false, undefined, msg.profileImage);
+        if (cleanComment === baseKey) {
+          // Keyword only → random class
+          spawnedClass = ALL_CLASSES[Math.floor(Math.random() * ALL_CLASSES.length)];
+          isMatch = true;
+        } else if (cleanComment === `${baseKey}fighter`) {
+          spawnedClass = "fighter"; isMatch = true;
+        } else if (cleanComment === `${baseKey}tank`) {
+          spawnedClass = "tank"; isMatch = true;
+        } else if (cleanComment === `${baseKey}mage`) {
+          spawnedClass = "mage"; isMatch = true;
+        } else if (cleanComment === `${baseKey}marksman` || cleanComment === `${baseKey}mm`) {
+          spawnedClass = "marksman"; isMatch = true;
+        } else if (cleanComment === `${baseKey}assassin`) {
+          spawnedClass = "assassin"; isMatch = true;
+        }
+
+        if (isMatch) {
+          spawnUnit(1, msg.username, side, false, spawnedClass, msg.profileImage, randomRarity());
         }
       };
 
-      if (msg.type === "like") {
-        cumulativeLikesRef.current += (msg.likeCount || 1);
-        if (cumulativeLikesRef.current - likeCounterRef.current >= 1000) {
-          likeCounterRef.current += 1000;
-          triggerAirstrike(Math.random() > 0.5 ? "player" : "enemy");
+      // 3. SPAWN LOGIC VIA GIFT (Exclusive team pools — 1 gift → 1 team)
+      const processGiftSpawn = () => {
+        if (msg.type !== "gift") return;
+
+        const giftNameRaw = msg.giftName || "";
+        const giftNameLower = giftNameRaw.toLowerCase();
+
+        // ROULETTE TRIGGER (Game Controller) — triggers randomly for one team
+        if (giftNameLower.includes("game controller")) {
+          const side = Math.random() > 0.5 ? "player" : "enemy";
+          useStore.getState().triggerRoulette(msg.username, side);
+          return;
         }
-      }
+
+        // Helper: find which pool a gift belongs to and which team it triggers
+        const findMatch = (side: "player" | "enemy") => {
+          const config = side === "player" ? towerConfig.player : towerConfig.enemy;
+          if (!config.active || !config.giftBindings?.length) return null;
+          for (const binding of config.giftBindings) {
+            if (binding.keyword && giftNameLower.includes(binding.keyword.toLowerCase())) {
+              return { side, binding };
+            }
+          }
+          return null;
+        };
+
+        // Check player pool FIRST, then enemy — no overlap
+        const match = findMatch("player") || findMatch("enemy");
+        if (!match) return;
+
+        const { side, binding } = match;
+
+        const formation = GIFT_FORMATIONS[binding.formationId];
+        if (formation) {
+          for (const rule of formation.rules) {
+            const isBoss = rule.unitClass === "boss" || rule.rarity === "legendary";
+            for (let i = 0; i < rule.count; i++) {
+              spawnUnit(1, msg.username, side, isBoss, rule.unitClass === "boss" ? undefined : rule.unitClass, msg.profileImage, rule.rarity);
+            }
+          }
+          useStore.getState().triggerGacha(msg.username, side, "GIFT REWARD", formation.name);
+        }
+      };
+
       processSpawn("player");
       processSpawn("enemy");
+      processGiftSpawn();
     });
   }, [messages, spawnUnit, towerConfig, gameMode, triggerAirstrike]);
+
+  // --- Roulette Execution Logic ---
+  const rouletteEvent = useStore(s => s.rouletteEvent);
+  useEffect(() => {
+    if (!rouletteEvent) return;
+    
+    // Wait 3 seconds for UI spinning animation
+    const timer = setTimeout(() => {
+      const outcomes = ["airstrike", "jackpot", "zonk"];
+      const outcome = outcomes[Math.floor(Math.random() * outcomes.length)];
+      const { username, team } = rouletteEvent;
+      const enemyTeam = team === "player" ? "enemy" : "player";
+      
+      if (outcome === "airstrike") {
+        triggerAirstrike(enemyTeam);
+      } else if (outcome === "jackpot") {
+        spawnUnit(10, username, team, false, "assassin");
+      } else if (outcome === "zonk") {
+        // Zonk: spawn enemies for the opposing team!
+        spawnUnit(5, username, enemyTeam, false, "fighter");
+      }
+      
+      useStore.getState().clearRoulette();
+    }, 3000);
+    
+    return () => clearTimeout(timer);
+  }, [rouletteEvent, spawnUnit, triggerAirstrike]);
 
   const displayMessages = useMemo(() => messages.slice(-50).reverse(), [messages]);
 

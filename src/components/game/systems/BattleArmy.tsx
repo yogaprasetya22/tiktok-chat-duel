@@ -38,13 +38,14 @@ interface BattleArmyProps {
 
 
 import { WORLD_UNIT_POOL_SIZE as MAX_UNITS } from '@/src/core/domain/unit.types';
-const NAME_POOL_SIZE = 120;
+const NAME_POOL_SIZE = 150;
 const TEST_IMAGE_URL = 'https://t3.ftcdn.net/jpg/13/11/22/86/360_F_1311228699_YoiLc5aJ3RWz3uRfdEtlV0UYSQjqf7RW.jpg';
 
 const textureLoader = new THREE.TextureLoader();
 textureLoader.setCrossOrigin('anonymous');
 const textureCache = new Map<string, { tex: THREE.Texture, lastUsed: number }>();
 const textureLoading = new Set<string>();
+const MAX_CONCURRENT_LOADS = 4; // FPS guard: don't fire too many fetches at once
 
 const tempObject = new THREE.Object3D();
 
@@ -351,6 +352,11 @@ const BattleArmyComponent = ({
   const nameSlotContent = useRef<string[]>(Array(NAME_POOL_SIZE).fill(''));
   const nameSlotColor = useRef<string[]>(Array(NAME_POOL_SIZE).fill('#ffffff'));
   const nameSlotImage = useRef<string[]>(Array(NAME_POOL_SIZE).fill(''));
+  // Tracks which unit ID currently owns each slot — prevents cross-unit texture contamination
+  const nameSlotOwner = useRef<string[]>(Array(NAME_POOL_SIZE).fill(''));
+  // Generation counter: incremented every time a slot is reassigned.
+  // Async texture callbacks capture this at launch time and discard if it changed.
+  const slotGeneration = useRef<Uint32Array>(new Uint32Array(NAME_POOL_SIZE));
 
 
   const lastNameCullTime = useRef(0);
@@ -377,17 +383,22 @@ const BattleArmyComponent = ({
     const HUD_DETAIL_DIST_SQ = 4900; // 70 * 70
     const HUD_MAX_RANGE_SQ = 7350; // 4900 * 1.5
 
-    // PERFORMANCE: Throttle sorting and unit filtering to every 12 frames
-    const shouldSort = frameCountRef.current % 12 === 0 || cachedActiveUnits.current.length === 0;
-
+    // PERFORMANCE: Throttle sorting and unit filtering to every 20 frames
+    const shouldSort = frameCountRef.current % 20 === 0 || cachedActiveUnits.current.length === 0;
+    // PERFORMANCE: Throttle dSq distance calculation to every 3 frames
+    const shouldCalcDist = frameCountRef.current % 3 === 0;
+    // Hoist indices so both throttle blocks can use it
     const indices = compBuffers?.activeIndices?.current || [];
-    for (let k = 0; k < indices.length; k++) {
-      const i = indices[k];
-      const u = rawMap[i];
-      if (!u || !u.isActive || u.hp <= 0 || u.position[1] < -50) continue;
-      const dx = camPos.x - u.position[0];
-      const dz = camPos.z - u.position[2];
-      u.dSq = dx * dx + dz * dz;
+
+    if (shouldCalcDist) {
+      for (let k = 0; k < indices.length; k++) {
+        const i = indices[k];
+        const u = rawMap[i];
+        if (!u || !u.isActive || u.hp <= 0 || u.position[1] < -50) continue;
+        const dx = camPos.x - u.position[0];
+        const dz = camPos.z - u.position[2];
+        u.dSq = dx * dx + dz * dz;
+      }
     }
 
     if (shouldSort) {
@@ -460,6 +471,9 @@ const BattleArmyComponent = ({
         nameAvailableSlots.current.push(slot);
         namePoolMap.current.delete(uid);
         nameSlotImage.current[slot] = '';
+        nameSlotOwner.current[slot] = '';
+        // Invalidate any pending async loads for this slot
+        slotGeneration.current[slot]++;
       }
     }
 
@@ -486,6 +500,10 @@ const BattleArmyComponent = ({
 
           const slot = nameAvailableSlots.current.shift()!;
           namePoolMap.current.set(id, slot);
+          // Track which unit owns this slot & bump generation to invalidate stale loads
+          nameSlotOwner.current[slot] = id;
+          slotGeneration.current[slot]++;
+          nameSlotImage.current[slot] = ''; // Force re-evaluation of image
           const mesh = nameTextRefs.current[slot];
           const group = nameGroupRefs.current[slot];
 
@@ -530,42 +548,76 @@ const BattleArmyComponent = ({
             }
             mesh.visible = true;
 
-            // Handle Profile Image
+            // Handle Profile Image — with strict owner verification to prevent race conditions
             const imgMesh = nameImageRefs.current[slot];
             if (imgMesh) {
-              const imgUrl = (gameMode === "TRAINING" || !u.profileImage)
-                ? TEST_IMAGE_URL
-                : `/api/proxy-image?url=${encodeURIComponent(u.profileImage)}`;
-              if (nameSlotImage.current[slot] !== imgUrl) {
-                nameSlotImage.current[slot] = imgUrl;
-                const mat = nameImageMaterials.current[slot];
-                const now = Date.now();
-                if (textureCache.has(imgUrl)) {
-                  const entry = textureCache.get(imgUrl)!;
-                  entry.lastUsed = now;
-                  if (mat) mat.uniforms.tDiffuse.value = entry.tex;
-                } else if (!textureLoading.has(imgUrl)) {
-                  textureLoading.add(imgUrl);
-                  textureLoader.load(imgUrl, (tex) => {
-                    tex.colorSpace = THREE.SRGBColorSpace;
-                    textureCache.set(imgUrl, { tex, lastUsed: Date.now() });
-                    textureLoading.delete(imgUrl);
-                    if (namePoolMap.current.get(id) === slot && mat) {
-                      mat.uniforms.tDiffuse.value = tex;
+              const currentOwner = u.id; // The unit that SHOULD own this slot right now
+              
+              // GUARD: If slot ownership doesn't match, skip — slot is stale
+              if (nameSlotOwner.current[slot] !== currentOwner) {
+                imgMesh.visible = false;
+              } else {
+                const imgUrl = (gameMode === "TRAINING" || !u.profileImage)
+                  ? TEST_IMAGE_URL
+                  : `/api/proxy-image?url=${encodeURIComponent(u.profileImage)}`;
+                
+                if (nameSlotImage.current[slot] !== imgUrl) {
+                  nameSlotImage.current[slot] = imgUrl;
+                  const gen = slotGeneration.current[slot]; // captured for closure
+                  const capturedOwner = currentOwner; // captured for closure
+                  const mat = nameImageMaterials.current[slot];
+
+                  // Always clear immediately so no ghost image from previous user shows
+                  if (mat) mat.uniforms.tDiffuse.value = null;
+
+                  if (textureCache.has(imgUrl)) {
+                    // Cache hit: verify owner AGAIN before applying
+                    const entry = textureCache.get(imgUrl)!;
+                    entry.lastUsed = Date.now();
+                    if (mat && nameSlotOwner.current[slot] === capturedOwner) {
+                      mat.uniforms.tDiffuse.value = entry.tex;
                     }
-                    if (textureCache.size > 80) {
-                      let oldestKey = "";
-                      let oldestTime = Infinity;
-                      for (const [key, val] of textureCache.entries()) {
-                        if (val.lastUsed < oldestTime) { oldestTime = val.lastUsed; oldestKey = key; }
-                      }
-                      if (oldestKey) { textureCache.get(oldestKey)?.tex.dispose(); textureCache.delete(oldestKey); }
+                  } else if (!textureLoading.has(imgUrl)) {
+                    if (textureLoading.size < MAX_CONCURRENT_LOADS) {
+                      textureLoading.add(imgUrl);
+                      textureLoader.load(imgUrl, (tex) => {
+                        tex.colorSpace = THREE.SRGBColorSpace;
+                        textureCache.set(imgUrl, { tex, lastUsed: Date.now() });
+                        textureLoading.delete(imgUrl);
+
+                        // TRIPLE GUARD: Check generation + owner + URL all match before applying
+                        if (
+                          slotGeneration.current[slot] === gen &&
+                          nameSlotOwner.current[slot] === capturedOwner &&
+                          nameSlotImage.current[slot] === imgUrl &&
+                          mat
+                        ) {
+                          mat.uniforms.tDiffuse.value = tex;
+                        }
+
+                        // LRU eviction: keep cache small to avoid memory pressure
+                        if (textureCache.size > 80) {
+                          let oldestKey = '';
+                          let oldestTime = Infinity;
+                          for (const [key, val] of textureCache.entries()) {
+                            if (val.lastUsed < oldestTime) { oldestTime = val.lastUsed; oldestKey = key; }
+                          }
+                          if (oldestKey) {
+                            textureCache.get(oldestKey)?.tex.dispose();
+                            textureCache.delete(oldestKey);
+                          }
+                        }
+                      }, undefined, () => { textureLoading.delete(imgUrl); });
+                    } else {
+                      // Over limit: Revert tracking so it retries next frame
+                      nameSlotImage.current[slot] = '';
                     }
-                  }, undefined, () => { textureLoading.delete(imgUrl); });
+                  }
                 }
+                imgMesh.visible = true;
+                // Slightly smaller profile image: boss=3.2, regular=2.0
+                imgMesh.scale.setScalar(u.isBoss ? 3.2 : 2.0);
               }
-              imgMesh.visible = true;
-              imgMesh.scale.setScalar(u.isBoss ? 2.2 : 1.4);
             }
 
             // Handle Decorative Rarity Border
@@ -576,12 +628,14 @@ const BattleArmyComponent = ({
               let pulse = 1.0;
               if (u.rarity === 'legendary') pulse = 1.0 + Math.sin(time * 6) * 0.1;
               else if (u.rarity === 'epic') pulse = 1.0 + Math.sin(time * 4) * 0.05;
-              borderMesh.scale.setScalar((u.isBoss ? 2.2 : 1.4) * 1.15 * pulse);
+              borderMesh.scale.setScalar((u.isBoss ? 3.2 : 2.0) * 1.15 * pulse);
               borderMesh.visible = true;
             }
 
             if (group) {
-              group.visible = true;
+              // NOTE: Do NOT set group.visible = true here!
+              // ECSArmyRenderer sets position first, THEN makes it visible.
+              // Setting visible here would flash the label at (0,0,0) for 1 frame.
             }
           }
         }
@@ -672,6 +726,7 @@ const BattleArmyComponent = ({
             key={"name-slot-" + i}
             ref={(el) => { nameGroupRefs.current[i] = el; }}
             visible={false}
+            position={[0, -200, 0]}
           >
             <Text
               ref={(el) => { nameTextRefs.current[i] = el; }}
@@ -690,16 +745,17 @@ const BattleArmyComponent = ({
             <mesh
               ref={(el) => { nameImageRefs.current[i] = el; }}
               visible={false}
-              position={[0, 1.25, 0]}
+              position={[0, 2.6, 0]}
               renderOrder={102}
             >
-              <planeGeometry args={[0.7, 0.7]} />
+              <planeGeometry args={[0.9, 0.9]} />
               <shaderMaterial
                 ref={(el) => { nameImageMaterials.current[i] = el; }}
                 vertexShader={ProfileImageShader.vertexShader}
                 fragmentShader={ProfileImageShader.fragmentShader}
                 uniforms={{
-                  tDiffuse: { value: null }
+                  tDiffuse: { value: null },
+                  uOpacity: { value: 0.82 }
                 }}
                 transparent={true}
                 depthWrite={false}
@@ -708,11 +764,11 @@ const BattleArmyComponent = ({
             <mesh
               ref={(el) => { nameBorderRefs.current[i] = el; }}
               visible={false}
-              position={[0, 1.25, -0.01]}
+              position={[0, 2.6, -0.01]}
               renderOrder={101}
             >
-              <circleGeometry args={[0.38, 12]} />
-              <meshBasicMaterial color="#ffffff" transparent opacity={0.8} />
+              <circleGeometry args={[0.45, 16]} />
+              <meshBasicMaterial color="#ffffff" transparent opacity={0.72} />
             </mesh>
           </group>
         )), [])}

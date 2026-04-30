@@ -61,6 +61,18 @@ interface BattleState {
 
   // Reset
   resetStore: (config: TowerConfig) => void;
+
+  // Tug of War Mechanics
+  isFeverTime: boolean;
+  triggerFeverTime: () => void;
+  
+  rouletteEvent: { id: string, username: string, team: "player" | "enemy" } | null;
+  triggerRoulette: (username: string, team: "player" | "enemy") => void;
+  clearRoulette: () => void;
+  
+  gachaEvent: { id: string, username: string, team: "player" | "enemy", type: string, description: string } | null;
+  triggerGacha: (username: string, team: "player" | "enemy", type: string, description: string) => void;
+  clearGacha: () => void;
 }
 
 export const useStore = create<BattleState>((set) => ({
@@ -128,5 +140,27 @@ export const useStore = create<BattleState>((set) => ({
     },
     killEvents: [],
     armyCounts: { player: 0, enemy: 0 }
-  }))
+  })),
+
+  // Tug of War
+  isFeverTime: false,
+  triggerFeverTime: () => {
+    set({ isFeverTime: true });
+    // Auto turn off fever time after 10s
+    setTimeout(() => {
+      set({ isFeverTime: false });
+    }, 10000);
+  },
+  
+  rouletteEvent: null,
+  triggerRoulette: (username, team) => {
+    set({ rouletteEvent: { id: Date.now().toString(), username, team } });
+  },
+  clearRoulette: () => set({ rouletteEvent: null }),
+
+  gachaEvent: null,
+  triggerGacha: (username, team, type, description) => {
+    set({ gachaEvent: { id: Date.now().toString(), username, team, type, description } });
+  },
+  clearGacha: () => set({ gachaEvent: null })
 }));

@@ -8,11 +8,17 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+
     const response = await fetch(url, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
       },
+      signal: controller.signal
     });
+    
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       throw new Error(`Failed to fetch image: ${response.statusText}`);
@@ -30,7 +36,15 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("Proxy Image Error:", error);
-    return new NextResponse("Error fetching image", { status: 500 });
+    console.warn(`[Proxy Image] Failed to fetch ${url}:`, error instanceof Error ? error.message : String(error));
+    // Return a transparent 1x1 GIF as fallback to prevent client UI from breaking
+    const transparentGif = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
+    return new NextResponse(transparentGif, { 
+      status: 200,
+      headers: {
+        "Content-Type": "image/gif",
+        "Cache-Control": "public, max-age=60"
+      }
+    });
   }
 }

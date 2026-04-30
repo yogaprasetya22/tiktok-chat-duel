@@ -43,14 +43,14 @@ const _col   = new THREE.Color();
 const _hide  = new THREE.Matrix4().makeScale(0, 0, 0);
 const _dbuf  = new Uint8Array(8);
 
-// Colors
-const C_WHITE  = new THREE.Color('#e8f0ff');
-const C_CRIT   = new THREE.Color('#ff4400');
-const C_GOLD   = new THREE.Color('#ffd700');
-const C_MAGIC  = new THREE.Color('#cc44ff');
-const C_HEAL   = new THREE.Color('#22ff88');
+// Colors (only magic/heal are fixed; normal/crit use team color)
+const C_MAGIC  = new THREE.Color('#dd66ff');
+const C_HEAL   = new THREE.Color('#00ffaa');
+// Scratch color — reused every frame, never allocated in loop
+const _teamScratch = new THREE.Color();
 
 // ─── ATLAS ───────────────────────────────────────────────────────────────────
+// Pure white fill — instanceColor does all the tinting at runtime.
 function buildAtlas(): THREE.CanvasTexture {
     const S = 128;
     const cvs = document.createElement('canvas');
@@ -73,34 +73,17 @@ function buildAtlas(): THREE.CanvasTexture {
         ctx.lineJoin  = 'round';
         ctx.miterLimit = 2;
 
-        // Thick black outline
-        ctx.shadowColor   = 'rgba(0,0,0,0.9)';
-        ctx.shadowBlur    = 8;
-        ctx.shadowOffsetY = 5;
-        ctx.strokeStyle = '#000';
-        ctx.lineWidth   = 28;
+        // Thin pure black outline only (for contrast, no color border)
+        ctx.shadowColor   = 'rgba(0,0,0,0.8)';
+        ctx.shadowBlur    = 6;
+        ctx.shadowOffsetY = 3;
+        ctx.strokeStyle   = '#000';
+        ctx.lineWidth     = 12; // Thinner border requested by user
         ctx.strokeText(ch, cx, cy);
+        ctx.shadowColor   = 'transparent';
 
-        ctx.shadowColor = 'transparent';
-
-        // Inner dark border
-        ctx.strokeStyle = '#1a0500';
-        ctx.lineWidth   = 14;
-        ctx.strokeText(ch, cx, cy);
-
-        // Gradient fill (warm white → gold)
-        const g = ctx.createLinearGradient(cx, cy - 40, cx, cy + 40);
-        g.addColorStop(0,   '#ffffff');
-        g.addColorStop(0.4, '#fff4e0');
-        g.addColorStop(1,   '#cc9933');
-        ctx.fillStyle = g;
-        ctx.fillText(ch, cx, cy);
-
-        // Top shine
-        const shine = ctx.createLinearGradient(cx, cy - 40, cx, cy);
-        shine.addColorStop(0, 'rgba(255,255,255,0.7)');
-        shine.addColorStop(1, 'rgba(255,255,255,0)');
-        ctx.fillStyle = shine;
+        // Pure white fill — instanceColor tints this at runtime
+        ctx.fillStyle = '#ffffff';
         ctx.fillText(ch, cx, cy);
     });
 
@@ -121,12 +104,12 @@ interface Evt {
     isCrit:  boolean;
     isMagic: boolean;
     isHeal:  boolean;
-    numDigits:   number;       // how many digit chars
-    numChars:    number;       // total chars written (digits + optional CRIT!)
-    // per-char data (max STRIDE entries)
-    charIdx: Uint8Array;      // atlas index per slot
-    localX:  Float32Array;    // x offset (camera-right space)
-    localY:  Float32Array;    // y offset (camera-up space)
+    numDigits: number;
+    numChars:  number;
+    charIdx:   Uint8Array;
+    localX:    Float32Array;
+    localY:    Float32Array;
+    teamColor: THREE.Color;  // pre-allocated, set at spawn from ev.color
 }
 
 function makeEvt(): Evt {
@@ -134,9 +117,10 @@ function makeEvt(): Evt {
         alive: false, startTime: 0, duration: 1, wx: 0, wy: 0, wz: 0,
         vx: 0, vy: 0, vz: 0, isCrit: false, isMagic: false, isHeal: false,
         numDigits: 0, numChars: 0,
-        charIdx: new Uint8Array(STRIDE),
-        localX:  new Float32Array(STRIDE),
-        localY:  new Float32Array(STRIDE),
+        charIdx:   new Uint8Array(STRIDE),
+        localX:    new Float32Array(STRIDE),
+        localY:    new Float32Array(STRIDE),
+        teamColor: new THREE.Color('#ffffff'),
     };
 }
 
@@ -160,12 +144,13 @@ export function DamageHUDBatcher({ damageQueue }: { damageQueue: React.RefObject
             attribute float aCharIdx;
             attribute float aOpacity;
             attribute float aCrit;
+            attribute vec3  aCol;
+            
             varying vec2  vUv;
             varying float vOp;
             varying float vCrit;
-            #ifdef USE_INSTANCING_COLOR
-            varying vec3 vCol;
-            #endif
+            varying vec3  vCol;
+            
             void main() {
                 float c = mod(aCharIdx, ${ATLAS_COLS}.0);
                 float r = floor(aCharIdx / ${ATLAS_COLS}.0);
@@ -173,28 +158,26 @@ export function DamageHUDBatcher({ damageQueue }: { damageQueue: React.RefObject
                             1.0 - (r + 1.0 - uv.y) / ${ATLAS_ROWS}.0);
                 vOp  = aOpacity;
                 vCrit = aCrit;
-                #ifdef USE_INSTANCING_COLOR
-                vCol = instanceColor;
-                #endif
+                vCol  = aCol;
+                
                 gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
             }
         `,
         fragmentShader: /* glsl */`
             uniform sampler2D uAtlas;
             uniform float     uTime;
+            
             varying vec2  vUv;
             varying float vOp;
             varying float vCrit;
-            #ifdef USE_INSTANCING_COLOR
-            varying vec3 vCol;
-            #endif
+            varying vec3  vCol;
+            
             void main() {
                 vec4 t = texture2D(uAtlas, vUv);
                 if (t.a < 0.05) discard;
-                vec3 c = t.rgb;
-                #ifdef USE_INSTANCING_COLOR
-                c *= vCol;
-                #endif
+                
+                vec3 c = t.rgb * vCol;
+                
                 // Shimmer for crits
                 if (vCrit > 0.5) {
                     float w = pow(sin(vUv.x * 10.0 - uTime * 8.0) * 0.5 + 0.5, 3.0) * 0.5;
@@ -209,6 +192,7 @@ export function DamageHUDBatcher({ damageQueue }: { damageQueue: React.RefObject
     const aCharIdx = useMemo(() => new Float32Array(MAX_INST), []);
     const aOpacity = useMemo(() => new Float32Array(MAX_INST), []);
     const aCrit    = useMemo(() => new Float32Array(MAX_INST), []);
+    const aCol     = useMemo(() => new Float32Array(MAX_INST * 3), []);
 
     useEffect(() => {
         const m = meshRef.current;
@@ -217,8 +201,10 @@ export function DamageHUDBatcher({ damageQueue }: { damageQueue: React.RefObject
         m.geometry.setAttribute('aCharIdx', new THREE.InstancedBufferAttribute(aCharIdx, 1));
         m.geometry.setAttribute('aOpacity', new THREE.InstancedBufferAttribute(aOpacity, 1));
         m.geometry.setAttribute('aCrit',    new THREE.InstancedBufferAttribute(aCrit,    1));
+        m.geometry.setAttribute('aCol',     new THREE.InstancedBufferAttribute(aCol,     3));
+        
         m.instanceMatrix.needsUpdate = true;
-    }, [aCharIdx, aOpacity, aCrit]);
+    }, [aCharIdx, aOpacity, aCrit, aCol]);
 
     useFrame((state) => {
         const now  = state.clock.elapsedTime;
@@ -267,7 +253,7 @@ export function DamageHUDBatcher({ damageQueue }: { damageQueue: React.RefObject
                 }
 
                 // Layout params
-                const SW  = isCrit ? 0.9 : 0.7;
+                const SW  = isCrit ? 0.65 : 0.6;
                 const GAP = SW * (isCrit ? 0.58 : 0.50);
                 const numW = dc * GAP;
 
@@ -290,6 +276,15 @@ export function DamageHUDBatcher({ damageQueue }: { damageQueue: React.RefObject
                     }
                 }
 
+                // Parse team color from event — boost to full brightness via HSL
+                e.teamColor.set(ev.color ?? '#ffffff');
+                {
+                    // Ensure max lightness so it's vivid against dark background
+                    const hsl = { h: 0, s: 0, l: 0 };
+                    e.teamColor.getHSL(hsl);
+                    e.teamColor.setHSL(hsl.h, Math.max(hsl.s, 0.85), Math.max(hsl.l, 0.72));
+                }
+
                 // Physics
                 const dx = (Math.random() - 0.5) * (isCrit ? 2.0 : 0.9);
                 const dz = (Math.random() - 0.5) * 0.4;
@@ -298,7 +293,7 @@ export function DamageHUDBatcher({ damageQueue }: { damageQueue: React.RefObject
                 e.alive     = true;
                 e.startTime = now;
                 e.duration  = isCrit ? 1.55 : 1.0;
-                e.wx = ev.position[0]; e.wy = ev.position[1] + 2.0; e.wz = ev.position[2];
+                e.wx = ev.position[0]; e.wy = ev.position[1] + (isCrit ? 4.0 : 2.8); e.wz = ev.position[2];
                 e.vx = dx; e.vy = vy; e.vz = dz;
                 e.isCrit = isCrit; e.isMagic = isMagic; e.isHeal = isHeal;
                 e.numDigits = dc;
@@ -352,9 +347,9 @@ export function DamageHUDBatcher({ damageQueue }: { damageQueue: React.RefObject
             // Scale
             let s: number;
             if (e.isCrit) {
-                if      (t < 0.07) s = t / 0.07 * 3.0;
-                else if (t < 0.18) s = 3.0 - (t - 0.07) / 0.11 * 1.3;
-                else               s = 1.7 - Math.min((t - 0.18) / 0.5, 1) * 0.4;
+                if      (t < 0.07) s = t / 0.07 * 2.0;
+                else if (t < 0.18) s = 2.0 - (t - 0.07) / 0.11 * 0.6;
+                else               s = 1.4 - Math.min((t - 0.18) / 0.5, 1) * 0.4;
             } else {
                 if      (t < 0.06) s = t / 0.06 * 1.8;
                 else if (t < 0.15) s = 1.8 - (t - 0.06) / 0.09 * 0.8;
@@ -376,14 +371,21 @@ export function DamageHUDBatcher({ damageQueue }: { damageQueue: React.RefObject
                 jy = (Math.random() - 0.5) * j;
             }
 
-            // Color
+            // Color — always team color (boosted at spawn), magic/heal override
             let baseCol: THREE.Color;
             if      (e.isHeal)  baseCol = C_HEAL;
             else if (e.isMagic) baseCol = C_MAGIC;
-            else if (e.isCrit)  baseCol = (Math.floor(t * 16) % 2 === 0) ? C_GOLD : C_CRIT;
-            else                baseCol = C_WHITE;
+            else {
+                // Use team color. For crits, briefly flash white then team color.
+                if (e.isCrit && t < 0.12 && Math.floor(t * 20) % 2 === 0) {
+                    _teamScratch.set(1, 1, 1); // white flash on impact
+                } else {
+                    _teamScratch.copy(e.teamColor);
+                }
+                baseCol = _teamScratch;
+            }
 
-            const SW = e.isCrit ? 0.9 : 0.7;
+            const SW = e.isCrit ? 0.65 : 0.6;
 
             for (let c = 0; c < e.numChars; c++) {
                 const si   = base + c;
@@ -404,9 +406,11 @@ export function DamageHUDBatcher({ damageQueue }: { damageQueue: React.RefObject
                 aCharIdx[si]  = e.charIdx[c];
                 aCrit[si]     = e.isCrit ? 1.0 : 0.0;
 
-                if (isLbl) _col.copy((Math.floor(t * 10) % 2 === 0) ? C_GOLD : C_WHITE);
-                else       _col.copy(baseCol);
-                m.setColorAt(si, _col);
+                _col.copy(baseCol);
+                
+                aCol[si * 3]     = _col.r;
+                aCol[si * 3 + 1] = _col.g;
+                aCol[si * 3 + 2] = _col.b;
             }
 
             // Hide unused slots in this event's block
@@ -419,7 +423,7 @@ export function DamageHUDBatcher({ damageQueue }: { damageQueue: React.RefObject
         (m.geometry.attributes.aCharIdx as THREE.InstancedBufferAttribute).needsUpdate = true;
         (m.geometry.attributes.aOpacity as THREE.InstancedBufferAttribute).needsUpdate = true;
         (m.geometry.attributes.aCrit    as THREE.InstancedBufferAttribute).needsUpdate = true;
-        if (m.instanceColor) m.instanceColor.needsUpdate = true;
+        (m.geometry.attributes.aCol     as THREE.InstancedBufferAttribute).needsUpdate = true;
     });
 
     return (
