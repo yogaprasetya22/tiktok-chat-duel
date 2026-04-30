@@ -238,6 +238,7 @@ export const useBattleSystem = () => {
     const unitDataPoolRef = useRef<UnitRuntimeData[]>([]);
     const vehiclePoolRef = useRef<YUKA.Vehicle[]>([]);
     const activeIndicesRef = useRef<number[]>([]);
+    const activeSetRef = useRef<Set<number>>(new Set()); // O(1) companion for .has() checks
     const lastMvpTimeRef = useRef(0);
     const cachedMvpRef = useRef<any>(null); // --- OPTIMIZATION: Spell Pool Pointers ---
 
@@ -515,6 +516,7 @@ export const useBattleSystem = () => {
         spellsRef.current.forEach((s) => (s.active = false));
         mmSpellsRef.current.forEach((s) => (s.active = false));
         activeIndicesRef.current = [];
+        activeSetRef.current.clear();
     }, [entityManager]);
 
     const spawnUnit = useCallback(
@@ -703,8 +705,10 @@ export const useBattleSystem = () => {
             _vActive[poolIdx] = 1;
             _vState[poolIdx] = 1;
 
-            if (!activeIndicesRef.current.includes(poolIdx)) {
+            // FIX: O(1) check instead of O(n) .includes()
+            if (!activeSetRef.current.has(poolIdx)) {
                 activeIndicesRef.current.push(poolIdx);
+                activeSetRef.current.add(poolIdx);
             }
 
             unitIndexRef.current.set(u.id, u);
@@ -732,13 +736,8 @@ export const useBattleSystem = () => {
             const weatherCfg = (WEATHER_CONFIG as any)[weather] || {};
             const weatherMults = weatherCfg.multipliers || {};
 
-            let activeCount = 0;
-            const eidArr = eidMap.current;
-            const activeArr = _vActive;
-            for (let i = 0; i < WORLD_UNIT_POOL_SIZE; i++) {
-                const eid = eidArr[i];
-                if (eid !== -1 && activeArr[i]) activeCount++;
-            }
+            // FIX: Use activeIndicesRef.length instead of scanning all 1500 slots every frame
+            const activeCount = activeIndicesRef.current.length;
             if (activeCount === 0 && gameStateRef.current !== "PLAYING") return; // OPTIMIZATION: Reduce grid update frequency to once every 5 frames (was 2).
             // This reclaim CPU time for VFX while maintaining accurate targeting.
 
@@ -756,15 +755,15 @@ export const useBattleSystem = () => {
                 physicsAccumulatorRef.current = 0.2;
             }
 
-            let steps = 0;
-            const MAX_STEPS_PER_FRAME = 3;
-            while (
-                physicsAccumulatorRef.current >= PHYSICS_STEP &&
-                steps < MAX_STEPS_PER_FRAME
-            ) {
+            // FIX: Cap physics to 1 step/frame max — YUKA EntityManager.update is O(n) vehicles
+            // 3 steps * 1500 vehicles = crushing CPU. 1 step is plenty for smooth movement.
+            if (physicsAccumulatorRef.current >= PHYSICS_STEP) {
                 entityManager.update(PHYSICS_STEP);
                 physicsAccumulatorRef.current -= PHYSICS_STEP;
-                steps++;
+                // Discard excess to prevent spiral of death
+                if (physicsAccumulatorRef.current > PHYSICS_STEP) {
+                    physicsAccumulatorRef.current = 0;
+                }
             }
             flushDamageBuffer(now);
 
@@ -778,9 +777,12 @@ export const useBattleSystem = () => {
             // FIX: Zero-allocation in-place compaction instead of .filter() which creates new array
             if (frameCountRef.current % 30 === 0) {
                 let writeIdx = 0;
+                activeSetRef.current.clear(); // Rebuild set
                 for (let ri = 0; ri < activeIdxArray.length; ri++) {
                     if (uPool[activeIdxArray[ri]].isActive) {
-                        activeIdxArray[writeIdx++] = activeIdxArray[ri];
+                        activeIdxArray[writeIdx] = activeIdxArray[ri];
+                        activeSetRef.current.add(activeIdxArray[writeIdx]);
+                        writeIdx++;
                     }
                 }
                 activeIdxArray.length = writeIdx;
@@ -802,7 +804,8 @@ export const useBattleSystem = () => {
                     _vActive[i] = 0;
                     u.isActive = false;
                     uData.isActive = false;
-                    unitIndexRef.current.delete(u.id); // FIX: Cleanup unitIndex on fast death path
+                    unitIndexRef.current.delete(u.id);
+                    activeSetRef.current.delete(i); // FIX: Also remove from O(1) set
                     continue;
                 } // SECONDARY: trigger dying animation on first frame at 0 HP
 
@@ -826,6 +829,7 @@ export const useBattleSystem = () => {
                         u.isActive = false;
                         uData.isActive = false;
                         unitIndexRef.current.delete(u.id);
+                        activeSetRef.current.delete(i);
                     }
                     continue;
                 } // PERFORMANCE: Spread 'Thinking' logic across 16 frames instead of 8.
@@ -1057,7 +1061,7 @@ export const useBattleSystem = () => {
                             const tz = currentTarget
                                 ? tData!.position[2]
                                 : targetBaseZ;
-                            const shardCount = 12; // LUXURY: 20 high-fidelity 3D ice shards
+                            const shardCount = 5; // PERF: Reduced from 12 — still visually impactful
 
                             for (let m = 0; m < shardCount; m++) {
                                 const s = pool[mageSpellPtr.current];

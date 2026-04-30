@@ -422,7 +422,11 @@ const BattleArmyComponent = ({
     const activeUnits = cachedActiveUnits.current;
     (state as any).sortedActiveUnits = activeUnits;
     const isPotato = !!settingsRef.current.potatoMode;
-    const gameMode = (state as any)._cachedGameMode ||= useStore.getState().gameMode;
+    // PERF: Cache gameMode - don't call getState() every frame
+    if (frameCountRef.current % 60 === 0) {
+      (state as any)._cachedGameMode = useStore.getState().gameMode;
+    }
+    const gameMode = (state as any)._cachedGameMode || 'TRAINING';
     const frustum = (state as any).battleFrustum as THREE.Frustum;
 
     if (isPotato) {
@@ -439,27 +443,32 @@ const BattleArmyComponent = ({
 
     // ─── 2. Name Labels Lifecycle ─────────────────────────────────────────────
 
-    // FIX B: Immediate cleanup tiap frame — jangan tunggu 4 frame
-    // Cek kematian, jauh dari kamera, atau inactive langsung
-    for (const [uid, slot] of namePoolMap.current.entries()) {
-      const uIdx = unitIndex.current.get(uid);
-      const u = uIdx ? rawMap[uIdx.poolIdx ?? -1] : null;
+    // FIX B: Cleanup dead/far name labels — throttled to every 3 frames
+    if (frameCountRef.current % 3 === 0) {
+      const toReleaseName: string[] = [];
+      for (const [uid, slot] of namePoolMap.current.entries()) {
+        const uIdx = unitIndex.current.get(uid);
+        const u = uIdx ? rawMap[uIdx.poolIdx ?? -1] : null;
 
-      const isDead = !u || !u.isActive || u.hp <= 0 || u.position[1] < -50;
-      const isTooFar = (u?.dSq ?? 0) > HUD_DETAIL_DIST_SQ;
+        const isDead = !u || !u.isActive || u.hp <= 0 || u.position[1] < -50;
+        const isTooFar = (u?.dSq ?? 0) > HUD_DETAIL_DIST_SQ;
 
-      if (isDead || isTooFar || isPotato) {
-        const group = nameGroupRefs.current[slot];
-        if (group) {
-          group.visible = false;
-          group.position.set(0, -200, 0);
+        if (isDead || isTooFar || isPotato) {
+          const group = nameGroupRefs.current[slot];
+          if (group) {
+            group.visible = false;
+            group.position.set(0, -200, 0);
+          }
+          if (nameTextRefs.current[slot]) nameTextRefs.current[slot].visible = false;
+          if (nameImageRefs.current[slot]) nameImageRefs.current[slot].visible = false;
+          if (nameBorderRefs.current[slot]) nameBorderRefs.current[slot].visible = false;
+          nameAvailableSlots.current.push(slot);
+          toReleaseName.push(uid);
+          nameSlotImage.current[slot] = '';
         }
-        if (nameTextRefs.current[slot]) nameTextRefs.current[slot].visible = false;
-        if (nameImageRefs.current[slot]) nameImageRefs.current[slot].visible = false;
-        if (nameBorderRefs.current[slot]) nameBorderRefs.current[slot].visible = false;
-        nameAvailableSlots.current.push(slot);
-        namePoolMap.current.delete(uid);
-        nameSlotImage.current[slot] = '';
+      }
+      for (let nr = 0; nr < toReleaseName.length; nr++) {
+        namePoolMap.current.delete(toReleaseName[nr]);
       }
     }
 
