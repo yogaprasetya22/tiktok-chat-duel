@@ -238,6 +238,8 @@ export const useBattleSystem = () => {
     const unitDataPoolRef = useRef<UnitRuntimeData[]>([]);
     const vehiclePoolRef = useRef<YUKA.Vehicle[]>([]);
     const activeIndicesRef = useRef<number[]>([]);
+    const activeSetRef = useRef<Set<number>>(new Set()); // O(1) mirror for includes() checks
+    const statsDirtyRef = useRef(false); // Only push stats to Zustand when data changed
     const lastMvpTimeRef = useRef(0);
     const cachedMvpRef = useRef<any>(null); // --- OPTIMIZATION: Spell Pool Pointers ---
 
@@ -420,6 +422,7 @@ export const useBattleSystem = () => {
                     stats.enemyHits[userName] =
                         (stats.enemyHits[userName] || 0) + 1;
             }
+            statsDirtyRef.current = true;
         },
         [],
     );
@@ -683,7 +686,8 @@ export const useBattleSystem = () => {
             _vActive[poolIdx] = 1;
             _vState[poolIdx] = 1;
 
-            if (!activeIndicesRef.current.includes(poolIdx)) {
+            if (!activeSetRef.current.has(poolIdx)) {
+                activeSetRef.current.add(poolIdx);
                 activeIndicesRef.current.push(poolIdx);
             }
 
@@ -759,6 +763,7 @@ export const useBattleSystem = () => {
                 activeIndicesRef.current = activeIdxArray.filter(
                     (idx) => uPool[idx].isActive,
                 );
+                activeSetRef.current = new Set(activeIndicesRef.current);
             }
 
             for (let k = 0; k < activeIdxArray.length; k++) {
@@ -777,6 +782,8 @@ export const useBattleSystem = () => {
                     _vActive[i] = 0;
                     u.isActive = false;
                     uData.isActive = false;
+                    unitIndexRef.current.delete(u.id);
+                    activeSetRef.current.delete(i);
                     continue;
                 } // SECONDARY: trigger dying animation on first frame at 0 HP
 
@@ -2372,7 +2379,10 @@ export const useBattleSystem = () => {
                 useStore
                     .getState()
                     .setBaseHp(playerBaseHpRef.current, enemyBaseHpRef.current);
-                useStore.getState().setLiveStats({ ...statsRef.current });
+                if (statsDirtyRef.current) {
+                    useStore.getState().setLiveStats({ ...statsRef.current });
+                    statsDirtyRef.current = false;
+                }
             }
         },
         [entityManager, flushDamageBuffer, accumulateDamage, addKillEvent],

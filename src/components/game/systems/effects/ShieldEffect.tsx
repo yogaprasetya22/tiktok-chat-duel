@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 import React, { useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { UnitRuntimeData, WORLD_UNIT_POOL_SIZE, ClassKey, SimulationSettings } from '@/src/core/domain/unit.types';
+import { UnitRuntimeData, ClassKey, SimulationSettings } from '@/src/core/domain/unit.types';
 
 function getBaseScale(classKey: ClassKey, level: number, isBoss: boolean): number {
   if (isBoss) {
@@ -92,13 +92,16 @@ interface ShieldEffectProps {
     simTimeRef: React.RefObject<number>;
 }
 
+// Pre-allocated scratch objects — zero allocation inside useFrame
+const _goldColor = new THREE.Color('#FFD700');
+
 export function ShieldEffect({ unitRegistry, activeIndicesRef, settingsRef, simTimeRef }: ShieldEffectProps) {
     const meshRef = useRef<THREE.InstancedMesh>(null!);
     const matRef = useRef<THREE.ShaderMaterial>(null!);
     const _obj = useMemo(() => new THREE.Object3D(), []);
     const _col = useMemo(() => new THREE.Color(), []);
 
-    const geo = useMemo(() => new THREE.SphereGeometry(1, 32, 16), []);
+    const geo = useMemo(() => new THREE.SphereGeometry(1, 12, 8), []); // 12×8 = 96 verts (was 32×16 = 512)
     const mat = useMemo(() => ShieldMaterial(), []);
 
     useFrame((state) => {
@@ -156,10 +159,7 @@ export function ShieldEffect({ unitRegistry, activeIndicesRef, settingsRef, simT
 
             const baseCol = u.type === 'player' ? '#4488ff' : '#ff4444';
             _col.set(baseCol);
-            if (rarity === 'legendary') {
-                const _gold = _obj.userData._gold || (_obj.userData._gold = new THREE.Color('#FFD700'));
-                _col.lerp(_gold, 0.5);
-            }
+            if (rarity === 'legendary') _col.lerp(_goldColor, 0.5);
             _col.multiplyScalar(opacity);
             mesh.setColorAt(count, _col);
             
@@ -167,12 +167,14 @@ export function ShieldEffect({ unitRegistry, activeIndicesRef, settingsRef, simT
         }
 
         mesh.count = count;
-        mesh.instanceMatrix.needsUpdate = true;
-        if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+        if (count > 0) {
+            mesh.instanceMatrix.needsUpdate = true;
+            if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+        }
     });
 
     return (
-        <instancedMesh ref={meshRef} args={[geo, mat, WORLD_UNIT_POOL_SIZE]} frustumCulled={false}>
+        <instancedMesh ref={meshRef} args={[geo, mat, 50]} frustumCulled={false}>
             <primitive object={mat} ref={matRef} attach="material" />
         </instancedMesh>
     );

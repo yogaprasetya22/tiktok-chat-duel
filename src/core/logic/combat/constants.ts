@@ -213,13 +213,13 @@ export const CORPSE_DESPAWN_MS = 0; // Time in ms before a corpse is removed fro
 
 // --- LOD IMPOSTOR SYSTEM ---
 
-export const LOD_IMPOSTOR_MAX = 1200;
+export const LOD_IMPOSTOR_MAX = 600;
 export const LOD_IMPOSTOR_SCALE = 1.8;
 export const LOD_IMPOSTOR_BOSS_SCALE = 5.0;
 
 // --- CENTRALIZED PERFORMANCE CONFIG ---
-export const ARMY_POOL_SIZE = 30; // Number of high-detail 3D models per class
-export const ANIM_CULL_DIST_SQ = 350 * 350; // Distance where bone animations stop (150m)
+export const ARMY_POOL_SIZE = 20; // Number of high-detail 3D models per class
+export const ANIM_CULL_DIST_SQ = 120 * 120; // Distance where bone animations stop (120m)
 
 // --- WEATHER SYSTEM CONFIG ---
 export const WEATHER_CONFIG = {

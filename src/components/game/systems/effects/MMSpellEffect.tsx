@@ -244,15 +244,15 @@ export function MMSpellEffect({ spellsRef, unitRegistry, simTimeRef }: Props) {
 
     const simNow = simTimeRef.current || 0;
     const time   = state.clock.elapsedTime;
-    const units  = unitRegistry.current;
 
     const RARITY_SCALE = { common: 0.8, elite: 1.0, epic: 1.2, legendary: 1.4 };
     const RARITY_GLOW  = { common: 4.0, elite: 6.0, epic: 8.0, legendary: 12.0 };
 
     // ── Aura bintang emas di atas MM saat ulti ────────────────────────────
     let an = 0;
-    for (let i = 0; i < units.length; i++) {
-        const u = units[i];
+    const sortedUnits = (state as any).sortedActiveUnits || [];
+    for (let i = 0; i < sortedUnits.length; i++) {
+        const u = sortedUnits[i];
         if (u.isActive && u.unitClass === 'marksman' && u.isBuffed) {
             if (an < 50) {
                 _obj.position.set(u.position[0], u.position[1] + 2.5, u.position[2]);
@@ -434,10 +434,11 @@ export function MMSpellEffect({ spellsRef, unitRegistry, simTimeRef }: Props) {
     // ── VFX pool: flash, dust, hit ────────────────────────────────────────
     let fn = 0; let hn = 0; let dn = 0;
     const currentVfx = activeVfx.current;
-    for (let j = currentVfx.length - 1; j >= 0; j--) {
+    let vfxWriteIdx = 0;
+    for (let j = 0; j < currentVfx.length; j++) {
         const idx = currentVfx[j];
         const v = vfxPool.current[idx];
-        if (!v.active) { currentVfx.splice(j, 1); continue; }
+        if (!v.active) continue;
 
         const age    = simNow - v.startTime;
         const vrScale = (v as any).rScale || 1.0;
@@ -445,7 +446,7 @@ export function MMSpellEffect({ spellsRef, unitRegistry, simTimeRef }: Props) {
 
         if (v.type === 'flash') {
             const ft = age / 120;
-            if (ft >= 1) { v.active = false; currentVfx.splice(j, 1); continue; }
+            if (ft >= 1) { v.active = false; continue; }
             if (fn < 100) {
                 _obj.position.set(v.x, v.y, v.z);
                 _obj.scale.setScalar(v.scale * (1.1 - ft) * 2.5 * vrScale);
@@ -457,7 +458,7 @@ export function MMSpellEffect({ spellsRef, unitRegistry, simTimeRef }: Props) {
             }
         } else if (v.type === 'dust') {
             const dt = age / 400;
-            if (dt >= 1) { v.active = false; currentVfx.splice(j, 1); continue; }
+            if (dt >= 1) { v.active = false; continue; }
             if (dn < 100) {
                 _obj.position.set(v.x, v.y, v.z);
                 _obj.rotation.set(-Math.PI/2, 0, v.rot);
@@ -470,7 +471,7 @@ export function MMSpellEffect({ spellsRef, unitRegistry, simTimeRef }: Props) {
             }
         } else { // 'hit'
             const ht = age / 280;
-            if (ht >= 1) { v.active = false; currentVfx.splice(j, 1); continue; }
+            if (ht >= 1) { v.active = false; continue; }
             if (hn < 200) {
                 _obj.position.set(v.x, v.y, v.z);
                 _obj.rotation.set(0, 0, v.rot + time * 5.0);
@@ -483,7 +484,9 @@ export function MMSpellEffect({ spellsRef, unitRegistry, simTimeRef }: Props) {
                 hn++;
             }
         }
+        currentVfx[vfxWriteIdx++] = currentVfx[j]; // keep alive (zero-alloc swap-remove)
     }
+    currentVfx.length = vfxWriteIdx;
     fMesh.count = fn; fMesh.instanceMatrix.needsUpdate = true; if (fMesh.instanceColor) fMesh.instanceColor.needsUpdate = true;
     hMesh.count = hn; hMesh.instanceMatrix.needsUpdate = true; if (hMesh.instanceColor) hMesh.instanceColor.needsUpdate = true;
     dMesh.count = dn; dMesh.instanceMatrix.needsUpdate = true; if (dMesh.instanceColor) dMesh.instanceColor.needsUpdate = true;

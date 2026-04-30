@@ -539,9 +539,8 @@ const CLASS_KEYS: ClassKey[] = ['fighter', 'tank', 'mage', 'marksman', 'assassin
               const nameSlot = namePoolMap.current.get(id)!;
               const nameGroup = nameGroupRefs.current[nameSlot];
               if (nameGroup) {
-                // Perfect Stack: Names sit exactly 0.8 units above the health bar
-                // FIX: Use vPos instead of cp to sync with visual model
-                nameGroup.position.set(vPos.x, vPos.y + by + 0.8, vPos.z);
+                // Posisi nama dan gambar profil didekatkan ke bar darah
+                nameGroup.position.set(vPos.x, vPos.y + by + 1.2, vPos.z);
                 nameGroup.quaternion.copy(camQ); 
               }
             }

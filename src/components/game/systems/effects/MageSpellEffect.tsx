@@ -311,10 +311,11 @@ export function MageSpellEffect({ spellsRef, unitRegistry, simTimeRef }: { spell
     (imp.material as any).uniforms.uTime.value = time;
 
     const currentImpacts = activeImpacts.current;
-    for (let j = currentImpacts.length - 1; j >= 0; j--) {
+    let writeIdx = 0;
+    for (let j = 0; j < currentImpacts.length; j++) {
       const idx = currentImpacts[j];
       const e = impacts.current[idx];
-      if (!e.active) { currentImpacts.splice(j, 1); continue; }
+      if (!e.active) continue;
       
       const age = simNow - e.startTime;
       const erScale = (e as any).rScale || 1.0;
@@ -322,7 +323,7 @@ export function MageSpellEffect({ spellsRef, unitRegistry, simTimeRef }: { spell
 
       if (e.type === 'charge') {
         const t = age / 400;
-        if (t >= 1) { e.active = false; currentImpacts.splice(j, 1); continue; }
+        if (t >= 1) { e.active = false; continue; }
         if (ci < 80) {
           _obj.position.set(e.x, 0.1, e.z);
           _obj.rotation.set(-Math.PI / 2, 0, time * 5.0);
@@ -335,7 +336,7 @@ export function MageSpellEffect({ spellsRef, unitRegistry, simTimeRef }: { spell
         }
       } else if (e.type === 'splinter') {
         const t = age / 500;
-        if (t >= 1) { e.active = false; currentImpacts.splice(j, 1); continue; }
+        if (t >= 1) { e.active = false; continue; }
         if (oi < MAX_ORB_INSTANCES) {
             const tSim = age * 0.01;
             const px = e.x + (e.vx || 0) * age;
@@ -353,7 +354,7 @@ export function MageSpellEffect({ spellsRef, unitRegistry, simTimeRef }: { spell
         }
       } else if (e.type === 'embers') {
         const t = age / 600;
-        if (t >= 1) { e.active = false; currentImpacts.splice(j, 1); continue; }
+        if (t >= 1) { e.active = false; continue; }
         if (ii < 250) {
           const fade = 1.0 - t;
           _obj.position.set(e.x, e.y, e.z);
@@ -367,7 +368,7 @@ export function MageSpellEffect({ spellsRef, unitRegistry, simTimeRef }: { spell
         }
       } else {
         const t = age / 500;
-        if (t >= 1) { e.active = false; currentImpacts.splice(j, 1); continue; }
+        if (t >= 1) { e.active = false; continue; }
         if (ii < 250) {
           const easeOut = Math.sqrt(t);
           const fade = 1.0 - t;
@@ -381,7 +382,9 @@ export function MageSpellEffect({ spellsRef, unitRegistry, simTimeRef }: { spell
           ii++;
         }
       }
+      currentImpacts[writeIdx++] = currentImpacts[j]; // keep alive (zero-alloc swap-remove)
     }
+    currentImpacts.length = writeIdx;
     
     mesh.count = oi;
     mesh.instanceMatrix.needsUpdate = true;

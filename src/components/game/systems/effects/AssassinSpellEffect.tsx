@@ -78,6 +78,10 @@ const LuxuriousCritMat = (tex: THREE.Texture) => new THREE.ShaderMaterial({
     blending: THREE.AdditiveBlending,
 });
 
+// Module-level constants — zero allocation inside useFrame
+const ASSASSIN_RARITY_SCALE: Record<string, number> = { common: 0.8, elite: 1.1, epic: 1.3, legendary: 1.5 };
+const ASSASSIN_RARITY_GLOW:  Record<string, number> = { common: 4.0, elite: 6.0, epic: 8.0, legendary: 10.0 };
+
 export function AssassinSpellEffect({ assassinSpellsRef, simTimeRef }: { assassinSpellsRef: React.RefObject<any[]>, simTimeRef: React.RefObject<number> }) {
     const meshRef = useRef<THREE.InstancedMesh>(null!);
     const sparkRef = useRef<THREE.InstancedMesh>(null!);
@@ -104,16 +108,14 @@ export function AssassinSpellEffect({ assassinSpellsRef, simTimeRef }: { assassi
 
         let n = 0; let sn = 0; let bn = 0;
 
-        const RARITY_SCALE = { common: 0.8, elite: 1.1, epic: 1.3, legendary: 1.5 };
-        const RARITY_GLOW = { common: 4.0, elite: 6.0, epic: 8.0, legendary: 10.0 };
 
         for (let i = 0; i < spells.length; i++) {
             const s = spells[i];
             if (!s.active) continue;
 
             const r = s.rarity || 'common';
-            const rScale = (RARITY_SCALE as any)[r] || 1.0;
-            const rGlow = (RARITY_GLOW as any)[r] || 5.0;
+            const rScale = ASSASSIN_RARITY_SCALE[r] || 1.0;
+            const rGlow = ASSASSIN_RARITY_GLOW[r] || 5.0;
 
             const age = simTime - s.startTime;
             const isTeleport = (s as any).isTeleport;
@@ -168,16 +170,20 @@ export function AssassinSpellEffect({ assassinSpellsRef, simTimeRef }: { assassi
         }
 
         mesh.count = n;
-        mesh.instanceMatrix.needsUpdate = true;
-        if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-
+        if (n > 0) {
+            mesh.instanceMatrix.needsUpdate = true;
+            if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+        }
         sMesh.count = sn;
-        sMesh.instanceMatrix.needsUpdate = true;
-        if (sMesh.instanceColor) sMesh.instanceColor.needsUpdate = true;
-
+        if (sn > 0) {
+            sMesh.instanceMatrix.needsUpdate = true;
+            if (sMesh.instanceColor) sMesh.instanceColor.needsUpdate = true;
+        }
         bMesh.count = bn;
-        bMesh.instanceMatrix.needsUpdate = true;
-        if (bMesh.instanceColor) bMesh.instanceColor.needsUpdate = true;
+        if (bn > 0) {
+            bMesh.instanceMatrix.needsUpdate = true;
+            if (bMesh.instanceColor) bMesh.instanceColor.needsUpdate = true;
+        }
 
         bMat.uniforms.uTime.value = time;
     });

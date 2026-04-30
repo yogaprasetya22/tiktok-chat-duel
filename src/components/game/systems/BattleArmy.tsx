@@ -38,7 +38,7 @@ interface BattleArmyProps {
 
 
 import { WORLD_UNIT_POOL_SIZE as MAX_UNITS } from '@/src/core/domain/unit.types';
-const NAME_POOL_SIZE = 60; 
+const NAME_POOL_SIZE = 100;  // 5 classes × 20 3D slots = 100 max visible units in HUD range
 const TEST_IMAGE_URL = 'https://t3.ftcdn.net/jpg/13/11/22/86/360_F_1311228699_YoiLc5aJ3RWz3uRfdEtlV0UYSQjqf7RW.jpg';
 
 const textureLoader = new THREE.TextureLoader();
@@ -291,6 +291,26 @@ const BattleArmyComponent = ({
     }
   }, []);
 
+  // Pre-warm the default profile image texture immediately on mount.
+  // This prevents gray circles at the start of battle while the first texture loads.
+  useEffect(() => {
+    if (!textureCache.has(TEST_IMAGE_URL)) {
+      textureLoading.add(TEST_IMAGE_URL);
+      textureLoader.load(TEST_IMAGE_URL, (tex) => {
+        tex.colorSpace = THREE.SRGBColorSpace;
+        textureCache.set(TEST_IMAGE_URL, { tex, lastUsed: Date.now() });
+        textureLoading.delete(TEST_IMAGE_URL);
+        // Backfill any already-mounted slots waiting for this texture
+        for (let i = 0; i < NAME_POOL_SIZE; i++) {
+          const mat = nameImageMaterials.current[i];
+          if (mat && !mat.uniforms.tDiffuse.value) {
+            mat.uniforms.tDiffuse.value = tex;
+          }
+        }
+      }, undefined, () => { textureLoading.delete(TEST_IMAGE_URL); });
+    }
+  }, []);
+
   const healthGeo = useMemo(() => {
     const geo = new THREE.PlaneGeometry(1.2, 0.18);
     const healthInfoArray = new Float32Array(MAX_UNITS * 2);
@@ -373,7 +393,7 @@ const BattleArmyComponent = ({
     frameCountRef.current++;
     
     // PERFORMANCE: Use consistent constants at the top
-    const HUD_DETAIL_DIST_SQ = 4900; // 70 * 70
+    const HUD_DETAIL_DIST_SQ = 6400; // 80 * 80 (Matches ECSArmyRenderer for consistency)
     const HUD_MAX_RANGE_SQ = 7350; // 4900 * 1.5
 
     // PERFORMANCE: Throttle sorting and unit filtering to every 12 frames
@@ -445,7 +465,8 @@ const BattleArmyComponent = ({
       const u = uIdx ? rawMap[uIdx.poolIdx ?? -1] : null;
 
       const isDead = !u || !u.isActive || u.hp <= 0 || u.position[1] < -50;
-      const isTooFar = (u?.dSq ?? 0) > HUD_DETAIL_DIST_SQ;
+      // PERFORMANCE: Hysteresis — assign at 80m, but only cleanup at 85m to prevent boundary flicker
+      const isTooFar = (u?.dSq ?? 0) > (HUD_DETAIL_DIST_SQ + 825); // + ~5m buffer (85*85 = 7225)
 
       if (isDead || isTooFar || isPotato) {
         const group = nameGroupRefs.current[slot];
@@ -462,16 +483,34 @@ const BattleArmyComponent = ({
       }
     }
 
+    // Release slots for behind-camera units (throttled to prevent flicker)
+    // This reclaims wasted slots so visible units always get labels
+    if (frustum && frameCountRef.current % 20 === 0) {
+      for (const [uid, slot] of namePoolMap.current.entries()) {
+        const uIdx = unitIndex.current.get(uid);
+        const u = uIdx ? rawMap[uIdx.poolIdx ?? -1] : null;
+        if (!u || !u.isActive) continue;
+        const pos = _vec.set(u.position[0], u.position[1] + 2, u.position[2]);
+        if (!frustum.containsPoint(pos)) {
+          const group = nameGroupRefs.current[slot];
+          if (group) { group.visible = false; group.position.set(0, -200, 0); }
+          nameAvailableSlots.current.push(slot);
+          namePoolMap.current.delete(uid);
+        }
+      }
+    }
+
     if (frameCountRef.current % 4 === 0) {
       lastNameCullTime.current = time;
 
       // Assign slots ke unit baru yang dekat (dari yang paling dekat)
       if (!isPotato) {
         let updatesThisFrame = 0;
-        const MAX_UPDATES_PER_FRAME = 2;
+        const MAX_UPDATES_PER_FRAME = 4;
 
-        const assignCount = Math.min(activeUnits.length, 60);
-        for (let i = 0; i < assignCount; i++) {
+        // Coba assign ke semua active unit terdekat sampai pool penuh (60 slot)
+        // Jangan batasi loop i < 60 karena unit yang di luar kamera (continue) akan membuang jatah loop
+        for (let i = 0; i < activeUnits.length; i++) {
           const u = activeUnits[i];
           const id = u.id;
 
@@ -481,9 +520,11 @@ const BattleArmyComponent = ({
           // FRUSTUM CULLING: Jangan assign slot ke unit di balik kamera
           const pos = _vec.set(u.position[0], u.position[1] + 2, u.position[2]);
           if (frustum && !frustum.containsPoint(pos)) continue;
+          
+          // Samakan dengan ECSArmyRenderer agar healthbar dan nama muncul/hilang bersamaan
           if ((u.dSq || 0) > HUD_DETAIL_DIST_SQ) continue;
 
-          const slot = nameAvailableSlots.current.shift()!;
+          const slot = nameAvailableSlots.current.pop()!;
           namePoolMap.current.set(id, slot);
           const mesh = nameTextRefs.current[slot];
           const group = nameGroupRefs.current[slot];
@@ -587,24 +628,59 @@ const BattleArmyComponent = ({
       }
     }
 
-
-
-    // 3. Signal Updates
-    if (shadowRef.current) {
-      shadowRef.current.instanceMatrix.needsUpdate = true;
-      if (shadowRef.current.instanceColor) shadowRef.current.instanceColor.needsUpdate = true;
+    // 3b. Sync name label positions for ALL assigned units every frame.
+    // ECSArmyRenderer only updates positions for units in the 3D pool (nearest 20 per class).
+    // This loop covers impostor-rendered units that ECSArmyRenderer misses.
+    // For 3D-pool units, ECSArmyRenderer runs AFTER this and overrides with precise lerped position.
+    if (namePoolMap.current.size > 0) {
+      const camQuat = state.camera.quaternion;
+      for (const [uid, slot] of namePoolMap.current.entries()) {
+        const nameGroup = nameGroupRefs.current[slot];
+        if (!nameGroup || !nameGroup.visible) continue;
+        const uRecord = unitIndex.current.get(uid);
+        if (!uRecord) continue;
+        const u = rawMap[uRecord.poolIdx ?? -1];
+        if (!u || !u.isActive || u.position[1] < -50) continue;
+        // Hitung skala visual total agar tinggi nama mengikuti tinggi unit (sama seperti ECSArmyRenderer)
+        const rarity = u.rarity || 'common';
+        const rScale = u.isBoss ? 1.0 : (rarity === 'legendary' ? 1.8 : (rarity === 'epic' ? 1.4 : (rarity === 'elite' ? 1.2 : 1.0)));
+        
+        let baseScale = 1.4 + (u.level || 1) * 0.1;
+        if (u.unitClass === 'tank') baseScale = 2.5 + (u.level || 1) * 0.15;
+        if (u.isBoss) baseScale = u.unitClass === 'tank' ? 6.5 : (u.unitClass === 'fighter' ? 4.5 : 4.0);
+        
+        const settingsScale = settingsRef.current?.unitScale || 1.0;
+        const totalVisualScale = baseScale * settingsScale * rScale;
+        
+        // Base tinggi darah = (u.isBoss ? 3.6 : 4.0) * totalVisualScale
+        // Tinggi nama = base tinggi darah + 1.2 (didekatkan ke darah)
+        const by = (u.isBoss ? 3.6 : 4.0) * totalVisualScale;
+        const byOffset = by + 1.2;
+        
+        nameGroup.position.set(u.position[0], u.position[1] + byOffset, u.position[2]);
+        nameGroup.quaternion.copy(camQuat);
+      }
     }
-    if (healthBarRef.current) {
-      healthBarRef.current.instanceMatrix.needsUpdate = true;
-      if (healthBarRef.current.instanceColor) healthBarRef.current.instanceColor.needsUpdate = true;
-      const attr = healthBarRef.current.geometry.getAttribute('aHealthInfo');
-      if (attr) attr.needsUpdate = true;
-    }
-    if (cooldownRef.current) {
-      cooldownRef.current.instanceMatrix.needsUpdate = true;
-      if (cooldownRef.current.instanceColor) cooldownRef.current.instanceColor.needsUpdate = true;
-      const attr = cooldownRef.current.geometry.getAttribute('aProgress');
-      if (attr) attr.needsUpdate = true;
+
+    // 3. Signal Updates — only upload GPU buffers when there's actual data to render
+    const hasActiveUnits = activeUnits.length > 0;
+    if (hasActiveUnits) {
+      if (shadowRef.current) {
+        shadowRef.current.instanceMatrix.needsUpdate = true;
+        if (shadowRef.current.instanceColor) shadowRef.current.instanceColor.needsUpdate = true;
+      }
+      if (healthBarRef.current) {
+        healthBarRef.current.instanceMatrix.needsUpdate = true;
+        if (healthBarRef.current.instanceColor) healthBarRef.current.instanceColor.needsUpdate = true;
+        const attr = healthBarRef.current.geometry.getAttribute('aHealthInfo');
+        if (attr) attr.needsUpdate = true;
+      }
+      if (cooldownRef.current) {
+        cooldownRef.current.instanceMatrix.needsUpdate = true;
+        if (cooldownRef.current.instanceColor) cooldownRef.current.instanceColor.needsUpdate = true;
+        const attr = cooldownRef.current.geometry.getAttribute('aProgress');
+        if (attr) attr.needsUpdate = true;
+      }
     }
   });
 

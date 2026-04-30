@@ -132,7 +132,7 @@ export function FighterSpellEffect({ fighterSpellsRef, simTimeRef }: { fighterSp
             const t = age / 400; 
             if (t >= 1) { s.active = false; continue; }
 
-            if (t < 0.05 && (s as any)._lastVFX !== s.startTime) {
+            if ((s as any)._lastVFX !== s.startTime) {
                 (s as any)._lastVFX = s.startTime;
                 
                 if (s.isCyclone) {
@@ -189,15 +189,16 @@ export function FighterSpellEffect({ fighterSpellsRef, simTimeRef }: { fighterSp
 
         let in_count = 0; let sl_count = 0; let bu_count = 0;
         const currentActive = activeIndices.current;
-        for (let j = currentActive.length - 1; j >= 0; j--) {
+        let writeIdx = 0;
+        for (let j = 0; j < currentActive.length; j++) {
             const idx = currentActive[j];
             const v = pool.current[idx];
-            if (!v.active) { currentActive.splice(j, 1); continue; }
+            if (!v.active) continue;
             const age = simTime - v.startTime;
-            if (age < 0) continue; 
+            if (age < 0) { currentActive[writeIdx++] = currentActive[j]; continue; }
             
             if (v.type === 'impact') {
-                const rt = age / 500; if (rt >= 1) { v.active = false; currentActive.splice(j, 1); continue; }
+                const rt = age / 500; if (rt >= 1) { v.active = false; continue; }
                 if (in_count < MAX_RINGS) {
                     const ease = 1.0 - Math.pow(rt, 3.0);
                     _obj.position.set(v.x, v.y, v.z);
@@ -211,7 +212,7 @@ export function FighterSpellEffect({ fighterSpellsRef, simTimeRef }: { fighterSp
                     in_count++;
                 }
             } else if (v.type === 'burst') {
-                const bt = age / 250; if (bt >= 1) { v.active = false; currentActive.splice(j, 1); continue; }
+                const bt = age / 250; if (bt >= 1) { v.active = false; continue; }
                 if (bu_count < MAX_BURSTS) {
                     _obj.position.set(v.x, v.y, v.z);
                     _obj.rotation.set(0, 0, age * 0.05);
@@ -224,7 +225,7 @@ export function FighterSpellEffect({ fighterSpellsRef, simTimeRef }: { fighterSp
                     bu_count++;
                 }
             } else if (v.type === 'cyclone') {
-                const ct = age / 600; if (ct >= 1) { v.active = false; currentActive.splice(j, 1); continue; }
+                const ct = age / 600; if (ct >= 1) { v.active = false; continue; }
                 if (sl_count < MAX_SLASHES) {
                     const ease = 1.0 - ct;
                     const rGlow = (v as any).rGlow || 15.0;
@@ -239,7 +240,7 @@ export function FighterSpellEffect({ fighterSpellsRef, simTimeRef }: { fighterSp
                     sl_count++;
                 }
             } else {
-                const dt = age / 300; if (dt >= 1) { v.active = false; currentActive.splice(j, 1); continue; }
+                const dt = age / 300; if (dt >= 1) { v.active = false; continue; }
                 if (sl_count < MAX_SLASHES) {
                     const ease = 1.0 - dt;
                     const rGlow = (v as any).rGlow || 15.0;
@@ -254,7 +255,9 @@ export function FighterSpellEffect({ fighterSpellsRef, simTimeRef }: { fighterSp
                     sl_count++;
                 }
             }
+            currentActive[writeIdx++] = currentActive[j]; // keep alive
         }
+        currentActive.length = writeIdx;
 
         impactRef.current.count = in_count;
         impactRef.current.instanceMatrix.needsUpdate = true;

@@ -102,15 +102,15 @@ export function TankSpellEffect({ tankSpellsRef, simTimeRef }: { tankSpellsRef: 
         const currentActive = activeIndices.current;
         let cn = 0;
         let dn = 0;
-
-        for (let j = currentActive.length - 1; j >= 0; j--) {
+        let writeIdx = 0;
+        for (let j = 0; j < currentActive.length; j++) {
             const idx = currentActive[j];
             const v = pool.current[idx];
-            if (!v.active) { currentActive.splice(j, 1); continue; }
+            if (!v.active) continue;
             const age = simTime - v.startTime;
             
             if (v.type === 'crack') {
-                const rt = age / 1500; if (rt >= 1) { v.active = false; currentActive.splice(j, 1); continue; }
+                const rt = age / 1500; if (rt >= 1) { v.active = false; continue; }
                 if (cn < MAX_RINGS) {
                     const ease = 1.0 - Math.pow(rt, 3.0);
                     _obj.position.set(v.x, v.y, v.z);
@@ -123,7 +123,7 @@ export function TankSpellEffect({ tankSpellsRef, simTimeRef }: { tankSpellsRef: 
                     cn++;
                 }
             } else if (v.type === 'dust') {
-                const rt = age / 800; if (rt >= 1) { v.active = false; currentActive.splice(j, 1); continue; }
+                const rt = age / 800; if (rt >= 1) { v.active = false; continue; }
                 if (dn < MAX_RINGS) {
                     const ease = 1.0 - rt;
                     _obj.position.set(v.x, v.y, v.z);
@@ -136,15 +136,20 @@ export function TankSpellEffect({ tankSpellsRef, simTimeRef }: { tankSpellsRef: 
                     dn++;
                 }
             }
+            currentActive[writeIdx++] = currentActive[j];
         }
+        currentActive.length = writeIdx;
 
         crackRef.current.count = cn;
-        crackRef.current.instanceMatrix.needsUpdate = true;
-        if (crackRef.current.instanceColor) crackRef.current.instanceColor.needsUpdate = true;
-
+        if (cn > 0) {
+            crackRef.current.instanceMatrix.needsUpdate = true;
+            if (crackRef.current.instanceColor) crackRef.current.instanceColor.needsUpdate = true;
+        }
         dustRef.current.count = dn;
-        dustRef.current.instanceMatrix.needsUpdate = true;
-        if (dustRef.current.instanceColor) dustRef.current.instanceColor.needsUpdate = true;
+        if (dn > 0) {
+            dustRef.current.instanceMatrix.needsUpdate = true;
+            if (dustRef.current.instanceColor) dustRef.current.instanceColor.needsUpdate = true;
+        }
 
         cMat.uniforms.uTime.value = time;
         dMat.uniforms.uTime.value = time;
