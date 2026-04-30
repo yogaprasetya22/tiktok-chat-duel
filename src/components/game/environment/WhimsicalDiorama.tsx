@@ -141,7 +141,7 @@ const FloatingRuins = () => {
 /**
  * WhimsicalDiorama - The main environment component
  */
-export const WhimsicalDiorama = ({ baseDistance = 24 }) => {
+export const WhimsicalDiorama = ({ baseDistance = 24 }: { baseDistance?: number, isCinematic?: boolean }) => {
     const weather = useStore(s => s.weather);
     const gameState = useStore(s => s.gameState);
     const isSetup = gameState === 'SETUP';

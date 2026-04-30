@@ -29,6 +29,9 @@ interface Message {
 }
 
 const API_URL = typeof window !== "undefined" ? window.location.origin : "";
+// Monotonic counter to ensure unique IDs even during same-millisecond bursts
+let _msgCounter = 0;
+const nextMsgId = () => `${Date.now()}-${++_msgCounter}`;
 
 export const useTikTokLive = (username: string) => {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -90,20 +93,20 @@ export const useTikTokLive = (username: string) => {
           setMessages((prev) => [
             ...prev,
             {
-              id: `${Date.now()}-${Math.random()}`,
+              id: nextMsgId(),
               username: data.username || "Unknown",
               comment: data.comment || "",
               profileImage: data.profileImage || "",
               type: "chat" as const,
               timestamp: data.timestamp || new Date().toISOString(),
             },
-          ].slice(-100));
+          ].slice(-300));
         } else if (data.type === "gift") {
           setConnected(true); setError(null);
           setMessages((prev) => [
             ...prev,
             {
-              id: `${Date.now()}-${Math.random()}`,
+              id: nextMsgId(),
               username: data.username || "Unknown",
               comment: `🎁 sent gift: ${data.giftName} (x${data.giftCount})`,
               profileImage: data.profileImage || "",
@@ -113,33 +116,33 @@ export const useTikTokLive = (username: string) => {
               diamondCount: data.diamondCount || 0,
               timestamp: data.timestamp || new Date().toISOString(),
             },
-          ].slice(-100));
+          ].slice(-300));
         } else if (data.type === "like") {
           setConnected(true); setError(null);
           setMessages((prev) => [
             ...prev,
             {
-              id: `${Date.now()}-${Math.random()}`,
+              id: nextMsgId(),
               username: data.username || "Unknown",
               comment: `❤️ liked (${data.likeCount} likes)`,
               profileImage: data.profileImage || "",
               type: "like" as const,
               timestamp: data.timestamp || new Date().toISOString(),
             },
-          ].slice(-100));
+          ].slice(-300));
         } else if (data.type === "follow") {
           setConnected(true); setError(null);
           setMessages((prev) => [
             ...prev,
             {
-              id: `${Date.now()}-${Math.random()}`,
+              id: nextMsgId(),
               username: data.username || "Unknown",
               comment: "👥 followed",
               profileImage: data.profileImage || "",
               type: "follow" as const,
               timestamp: data.timestamp || new Date().toISOString(),
             },
-          ].slice(-100));
+          ].slice(-300));
         } else if (data.type === "heartbeat") {
           // Heatbeat from SSE guarantees we are still hooked to the stream
           setConnected(true);

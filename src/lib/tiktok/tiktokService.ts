@@ -116,12 +116,22 @@ class TikTokLiveService {
 
     this.setupListeners(cleanUsername);
 
-    try {
-      await this.client.connect();
-      console.log(`[TikTok] Connected to @${cleanUsername}`);
-    } catch (error) {
-      console.error(`[TikTok] Connection error for @${cleanUsername}:`, error);
-      throw error;
+    let attempts = 0;
+    const maxAttempts = 3;
+
+    while (attempts < maxAttempts) {
+      try {
+        await this.client.connect();
+        console.log(`[TikTok] Connected to @${cleanUsername}`);
+        return;
+      } catch (error: any) {
+        attempts++;
+        console.error(`[TikTok] Connection attempt ${attempts} failed for @${cleanUsername}:`, error.message || error);
+        if (attempts >= maxAttempts) {
+          throw error;
+        }
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
     }
   }
 

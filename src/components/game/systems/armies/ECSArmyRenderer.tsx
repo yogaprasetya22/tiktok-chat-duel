@@ -125,6 +125,7 @@ function getBaseScale(classKey: ClassKey, level: number, isBoss: boolean): numbe
 const _hudTemp = new THREE.Object3D();
 const _healthColor = new THREE.Color();
 const _whiteColor = new THREE.Color('#ffffff');
+let _ecsFrame = 0; // module-level frame counter for throttling
 
 
 // ─── Main Component ──────────────────────────────────────────────────────────
@@ -337,6 +338,7 @@ const ECSArmyRendererInner = ({
     const frustum = (state as any).battleFrustum;
     const nowMs = Date.now();
 
+    _ecsFrame++;
     const isPotato = settings.potatoMode;
 
     // Clear all active sets
@@ -475,9 +477,9 @@ const ECSArmyRendererInner = ({
         const hIdx = hudBase + slotIdx;
 
         if (shadowRef.current && healthBarRef.current) {
-          // OPTIMIZATION: Reduce HUD detail radius to 40m (was 180m) to save CPU/GPU cycles
-          // HUD visible radius at 90m, but now with strict Frustum Culling per-unit
-          const HUD_DETAIL_DIST_SQ = 80 * 80;
+          // Increase HUD detail radius to 200m so labels don't disappear when camera moves back
+          // HUD visible radius at 200m, but now with strict Frustum Culling per-unit
+          const HUD_DETAIL_DIST_SQ = 200 * 200;
           const isVisible = frustum ? frustum.containsPoint(item.group.position) : true;
           const showDetail = isVisible && (uData.isBoss || (uData.dSq || 0) < HUD_DETAIL_DIST_SQ);
 
@@ -548,6 +550,8 @@ const ECSArmyRendererInner = ({
                 // FIX: Use vPos instead of cp to sync with visual model
                 nameGroup.position.set(vPos.x, vPos.y + by + 0.8, vPos.z);
                 nameGroup.quaternion.copy(camQ);
+                // Only make visible AFTER position is correct — prevents flash at (0,0,0)
+                nameGroup.visible = true;
               }
             }
           } else {
@@ -565,15 +569,24 @@ const ECSArmyRendererInner = ({
           }
         }
 
-        // ── Animation Mixer Update (with optimization) ──────────────────────
-        const isVisible = (uData.isBoss) || (frustum ? frustum.containsPoint(cp) : true);
-
-        // Skip frames logic: further units update less frequently to save CPU
-        // Full (0-50m): 60f | Mid (50-100m): 30f | Far (100m+): 12f
-        const sf = (uData.isBoss) ? 1 : ((uData.dSq || 0) > 10000 ? 5 : ((uData.dSq || 0) > 2500 ? 2 : 1));
+        // ── Animation Mixer Update ──────────────────────────────────────────
+        // KEY FIX: Do NOT use frustum to gate animations.
+        // In cinematic mode the camera is at the side, so many units are
+        // "outside" the frustum even though they are visible on screen.
+        // Instead: always animate if within ANIM_CULL_DIST_SQ from camera.
+        // Use a gentler skip-frame that doesn't freeze units that are
+        // close to the battle center (they look bad if they freeze).
         const tooFar = (uData.dSq || 0) > ANIM_CULL_DIST_SQ;
+        // Distance from world center — units at frontline always get full update
+        const distFromCenterSq = uData.position[0] * uData.position[0] + uData.position[2] * uData.position[2];
+        const isNearCenter = distFromCenterSq < 60 * 60; // 60u from origin
+        // Skip frame: near center always full rate; far from camera slow down
+        const sf = uData.isBoss ? 1
+          : isNearCenter ? 1                        // frontline: every frame
+          : (uData.dSq || 0) > 10000 ? 3           // far: every 3rd frame
+          : 1;                                       // close: every frame
 
-        if (!tooFar && isVisible && time - item.lastUpdate >= 0.016 * sf) {
+        if (!tooFar && time - item.lastUpdate >= 0.016 * sf) {
           item.mixer.update(delta * sf);
           item.lastUpdate = time;
         }
@@ -596,11 +609,13 @@ const ECSArmyRendererInner = ({
       }
     } // closes classKey loop
 
-    // ── O(1) Global Shader Update (Zero-Allocation Update) ──
-    const globalTime = (simTimeRef.current || 0) * 0.001;
-    for (const [_, mat] of _materialCache.entries()) {
-      if (mat.userData.painterlyShader) {
-        mat.userData.painterlyShader.uniforms.time.value = globalTime;
+    // ── O(1) Global Shader Update — throttled to every 6 frames ──
+    if (_ecsFrame % 6 === 0) {
+      const globalTime = (simTimeRef.current || 0) * 0.001;
+      for (const [_, mat] of _materialCache.entries()) {
+        if (mat.userData.painterlyShader) {
+          mat.userData.painterlyShader.uniforms.time.value = globalTime;
+        }
       }
     }
 

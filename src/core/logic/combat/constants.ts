@@ -219,7 +219,7 @@ export const LOD_IMPOSTOR_BOSS_SCALE = 5.0;
 
 // --- CENTRALIZED PERFORMANCE CONFIG ---
 export const ARMY_POOL_SIZE = 30; // Number of high-detail 3D models per class
-export const ANIM_CULL_DIST_SQ = 350 * 350; // Distance where bone animations stop (150m)
+export const ANIM_CULL_DIST_SQ = 450 * 450; // Distance where bone animations stop (150m)
 
 // --- WEATHER SYSTEM CONFIG ---
 export const WEATHER_CONFIG = {
