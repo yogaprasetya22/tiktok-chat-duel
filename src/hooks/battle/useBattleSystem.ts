@@ -321,7 +321,11 @@ export const useBattleSystem = () => {
         }
         const toFlush: string[] = [];
         for (const [targetId, data] of damageBufferRef.current) {
-            if (now - data.lastHit > 150) {
+            // FIX: Flush if idle for 100ms OR if it's been accumulating for 250ms
+            const age = now - (data as any).startTime;
+            const idle = now - data.lastHit;
+            
+            if (idle > 100 || age > 250) {
                 toFlush.push(targetId);
                 if (damageQueueRef.current.length < 500) {
                     damageQueueRef.current.push({
@@ -350,14 +354,16 @@ export const useBattleSystem = () => {
                 existing.position[0] = position[0];
                 existing.position[1] = position[1];
                 existing.position[2] = position[2];
-                existing.lastHit = Date.now();
+                existing.lastHit = performance.now(); // FIX: Use performance.now() to match flushDamageBuffer
             } else {
+                const now = performance.now();
                 damageBufferRef.current.set(targetId, {
                     total: value,
                     position: [position[0], position[1], position[2]],
-                    lastHit: Date.now(),
+                    lastHit: now,
+                    startTime: now, // Track when this buffer started for periodic flushing
                     color,
-                });
+                } as any);
             }
         },
         [],
