@@ -350,7 +350,7 @@ export function MarksmanArmy({
       else if (uData.status === 'marching') targetAnim = 'Run';
       else if (uData.status === 'attacking') {
         const timeSinceAtk = (simTimeRef.current || 0) - (uData.lastAttackTime || 0);
-        const shootName = pItem.actions['Shoot_OneHanded'] ? 'Shoot_OneHanded' :
+        const shootName = pItem.actions['Punch'] ? 'Punch' :
           (pItem.actions['Shoot'] ? 'Shoot' :
             (pItem.actions['Attack'] ? 'Attack' : 'Idle'));
         targetAnim = timeSinceAtk < 600 ? shootName : 'Idle';
@@ -470,7 +470,7 @@ export function MarksmanArmy({
       const frustum = (state as any).battleFrustum;
       const isVisible = frustum ? frustum.containsPoint(cp) : true;
       const sf = (uData.dSq || 0) > 3600 ? 5 : (uData.dSq || 0) > 400 ? 2 : 1;
-      const isTooFar = (uData.dSq || 0) > ANIM_CULL_DIST_SQ; 
+      const isTooFar = (uData.dSq || 0) > ANIM_CULL_DIST_SQ;
 
       if (!isTooFar && isVisible && time - pItem.lastUpdate >= 0.016 * sf) {
         pItem.mixer.update(delta * sf);

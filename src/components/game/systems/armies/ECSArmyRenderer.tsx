@@ -65,18 +65,18 @@ interface ECSArmyRendererProps {
 // ─── Per-class config (static) ───────────────────────────────────────────────
 
 const CLASS_COLORABLE_KW: Record<ClassKey, string[]> = {
-  fighter:  ['cape', 'cloth', 'trim', 'helmet', 'shoulder', 'robe', 'cloak', 'primary', 'team'],
-  tank:     ['cloth', 'plume', 'trim', 'shield_pattern', 'helmet', 'robe', 'cloak', 'cape', 'primary', 'team'],
-  mage:     ['cloth', 'trim', 'jewel', 'robe', 'cloak', 'cape', 'scarf', 'primary', 'team'],
+  fighter: ['cape', 'cloth', 'trim', 'helmet', 'shoulder', 'robe', 'cloak', 'primary', 'team'],
+  tank: ['cloth', 'plume', 'trim', 'shield_pattern', 'helmet', 'robe', 'cloak', 'cape', 'primary', 'team'],
+  mage: ['cloth', 'trim', 'jewel', 'robe', 'cloak', 'cape', 'scarf', 'primary', 'team'],
   marksman: ['cloth', 'pattern', 'trim', 'ribbon', 'quiver', 'robe', 'cloak', 'cape', 'primary', 'team'],
   assassin: ['cloth', 'mask', 'hood', 'wrap', 'ribbon', 'robe', 'cloak', 'cape', 'primary', 'team'],
 };
 
 // HUD slot base index per class (must match instanced mesh allocation of 1500 total)
 const CLASS_HUD_BASE: Record<ClassKey, number> = {
-  fighter:  0,
-  tank:     200,
-  mage:     400,
+  fighter: 0,
+  tank: 200,
+  mage: 400,
   marksman: 600,
   assassin: 800,
 };
@@ -95,7 +95,7 @@ function resolveAttackAnim(classKey: ClassKey, actions: Record<string, THREE.Ani
       return f || 'Idle';
     }
     case 'marksman':
-      return actions['Shoot_OneHanded'] ? 'Shoot_OneHanded' : (actions['Shoot'] ? 'Shoot' : (actions['Attack'] ? 'Attack' : 'Idle'));
+      return actions['Punch'] ? 'Punch' : (actions['Shoot'] ? 'Shoot' : (actions['Attack'] ? 'Attack' : 'Idle'));
     case 'assassin': {
       const f = keys.find(n => n === 'Attack' || n.includes('Attack') || n.includes('Slash') || n.includes('Stab') || n.includes('Strike'));
       return f || 'Idle';
@@ -133,27 +133,27 @@ const _whiteColor = new THREE.Color('#ffffff');
 const _materialCache = new Map<number, THREE.MeshStandardMaterial>();
 
 const getCachedMaterial = (
-  classKey: ClassKey, 
-  rarity: string, 
-  team: 'player' | 'enemy', 
+  classKey: ClassKey,
+  rarity: string,
+  team: 'player' | 'enemy',
   towerConfig: TowerConfig,
   gltfByClass: any
 ): THREE.MeshStandardMaterial => {
   const teamIdx = team === 'player' ? 0 : 1;
   const teamColor = teamIdx === 0 ? towerConfig.player.color : towerConfig.enemy.color;
-  
+
   const rarityIdx = rarity === 'common' ? 0 : (rarity === 'elite' ? 1 : (rarity === 'epic' ? 2 : 3));
   const classIdx = classKey === 'fighter' ? 0 : (classKey === 'tank' ? 1 : (classKey === 'mage' ? 2 : (classKey === 'marksman' ? 3 : 4)));
-  
+
   // BITMASK KEY: [Class: 4 bits][Rarity: 2 bits][Team: 1 bit]
   const key = (classIdx << 3) | (rarityIdx << 1) | teamIdx;
-  
+
   if (_materialCache.has(key)) return _materialCache.get(key)!;
 
   const assets = gltfByClass[classKey];
   const sourceMesh = assets[0].scene.getObjectByProperty('isMesh', true) as THREE.Mesh;
   const mat = (sourceMesh.material as THREE.MeshStandardMaterial).clone();
-  
+
   applyPainterlyStyle(mat);
   mat.color.set(teamColor);
 
@@ -177,21 +177,21 @@ const ECSArmyRendererInner = ({
 
   // ── Load all GLTF assets (preload happens at bottom of file) ──
   const f1 = useGLTF('/assets-model/Knight_Golden_Female.glb', true, true, (l: any) => l.setMeshoptDecoder(MeshoptDecoder)) as any;
-  const f2 = useGLTF('/assets-model/Knight_Golden_Male.glb',   true, true, (l: any) => l.setMeshoptDecoder(MeshoptDecoder)) as any;
-  const f3 = useGLTF('/assets-model/Knight_Male.glb',          true, true, (l: any) => l.setMeshoptDecoder(MeshoptDecoder)) as any;
-  const t1 = useGLTF('/assets-model/Viking_Male.glb',          true, true, (l: any) => l.setMeshoptDecoder(MeshoptDecoder)) as any;
-  const t2 = useGLTF('/assets-model/Viking_Female.glb',        true, true, (l: any) => l.setMeshoptDecoder(MeshoptDecoder)) as any;
-  const g1 = useGLTF('/assets-model/Witch.glb',                true, true, (l: any) => l.setMeshoptDecoder(MeshoptDecoder)) as any;
-  const g2 = useGLTF('/assets-model/Wizard.glb',               true, true, (l: any) => l.setMeshoptDecoder(MeshoptDecoder)) as any;
-  const m1 = useGLTF('/assets-model/Cowboy_Female.glb',        true, true, (l: any) => l.setMeshoptDecoder(MeshoptDecoder)) as any;
-  const n1 = useGLTF('/assets-model/Ninja_Female.glb',         true, true, (l: any) => l.setMeshoptDecoder(MeshoptDecoder)) as any;
-  const n2 = useGLTF('/assets-model/Ninja_Male.glb',           true, true, (l: any) => l.setMeshoptDecoder(MeshoptDecoder)) as any;
+  const f2 = useGLTF('/assets-model/Knight_Golden_Male.glb', true, true, (l: any) => l.setMeshoptDecoder(MeshoptDecoder)) as any;
+  const f3 = useGLTF('/assets-model/Knight_Male.glb', true, true, (l: any) => l.setMeshoptDecoder(MeshoptDecoder)) as any;
+  const t1 = useGLTF('/assets-model/Viking_Male.glb', true, true, (l: any) => l.setMeshoptDecoder(MeshoptDecoder)) as any;
+  const t2 = useGLTF('/assets-model/Viking_Female.glb', true, true, (l: any) => l.setMeshoptDecoder(MeshoptDecoder)) as any;
+  const g1 = useGLTF('/assets-model/Witch.glb', true, true, (l: any) => l.setMeshoptDecoder(MeshoptDecoder)) as any;
+  const g2 = useGLTF('/assets-model/Wizard.glb', true, true, (l: any) => l.setMeshoptDecoder(MeshoptDecoder)) as any;
+  const m1 = useGLTF('/assets-model/Cowboy_Female.glb', true, true, (l: any) => l.setMeshoptDecoder(MeshoptDecoder)) as any;
+  const n1 = useGLTF('/assets-model/Ninja_Female.glb', true, true, (l: any) => l.setMeshoptDecoder(MeshoptDecoder)) as any;
+  const n2 = useGLTF('/assets-model/Ninja_Male.glb', true, true, (l: any) => l.setMeshoptDecoder(MeshoptDecoder)) as any;
 
   // Map classKey → array of GLTF assets to pick from randomly
   const gltfByClass = useMemo<Record<ClassKey, any[]>>(() => ({
-    fighter:  [f1, f2, f3],
-    tank:     [t1, t2],
-    mage:     [g1, g2],
+    fighter: [f1, f2, f3],
+    tank: [t1, t2],
+    mage: [g1, g2],
     marksman: [m1],
     assassin: [n1, n2],
   }), [f1, f2, f3, t1, t2, g1, g2, m1, n1, n2]);
@@ -201,9 +201,9 @@ const ECSArmyRendererInner = ({
 
   // ── Lazy Pools (one per class) ──
   const pools = useRef<Record<ClassKey, ClassPool>>({
-    fighter:  { items: [], available: [], assigned: new Map(), activeSet: new Set() },
-    tank:     { items: [], available: [], assigned: new Map(), activeSet: new Set() },
-    mage:     { items: [], available: [], assigned: new Map(), activeSet: new Set() },
+    fighter: { items: [], available: [], assigned: new Map(), activeSet: new Set() },
+    tank: { items: [], available: [], assigned: new Map(), activeSet: new Set() },
+    mage: { items: [], available: [], assigned: new Map(), activeSet: new Set() },
     marksman: { items: [], available: [], assigned: new Map(), activeSet: new Set() },
     assassin: { items: [], available: [], assigned: new Map(), activeSet: new Set() },
   });
@@ -271,8 +271,8 @@ const ECSArmyRendererInner = ({
       group: clone, mixer, actions, colorable,
       currentAnim: '', lastUpdate: 0, rotation: 0, initialized: false,
       attackAnim: resolveAttackAnim(classKey, actions),
-      runAnim:    resolveRunAnim(actions),
-      deathAnim:  resolveDeathAnim(actions),
+      runAnim: resolveRunAnim(actions),
+      deathAnim: resolveDeathAnim(actions),
     };
 
     pool.items.push(item);
@@ -309,7 +309,7 @@ const ECSArmyRendererInner = ({
     shadowRef.current?.setMatrixAt(hIdx, _hudTemp.matrix);
     healthBarRef.current?.setMatrixAt(hIdx, _hudTemp.matrix);
     cooldownRef.current?.setMatrixAt(hIdx, _hudTemp.matrix);
-    
+
     if (uid && namePoolMap.current.has(uid)) {
       const slot = namePoolMap.current.get(uid)!;
       const group = nameGroupRefs.current[slot];
@@ -320,10 +320,10 @@ const ECSArmyRendererInner = ({
     }
   };
 
-// ─── Constants ──────────────────────────────────────────────────────────────
-const CLASS_KEYS: ClassKey[] = ['fighter', 'tank', 'mage', 'marksman', 'assassin'];
+  // ─── Constants ──────────────────────────────────────────────────────────────
+  const CLASS_KEYS: ClassKey[] = ['fighter', 'tank', 'mage', 'marksman', 'assassin'];
 
-// ── Main render loop ──────────────────────────────────────────────────────
+  // ── Main render loop ──────────────────────────────────────────────────────
   useFrame((state, delta) => {
     const rawMap = unitRegistry.current;
     if (!rawMap) return;
@@ -366,7 +366,7 @@ const CLASS_KEYS: ClassKey[] = ['fighter', 'tank', 'mage', 'marksman', 'assassin
     }
 
     // ── Pre-optimized sorted unit buckets from parent ──
-    const buckets = (state as any).unitBuckets as Record<ClassKey, UnitRuntimeData[]>; 
+    const buckets = (state as any).unitBuckets as Record<ClassKey, UnitRuntimeData[]>;
     if (!buckets) return;
 
     // Use zero-allocation for-loops instead of forEach for hot logic
@@ -378,7 +378,7 @@ const CLASS_KEYS: ClassKey[] = ['fighter', 'tank', 'mage', 'marksman', 'assassin
       const hudBase = CLASS_HUD_BASE[classKey];
       const healthAttr = healthBarRef.current?.geometry.getAttribute('aHealthInfo') as THREE.InstancedBufferAttribute | undefined;
       const cooldownAttr = cooldownRef.current?.geometry.getAttribute('aProgress') as THREE.InstancedBufferAttribute | undefined;
-      
+
       const lerpFactor = 1.0 - Math.exp(-45 * delta);
       const rotLerpFactor = 1.0 - Math.exp(-15 * delta);
 
@@ -403,14 +403,14 @@ const CLASS_KEYS: ClassKey[] = ['fighter', 'tank', 'mage', 'marksman', 'assassin
         const baseScale = getBaseScale(classKey, uData.level || 1, uData.isBoss);
         const rarity = uData.rarity || 'common';
         const rScale = uData.isBoss ? 1.0 : (rarity === 'legendary' ? 1.8 : (rarity === 'epic' ? 1.4 : (rarity === 'elite' ? 1.2 : 1.0)));
-        
+
         // UNIQUE VARIATION: Subtle height variation based on ID for an 'Organic Army' feel
         const idNum = uData.poolIdx;
         const hVar = 1.0 + ((idNum % 7) - 3) * 0.015; // +/- 4.5% height variation
         item.group.scale.set(
-            baseScale * settings.unitScale * rScale,
-            baseScale * settings.unitScale * rScale * hVar,
-            baseScale * settings.unitScale * rScale
+          baseScale * settings.unitScale * rScale,
+          baseScale * settings.unitScale * rScale * hVar,
+          baseScale * settings.unitScale * rScale
         );
 
         // ASSIGN SHARED MATERIAL FROM CACHED MASTER
@@ -463,7 +463,7 @@ const CLASS_KEYS: ClassKey[] = ['fighter', 'tank', 'mage', 'marksman', 'assassin
 
           let diff = uData.rotation[1] - item.rotation;
           while (diff < -Math.PI) diff += Math.PI * 2;
-          while (diff >  Math.PI) diff -= Math.PI * 2;
+          while (diff > Math.PI) diff -= Math.PI * 2;
           item.rotation += diff * rotLerpFactor;
           item.group.rotation.y = item.rotation;
         }
@@ -477,17 +477,17 @@ const CLASS_KEYS: ClassKey[] = ['fighter', 'tank', 'mage', 'marksman', 'assassin
         if (shadowRef.current && healthBarRef.current) {
           // OPTIMIZATION: Reduce HUD detail radius to 40m (was 180m) to save CPU/GPU cycles
           // HUD visible radius at 90m, but now with strict Frustum Culling per-unit
-          const HUD_DETAIL_DIST_SQ = 80 * 80; 
+          const HUD_DETAIL_DIST_SQ = 80 * 80;
           const isVisible = frustum ? frustum.containsPoint(item.group.position) : true;
           const showDetail = isVisible && (uData.isBoss || (uData.dSq || 0) < HUD_DETAIL_DIST_SQ);
 
           if (showDetail) {
             const vPos = item.group.position;
             const totalVisualScale = baseScale * settings.unitScale * rScale;
-            
-            const by  = (uData.isBoss ? 3.6 : 4.0) * totalVisualScale;
-            const bs  = (uData.isBoss ? 0.7 : 0.8) * totalVisualScale;
-            const ss  = 1.1 * totalVisualScale;
+
+            const by = (uData.isBoss ? 3.6 : 4.0) * totalVisualScale;
+            const bs = (uData.isBoss ? 0.7 : 0.8) * totalVisualScale;
+            const ss = 1.1 * totalVisualScale;
 
             _hudTemp.position.set(vPos.x, -0.45, vPos.z);
             _hudTemp.quaternion.identity();
@@ -501,14 +501,14 @@ const CLASS_KEYS: ClassKey[] = ['fighter', 'tank', 'mage', 'marksman', 'assassin
               const cdTime = skillCfg.skill_cooldown * (1.0 - ((uData as any).cooldownReduction || 0));
               const timeSinceSkill = (simTimeRef.current || 0) - (uData.lastSkillTime || 0);
               const progress = Math.min(1.0, timeSinceSkill / cdTime);
-              
+
               _hudTemp.position.set(vPos.x, -0.44, vPos.z); // Slightly above shadow
               _hudTemp.quaternion.identity(); // Geometry is already pre-rotated -PI/2
               _hudTemp.scale.set(ss * 1.5, ss * 1.5, 1);
               _hudTemp.updateMatrix();
               cooldownRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
               cooldownAttr.setX(hIdx, progress);
-              
+
               // NEW: Sync cooldown ring color with team color
               _healthColor.set(teamColor);
               cooldownRef.current.setColorAt(hIdx, _healthColor);
@@ -517,9 +517,9 @@ const CLASS_KEYS: ClassKey[] = ['fighter', 'tank', 'mage', 'marksman', 'assassin
               _hudTemp.updateMatrix();
               cooldownRef.current?.setMatrixAt(hIdx, _hudTemp.matrix);
             }
-            
+
             // Use emissive color for shadow aura
-            _healthColor.copy(sharedMat.emissive); 
+            _healthColor.copy(sharedMat.emissive);
             shadowRef.current.setColorAt(hIdx, _healthColor);
 
             _hudTemp.position.set(vPos.x, vPos.y + by, vPos.z);
@@ -530,7 +530,7 @@ const CLASS_KEYS: ClassKey[] = ['fighter', 'tank', 'mage', 'marksman', 'assassin
 
             // Update custom shader attribute for health percentage & ticks
             if (healthAttr) {
-                healthAttr.setXY(hIdx, uData.hp, uData.maxHp || 100);
+              healthAttr.setXY(hIdx, uData.hp, uData.maxHp || 100);
             }
 
             // Fill Color + Damage Flash
@@ -547,7 +547,7 @@ const CLASS_KEYS: ClassKey[] = ['fighter', 'tank', 'mage', 'marksman', 'assassin
                 // Perfect Stack: Names sit exactly 0.8 units above the health bar
                 // FIX: Use vPos instead of cp to sync with visual model
                 nameGroup.position.set(vPos.x, vPos.y + by + 0.8, vPos.z);
-                nameGroup.quaternion.copy(camQ); 
+                nameGroup.quaternion.copy(camQ);
               }
             }
           } else {
@@ -567,7 +567,7 @@ const CLASS_KEYS: ClassKey[] = ['fighter', 'tank', 'mage', 'marksman', 'assassin
 
         // ── Animation Mixer Update (with optimization) ──────────────────────
         const isVisible = (uData.isBoss) || (frustum ? frustum.containsPoint(cp) : true);
-        
+
         // Skip frames logic: further units update less frequently to save CPU
         // Full (0-50m): 60f | Mid (50-100m): 30f | Far (100m+): 12f
         const sf = (uData.isBoss) ? 1 : ((uData.dSq || 0) > 10000 ? 5 : ((uData.dSq || 0) > 2500 ? 2 : 1));
