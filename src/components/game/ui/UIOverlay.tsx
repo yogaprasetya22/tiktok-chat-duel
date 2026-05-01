@@ -1,10 +1,10 @@
 import { TowerConfig } from "@/src/hooks/battle/useBattleSystem";
-import { GiftBinding } from "@/src/core/domain/unit.types";
+import { GiftBinding, KillEvent } from "@/src/core/domain/unit.types";
 import {
   Settings2, Sword, Zap, Trophy, Users, MessageSquare, Gift,
   CheckCircle2, Camera, Loader2, AlertTriangle, ChevronRight,
   CloudRain, Wind, CloudLightning, Sun, Shield, X, MessageCircle,
-  Activity, RefreshCw, Target
+  Activity, RefreshCw, Target, Flame, Sparkles,
 } from "lucide-react";
 import React, { useState, useEffect, useRef } from "react";
 import { MVPScreen } from "../../ui/MVPScreen";
@@ -80,14 +80,14 @@ const StatusIndicators = React.memo(({ connected }: { connected: boolean }) => {
   }, [connected]);
 
   return (
-    <div className="absolute top-3 left-3 flex gap-2 pointer-events-none select-none z-50">
-      <div className="hud-glass rounded-lg px-2 py-1 flex items-center gap-1.5 border border-white/5">
-        <Activity className={`w-3 h-3 ${fps < 30 ? 'text-rose-500' : fps < 55 ? 'text-amber-500' : 'text-emerald-500'}`} />
-        <span className="text-[10px] font-black tabular-nums text-white/90">{fps} <span className="text-[7px] text-white/40 uppercase tracking-tighter">fps</span></span>
+    <div className="absolute top-2 left-2 flex gap-1 pointer-events-none select-none z-50 scale-90 md:scale-100 origin-top-left">
+      <div className="hud-glass rounded-lg px-1.5 py-0.5 flex items-center gap-1 border border-white/5">
+        <Activity className={`w-2.5 h-2.5 ${fps < 30 ? 'text-rose-500' : fps < 55 ? 'text-amber-500' : 'text-emerald-500'}`} />
+        <span className="text-[9px] font-black tabular-nums text-white/90">{fps} <span className="text-[6px] text-white/40 uppercase tracking-tighter">fps</span></span>
       </div>
-      <div className="hud-glass rounded-lg px-2 py-1 flex items-center gap-1.5 border border-white/5">
-        <Zap className={`w-3 h-3 ${ping > 100 ? 'text-rose-500' : 'text-emerald-500'}`} />
-        <span className="text-[10px] font-black tabular-nums text-white/90">{ping} <span className="text-[7px] text-white/40 uppercase tracking-tighter">ms</span></span>
+      <div className="hud-glass rounded-lg px-1.5 py-0.5 flex items-center gap-1 border border-white/5">
+        <Zap className={`w-2.5 h-2.5 ${ping > 100 ? 'text-rose-500' : 'text-emerald-500'}`} />
+        <span className="text-[9px] font-black tabular-nums text-white/90">{ping} <span className="text-[6px] text-white/40 uppercase tracking-tighter">ms</span></span>
       </div>
     </div>
   );
@@ -97,15 +97,57 @@ const StatusIndicators = React.memo(({ connected }: { connected: boolean }) => {
 // SUB-COMPONENTS (Memoized for performance)
 // ============================================
 
-const KillFeed = React.memo(({ killEvents, towerConfig }: { killEvents: any[], towerConfig: any }) => (
-  <div className="absolute top-16 left-3 w-48 md:w-56 flex flex-col gap-1 pointer-events-none select-none">
-    {killEvents.slice(-3).map((event) => event?.id && (
-      <div key={event.id} className="animate-slide-up hud-glass rounded-lg px-2.5 py-1.5 flex items-center gap-2">
-        <span className="text-[9px] font-black italic tracking-tight truncate" style={{ color: towerConfig.player.color }}>{event.killer}</span>
-        <Sword className="w-2.5 h-2.5 text-rose-500 flex-shrink-0" />
-        <span className="text-[9px] font-bold text-white/50 truncate">{event.victim}</span>
-      </div>
-    ))}
+const KillFeed = React.memo(({ killEvents, towerConfig }: { killEvents: KillEvent[], towerConfig: any }) => (
+  <div className="absolute top-12 left-2 w-48 md:w-64 flex flex-col gap-1 pointer-events-none select-none z-50">
+    {killEvents.slice(-4).map((event) => {
+      if (!event?.id) return null;
+      const rarity = event.rarity || 'common';
+      const rColor = RARITY_COLOR[rarity];
+      const isBoss = event.victimType === 'boss';
+      
+      return (
+        <div key={event.id} 
+             className="animate-slide-up flex items-center gap-2 px-3 py-1.5 rounded-lg border relative overflow-hidden group"
+             style={{ 
+               backgroundColor: isBoss ? 'rgba(239, 68, 68, 0.2)' : 'rgba(0,0,0,0.85)',
+               borderColor: isBoss ? '#ef4444' : `${rColor}33`,
+               boxShadow: isBoss ? '0 0 15px rgba(239,68,68,0.3)' : `0 0 10px ${rColor}11`
+             }}>
+          {/* Rarity Accent */}
+          <div className="absolute left-0 top-0 bottom-0 w-1" style={{ backgroundColor: isBoss ? '#ef4444' : rColor }} />
+          
+          {/* Profile Image (Killer) */}
+          {event.profileImage && (
+            <div className="w-5 h-5 rounded-full overflow-hidden border border-white/20 flex-shrink-0 shadow-sm">
+              <img src={event.profileImage} alt="" className="w-full h-full object-cover" />
+            </div>
+          )}
+
+          <div className="flex items-center gap-1.5 min-w-0 flex-1">
+            <span className="text-[9px] font-black italic tracking-tight truncate text-white" 
+                  style={{ textShadow: `0 0 4px ${towerConfig.player.color}88` }}>
+              {event.killer}
+            </span>
+            <div className="flex-shrink-0 flex items-center justify-center p-0.5 rounded bg-white/5">
+              <Sword className={`w-2.5 h-2.5 ${isBoss ? 'text-rose-500 animate-pulse' : 'text-white/40'}`} />
+            </div>
+            <div className="flex flex-col min-w-0">
+              <span className={`text-[8px] font-black truncate uppercase tracking-tighter ${isBoss ? 'text-rose-400' : 'text-white/40'}`}>
+                {event.victim}
+              </span>
+              <span className="text-[6px] font-black uppercase opacity-40 tracking-widest leading-none">
+                {isBoss ? 'BOSS DEFEATED' : rarity}
+              </span>
+            </div>
+          </div>
+
+          {/* Luxury Shimmer Effect for Legendaries */}
+          {rarity === 'legendary' && (
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-yellow-500/10 to-transparent -translate-x-full animate-[shimmer_2s_infinite]" />
+          )}
+        </div>
+      );
+    })}
   </div>
 ));
 
@@ -116,38 +158,48 @@ const Leaderboard = React.memo(({ team, color, name }: { team: 'player' | 'enemy
   const profileImages = liveStats.profileImages || {};
 
   return (
-    <div className={`absolute top-56 ${isPlayer ? 'left-3' : 'right-3'} w-32 md:w-44 select-none`}>
-      <div className="hud-glass rounded-xl p-2 md:p-3 space-y-2 animate-fade-in-scale">
-        <div className="flex items-center gap-1.5 border-b border-white/5 pb-1.5">
-          <Trophy className="w-3 h-3" style={{ color }} />
-          <span className="text-[8px] md:text-[9px] font-black text-white/70 uppercase tracking-widest truncate">{name}</span>
+    <div className={`absolute top-48 md:top-56 ${isPlayer ? 'left-2' : 'right-2'} w-28 md:w-44 select-none scale-90 md:scale-100 origin-top-${isPlayer ? 'left' : 'right'}`}>
+      <div className="hud-glass rounded-xl p-1.5 md:p-3 space-y-1.5 animate-fade-in-scale border border-white/5">
+        <div className="flex items-center gap-1 border-b border-white/5 pb-1">
+          <Trophy className="w-2.5 h-2.5" style={{ color }} />
+          <span className="text-[7px] md:text-[9px] font-black text-white/70 uppercase tracking-widest truncate">{name}</span>
         </div>
         <div className="space-y-1.5">
           {Object.entries(kills || {})
             .sort(([, a]: any, [, b]: any) => b - a)
             .slice(0, 5)
-            .map(([username, value], i) => (
-              <div key={username} className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                  <div className={`w-4 h-4 md:w-5 md:h-5 rounded flex items-center justify-center font-black text-[7px] md:text-[8px] ${i === 0 ? 'text-white animate-pulse' : 'text-white/30 bg-white/5'
-                    }`}
-                    style={i === 0 ? { backgroundColor: `${color}44`, borderColor: color, border: '1px solid' } : {}}>
-                    {i + 1}
-                  </div>
-                  {profileImages[username] && (
-                    <div className="w-3.5 h-3.5 rounded-full overflow-hidden border border-black/50 flex-shrink-0">
-                      <img src={profileImages[username]} alt="" className="w-full h-full object-cover" />
+            .map(([username, value], i) => {
+              const isTop3 = i < 3;
+              const rankColor = i === 0 ? '#fbbf24' : i === 1 ? '#cbd5e1' : i === 2 ? '#cd7f32' : color;
+              return (
+                <div key={username} className="flex items-center justify-between group transition-all duration-300 hover:translate-x-1">
+                  <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                    <div className={`w-4 h-4 md:w-5 md:h-5 rounded flex items-center justify-center font-black text-[7px] md:text-[8px] transition-all shadow-lg ${i === 0 ? 'animate-pulse scale-110' : ''
+                      }`}
+                      style={{
+                        backgroundColor: isTop3 ? `${rankColor}33` : 'rgba(255,255,255,0.05)',
+                        borderColor: isTop3 ? rankColor : 'rgba(255,255,255,0.1)',
+                        borderWidth: '1px',
+                        color: isTop3 ? rankColor : '#ffffff44'
+                      }}>
+                      {i + 1}
                     </div>
-                  )}
-                  <span className="text-[8px] md:text-[9px] font-black text-white/60 truncate uppercase">{username}</span>
+                    {profileImages[username] && (
+                      <div className={`w-3.5 h-3.5 rounded-full overflow-hidden border flex-shrink-0 ${i === 0 ? 'ring-1 ring-yellow-400 ring-offset-1 ring-offset-black/50' : 'border-white/10'}`}>
+                        <img src={profileImages[username]} alt="" className="w-full h-full object-cover" />
+                      </div>
+                    )}
+                    <span className={`text-[8px] md:text-[9px] font-black truncate uppercase tracking-tight ${i === 0 ? 'text-white' : 'text-white/60'}`}>{username}</span>
+                  </div>
+                  <span className="text-[8px] md:text-[10px] font-black italic pl-1 flex items-center gap-0.5" style={{ color: isTop3 ? rankColor : '#ffffff88' }}>
+                    {value as number}
+                    {i === 0 && <span className="text-[6px] not-italic opacity-50">K</span>}
+                  </span>
                 </div>
-                <span className="text-[9px] md:text-[10px] font-black italic pl-1" style={{ color: i === 0 ? color : '#ffffff88' }}>
-                  {value as number}
-                </span>
-              </div>
-            ))}
+              );
+            })}
           {Object.keys(kills || {}).length === 0 && (
-            <p className="text-[7px] uppercase tracking-[0.15em] text-white/20 font-black text-center py-1">Empty...</p>
+            <p className="text-[6px] uppercase tracking-[0.15em] text-white/20 font-black text-center py-1">No Data</p>
           )}
         </div>
       </div>
@@ -164,34 +216,56 @@ const Scoreboard = React.memo(({ towerConfig }: { towerConfig: TowerConfig }) =>
   const tensionPercent = (armyCounts.player / totalArmy) * 100;
 
   return (
-    <div className="absolute -top-8 left-1/2 -translate-x-1/2 flex flex-col items-center z-40 pointer-events-none select-none w-full max-w-[320px]">
-      <div className="w-full bg-black/80 backdrop-blur-md rounded-2xl border border-white/10 shadow-2xl overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-2.5">
+    <div className="absolute top-0 left-1/2 -translate-x-1/2 flex flex-col items-center z-40 pointer-events-none select-none w-full max-w-[280px] md:max-w-[320px] scale-90 md:scale-100 origin-top">
+      <div className="w-full bg-gradient-to-b from-zinc-900/95 to-black/95 rounded-b-3xl border-x border-b border-white/10 shadow-2xl overflow-hidden">
+        {/* Header Specular Highlight */}
+        <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+
+        <div className="flex items-center justify-between px-5 py-2 md:px-6 md:py-3">
           {/* Team A Score */}
-          <div className="flex flex-col items-start min-w-0 max-w-[40%]">
-            <span className="text-[11px] md:text-[13px] font-black uppercase text-indigo-400 tracking-widest mb-0.5 truncate w-full">
-              {towerConfig?.player.name || "TEAM A"}
-            </span>
-            <span className="text-2xl font-black italic text-white leading-none drop-shadow-md">{playerWins}</span>
+          <div className="flex flex-col items-start min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 w-full">
+              <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 shadow-[0_0_8px_#6366f1]" />
+              <span className="text-[10px] md:text-[12px] font-black uppercase text-indigo-400 tracking-[0.15em] truncate">
+                {towerConfig?.player.name || "TEAM A"}
+              </span>
+            </div>
+            <span className="text-2xl md:text-3xl font-black italic text-white leading-none tracking-tighter drop-shadow-lg">{playerWins}</span>
           </div>
 
-          <div className="px-3 flex flex-col items-center justify-center">
-            <span className="text-[10px] font-black italic text-white/30 tracking-tighter">VS</span>
+          {/* VS Center Badge */}
+          <div className="px-3 flex flex-col items-center justify-center relative">
+            <div className="absolute inset-0 bg-white/5 blur-xl rounded-full" />
+            <div className="w-8 h-8 rounded-full bg-zinc-900 border border-white/10 flex items-center justify-center relative z-10 shadow-inner">
+              <span className="text-[10px] font-black italic text-white/40 tracking-tighter">VS</span>
+            </div>
           </div>
 
           {/* Team B Score */}
-          <div className="flex flex-col items-end min-w-0 max-w-[40%] text-right">
-            <span className="text-[11px] md:text-[13px] font-black uppercase text-rose-400 tracking-widest mb-0.5 truncate w-full">
-              {towerConfig?.enemy.name || "TEAM B"}
-            </span>
-            <span className="text-2xl font-black italic text-white leading-none drop-shadow-md">{enemyWins}</span>
+          <div className="flex flex-col items-end min-w-0 flex-1 text-right">
+            <div className="flex items-center justify-end gap-1.5 w-full">
+              <span className="text-[10px] md:text-[12px] font-black uppercase text-rose-400 tracking-[0.15em] truncate">
+                {towerConfig?.enemy.name || "TEAM B"}
+              </span>
+              <div className="w-1.5 h-1.5 rounded-full bg-rose-500 shadow-[0_0_8px_#f43f5e]" />
+            </div>
+            <span className="text-2xl md:text-3xl font-black italic text-white leading-none tracking-tighter drop-shadow-lg">{enemyWins}</span>
           </div>
         </div>
 
-        {/* Tension Bar (Tarik Tambang) */}
-        <div className="h-2 w-full bg-black/60 flex relative">
-          <div className="h-full bg-indigo-500 transition-all duration-500 ease-out relative" style={{ width: `${tensionPercent}%`, boxShadow: '0 0 8px rgba(99,102,241,0.6)' }} />
-          <div className="h-full bg-rose-500 transition-all duration-500 ease-out relative" style={{ width: `${100 - tensionPercent}%`, boxShadow: '0 0 8px rgba(244,63,94,0.6)' }} />
+        {/* Tension Bar (Clash System) */}
+        <div className="h-2 w-full bg-black/40 flex relative">
+          <div className="h-full bg-gradient-to-r from-indigo-600 to-indigo-400 transition-all duration-700 ease-out relative"
+            style={{ width: `${tensionPercent}%`, boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.2)' }}>
+            <div className="absolute inset-0 bg-white/10 opacity-30 animate-pulse" />
+          </div>
+          <div className="h-full bg-gradient-to-l from-rose-600 to-rose-400 transition-all duration-700 ease-out relative"
+            style={{ width: `${100 - tensionPercent}%`, boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.2)' }}>
+            <div className="absolute inset-0 bg-white/10 opacity-30 animate-pulse" />
+          </div>
+          {/* Central Clash Point */}
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1 h-6 bg-white shadow-[0_0_15px_#fff] z-10 rotate-12"
+            style={{ left: `${tensionPercent}%` }} />
         </div>
       </div>
     </div>
@@ -204,10 +278,14 @@ const FeverTimeOverlay = React.memo(() => {
   return (
     <div className="absolute inset-0 pointer-events-none z-30 flex items-center justify-center overflow-hidden">
       <div className="absolute inset-0 bg-red-600/10 animate-pulse mix-blend-overlay" />
-      <div className="absolute top-1/4 animate-bounce-slow">
-        <h1 className="text-6xl md:text-8xl font-black italic text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 to-red-600 drop-shadow-[0_0_30px_rgba(220,38,38,0.8)] uppercase tracking-tighter">
-          🔥 FEVER TIME 🔥
-        </h1>
+      <div className="absolute top-1/4 animate-bounce-slow flex flex-col items-center">
+        <div className="flex items-center gap-4">
+          <Flame className="w-12 h-12 md:w-20 md:h-20 text-orange-500 fill-orange-500/20 blur-[2px] animate-pulse" />
+          <h1 className="text-6xl md:text-8xl font-black italic text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 to-red-600 drop-shadow-[0_0_30px_rgba(220,38,38,0.8)] uppercase tracking-tighter">
+            FEVER TIME
+          </h1>
+          <Flame className="w-12 h-12 md:w-20 md:h-20 text-orange-500 fill-orange-500/20 blur-[2px] animate-pulse" />
+        </div>
         <p className="text-center text-white/90 font-black tracking-[0.3em] uppercase text-sm mt-2 drop-shadow-md">
           2x Speed & Attack!
         </p>
@@ -217,12 +295,24 @@ const FeverTimeOverlay = React.memo(() => {
 });
 
 // Unit class descriptions shown in CMD panels
-const UNIT_ABILITIES: Record<string, { icon: string; desc: string; skill: string }> = {
-  fighter: { icon: '⚔️', desc: 'Pejuang garis depan', skill: 'Cyclone Slash' },
-  tank: { icon: '🛡️', desc: 'Benteng pertahanan', skill: 'Fortress Guard' },
-  mage: { icon: '✨', desc: 'Serangan jarak jauh', skill: 'Meteor Rain' },
-  marksman: { icon: '🎯', desc: 'Sniper dari belakang', skill: 'Tactical Combo' },
-  assassin: { icon: '🗡️', desc: 'Pembunuh cepat & licik', skill: 'Shadow Step' },
+// Unit class icon mapping
+const UnitIcon = ({ cls, className = "w-3 h-3" }: { cls: string, className?: string }) => {
+  switch (cls) {
+    case 'fighter': return <Sword className={className} />;
+    case 'tank': return <Shield className={className} />;
+    case 'mage': return <Sparkles className={className} />;
+    case 'marksman': return <Target className={className} />;
+    case 'assassin': return <Zap className={className} />;
+    default: return null;
+  }
+};
+
+const UNIT_ABILITIES: Record<string, { desc: string; skill: string; color: string }> = {
+  fighter: { desc: 'Pejuang garis depan', skill: 'Cyclone Slash', color: '#f87171' },
+  tank: { desc: 'Benteng pertahanan', skill: 'Fortress Guard', color: '#60a5fa' },
+  mage: { desc: 'Serangan jarak jauh', skill: 'Meteor Rain', color: '#c084fc' },
+  marksman: { desc: 'Sniper dari belakang', skill: 'Tactical Combo', color: '#fbbf24' },
+  assassin: { desc: 'Pembunuh cepat & licik', skill: 'Shadow Step', color: '#4ade80' },
 };
 
 const RARITY_COLOR: Record<string, string> = {
@@ -237,69 +327,83 @@ const UnitInfoPanel = React.memo(({ towerConfig }: { towerConfig: TowerConfig })
   const eKey = towerConfig.enemy.commentKeyword;
 
   return (
-    // Menggunakan left-3 dan right-3 agar memenuhi layar, justify-between memisahkan elemen, items-end meratakan bawah
-    <div className="absolute bottom-30 left-3 right-3 pointer-events-none select-none flex justify-between items-end">
+    // Menggunakan bottom-[100px] agar tidak tertutup HP bar di mobile, flex-col di layar kecil
+    <div className="absolute bottom-28 md:bottom-10 left-2 right-2 pointer-events-none select-none flex flex-row justify-between items-end gap-2 scale-75 md:scale-100 origin-bottom">
 
       {/* KIRI: Unit Guide */}
-      <div className="w-48 md:w-56 bg-black/50 backdrop-blur-md rounded-xl border border-white/10 shadow-xl overflow-hidden">
-        <div className="flex items-center gap-1.5 px-2.5 py-1.5 border-b border-white/5 bg-gradient-to-r from-amber-500/20 to-transparent">
-          <Sword className="w-3 h-3 text-amber-400" />
-          <span className="text-[9px] font-black text-white uppercase tracking-widest">Nama Unit</span>
+      <div className="w-1/2 max-w-[200px] bg-black/85 rounded-xl border border-white/10 shadow-xl overflow-hidden">
+        <div className="flex items-center gap-1 px-2 py-1 border-b border-white/5 bg-gradient-to-r from-amber-500/20 to-transparent">
+          <Sword className="w-2.5 h-2.5 text-amber-400" />
+          <span className="text-[11px] font-black text-white uppercase tracking-widest">Units</span>
         </div>
-        <div className="px-2.5 py-2 flex flex-col gap-1.5">
+        <div className="px-2 py-1.5 flex flex-col gap-1">
           {Object.entries(UNIT_ABILITIES).map(([cls, info]) => (
-            <div key={cls} className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-lg bg-white/5 flex items-center justify-center text-[12px] shadow-inner border border-white/5">
-                {info.icon}
+            <div key={cls} className="flex items-center gap-1.5">
+              <div className="w-5 h-5 rounded bg-white/5 flex items-center justify-center border border-white/5" style={{ color: info.color }}>
+                <UnitIcon cls={cls} className="w-2.5 h-2.5" />
               </div>
               <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between mb-0.5">
-                  <span className="text-[9px] font-black text-white capitalize tracking-wide">{cls}</span>
-                  <span className="text-[7px] font-bold text-amber-400/80 uppercase">{info.skill}</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-black text-white capitalize">{cls}</span>
                 </div>
-                <div className="text-[8px] text-white/40 leading-tight">{info.desc}</div>
+                <div className="text-[11px] text-white/40 leading-tight truncate">{info.desc}</div>
               </div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* KANAN: How to Spawn Guide */}
-      <div className="w-48 md:w-56 bg-black/50 backdrop-blur-md rounded-xl border border-white/10 shadow-xl overflow-hidden">
-
-        <div className="flex items-center gap-1.5 px-2.5 py-1.5 border-b border-white/5 bg-gradient-to-r from-blue-500/20 to-transparent">
-          <Zap className="w-3 h-3 text-blue-400" />
-          <span className="text-[9px] font-black text-white uppercase tracking-widest">Cara Main</span>
+      {/* KANAN: How to Play Guide */}
+      <div className="w-1/2 max-w-[220px] bg-black/90 rounded-2xl border border-white/10 shadow-2xl overflow-hidden">
+        <div className="flex items-center gap-1.5 px-3 py-2 border-b border-white/5 bg-gradient-to-r from-emerald-500/20 to-transparent">
+          <Target className="w-3 h-3 text-emerald-400" />
+          <span className="text-[10px] md:text-[11px] font-black text-white uppercase tracking-[0.15em]">How to Play</span>
         </div>
+        
         <div className="p-2.5 flex flex-col gap-2">
-          {/* Chat Guide */}
-          <div>
-            <p className="text-[8px] font-bold text-blue-300 mb-1 flex items-center gap-1">
-              <MessageSquare className="w-2.5 h-2.5" /> VIA CHAT
-            </p>
-            <div className="bg-white/5 rounded-lg p-1.5 border border-white/5">
-              <p className="text-[13px] text-white/60 leading-relaxed">
-                Ketik <span className="text-white font-black">[{pKey}/{eKey}]</span> + <span className="text-white font-black">Nama Unit</span>
+          {/* Step 1: Join */}
+          <div className="flex items-start gap-2 group">
+            <div className="w-5 h-5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-500/20 transition-colors">
+              <Users className="w-3 h-3 text-emerald-400" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[8px] text-white/40 uppercase font-black leading-none mb-1">Step 1: Join Team</p>
+              <p className="text-[11px] text-white/90 leading-tight">
+                Ketik <span className="text-emerald-400 font-black">"{pKey}"</span> atau <span className="text-rose-400 font-black">"{eKey}"</span>
               </p>
-              <p className="mt-1 text-[10px] text-white/60 uppercase tracking-widest">Contoh: <span className="text-white/60 uppercase tracking-widest">[{pKey} tank] / [{eKey} mage]</span></p>
             </div>
           </div>
-          {/* Gift Guide */}
-          <div>
-            <p className="text-[8px] font-bold text-pink-400 mb-1 flex items-center gap-1">
-              <Gift className="w-2.5 h-2.5" /> VIA GIFT (GACHA)
-            </p>
-            <div className="space-y-1">
-              <div className="flex items-center justify-between bg-amber-500/10 border border-amber-500/20 rounded-lg px-2 py-1">
-                <span className="text-[8px] text-amber-200/80 font-bold">1 COIN</span>
-                <span className="text-[8px] text-white font-black">MINI GACHA ✨</span>
-              </div>
-              <div className="flex items-center justify-between bg-purple-500/10 border border-purple-500/20 rounded-lg px-2 py-1">
-                <span className="text-[8px] text-purple-200/80 font-bold">&gt;5 COIN</span>
-                <span className="text-[8px] text-white font-black">SUPER GACHA 🔥</span>
-              </div>
+
+          {/* Step 2: Spawn */}
+          <div className="flex items-start gap-2 group">
+            <div className="w-5 h-5 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-500/20 transition-colors">
+              <MessageSquare className="w-3 h-3 text-blue-400" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[8px] text-white/40 uppercase font-black leading-none mb-1">Step 2: Spawn Unit</p>
+              <p className="text-[11px] text-white/90 leading-tight">
+                Ketik <span className="text-white font-black italic">tank, mage, marksman...</span>
+              </p>
             </div>
           </div>
+
+          {/* Step 3: Support */}
+          <div className="flex items-start gap-2 group">
+            <div className="w-5 h-5 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center flex-shrink-0 group-hover:bg-amber-500/20 transition-colors">
+              <Gift className="w-3 h-3 text-amber-400" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[8px] text-white/40 uppercase font-black leading-none mb-1">Step 3: Mass Spawn</p>
+              <p className="text-[11px] text-white/90 leading-tight">
+                Kirim <span className="text-amber-400 font-black italic">Gift</span> untuk pasukan besar!
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer Accent */}
+        <div className="px-2.5 py-1.5 bg-white/5 flex items-center justify-center border-t border-white/5">
+          <p className="text-[7px] text-white/30 font-black uppercase tracking-widest animate-pulse">Waiting for your command...</p>
         </div>
       </div>
 
@@ -326,7 +430,7 @@ const RouletteOverlay = React.memo(() => {
   if (spinState === "hidden" || !rouletteEvent) return null;
 
   return (
-    <div className="absolute inset-0 z-50 flex items-center justify-center pointer-events-none bg-black/40 backdrop-blur-sm animate-fade-in">
+    <div className="absolute inset-0 z-50 flex items-center justify-center pointer-events-none bg-black/80 animate-fade-in">
       <div className="flex flex-col items-center">
         <h2 className="text-2xl md:text-4xl font-black italic text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 to-amber-500 drop-shadow-[0_0_20px_rgba(252,211,77,0.8)] uppercase tracking-widest mb-4">
           ROULETTE GACHA
@@ -356,7 +460,7 @@ const VictoryWipe = React.memo(({ state }: { state: string }) => {
       <div className="absolute inset-0 bg-white animate-flash-out" />
 
       {/* Colored Mood Overlay */}
-      <div className={`absolute inset-0 ${state === 'WON' ? 'bg-indigo-600/40' : 'bg-rose-600/40'} backdrop-blur-[4px] animate-fade-in`}
+      <div className={`absolute inset-0 ${state === 'WON' ? 'bg-indigo-600/40' : 'bg-rose-600/40'} animate-fade-in`}
         style={{ animationDelay: '0.2s' }} />
 
       {/* Dynamic Scanlines / Glitch */}
@@ -369,151 +473,145 @@ const VictoryWipe = React.memo(({ state }: { state: string }) => {
 });
 
 const TowerHPBars = React.memo(({ towerConfig }: { towerConfig: TowerConfig }) => {
-  const [playerBaseHp, setPlayerHp] = useState(useStore.getState().playerBaseHp);
-  const [enemyBaseHp, setEnemyHp] = useState(useStore.getState().enemyBaseHp);
-  const [armyCounts, setArmyCounts] = useState(useStore.getState().armyCounts);
-
-  useEffect(() => {
-    const unsub = useStore.subscribe((state) => {
-      setPlayerHp(state.playerBaseHp);
-      setEnemyHp(state.enemyBaseHp);
-      setArmyCounts(state.armyCounts);
-    });
-    return unsub;
-  }, []);
+  const playerBaseHp = useStore(s => s.playerBaseHp);
+  const enemyBaseHp = useStore(s => s.enemyBaseHp);
+  const armyCounts = useStore(s => s.armyCounts);
 
   const pWidth = (playerBaseHp / (towerConfig?.baseHp || 1000)) * 100;
   const eWidth = (enemyBaseHp / (towerConfig?.baseHp || 1000)) * 100;
 
   return (
-    <div className="absolute bottom-3 left-3 right-3 pointer-events-none select-none">
-
-      {/* ── Gift Info Bar: horizontal strip above HP bars ──────────────────── */}
+    <div className="absolute bottom-3 left-4 right-4 pointer-events-none select-none">
+      {/* ── Gift Info Bar: Premium Badges above HP bars ──────────────────── */}
       {(() => {
         const playerGifts = towerConfig.player.giftBindings || [];
         const enemyGifts = towerConfig.enemy.giftBindings || [];
-
         if (playerGifts.length === 0 && enemyGifts.length === 0) return null;
 
-        // Fungsi bantuan untuk merender setiap item gift agar kode tidak berulang
         const renderGiftItem = (b: GiftBinding, i: number, teamColor: string) => {
           const formation = GIFT_FORMATIONS[b.formationId];
           if (!formation) return null;
+          const giftDef = lookupGiftByKeyword(b.keyword);
+
           return (
             <div
               key={i}
-              className="flex items-center gap-1.5 bg-black/75 backdrop-blur-sm rounded-lg px-2 py-1 border flex-shrink-0"
-              style={{ borderColor: `${teamColor}55` }}
+              className="flex items-center gap-2 bg-zinc-950/90 rounded-xl px-2.5 py-1.5 border border-white/5 shadow-lg flex-shrink-0 relative overflow-hidden"
             >
-              {/* Team dot */}
-              <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: teamColor }} />
-              {/* Gift name */}
-              {(() => {
-                const giftDef = lookupGiftByKeyword(b.keyword);
-                return giftDef?.picture ? (
-                  <div className="flex items-center gap-1">
-                    <img src={giftDef.picture} alt={b.keyword} className="w-7 h-7 object-contain drop-shadow-md" />
-                  </div>
-                ) : (
-                  <span className="text-pink-400 text-[9px] font-black">🎁</span>
-                );
-              })()}
-              {/* Formation name */}
-              {/* <span className="text-amber-300 text-[9px] font-black max-w-[50px] truncate">{formation.name}</span> */}
-              {/* Units breakdown */}
-              <div className="flex items-center gap-1">
-                {formation.rules.map((r, ri) => (
-                  <span key={ri} className="text-[8px] font-bold whitespace-nowrap" style={{ color: RARITY_COLOR[r.rarity] }}>
-                    {UNIT_ABILITIES[r.unitClass]?.icon}{r.count}
-                  </span>
-                ))}
+              {/* Team Accent Top Border */}
+              <div className="absolute top-0 inset-x-0 h-[2px]" style={{ backgroundColor: teamColor, boxShadow: `0 0 8px ${teamColor}` }} />
+
+              {/* Gift Icon */}
+              <div className="relative group">
+                <div className="absolute inset-0 bg-white/10 blur-md rounded-full scale-0 group-hover:scale-100 transition-transform" />
+                <img
+                  src={giftDef?.picture || "https://p16-webcast.tiktokcdn.com/img/maliva/webcast-va/resource/cdb55940740d5c83879b2934f9a7d08e.png~tplv-obj.webp"}
+                  alt={b.keyword}
+                  className="w-6 h-6 md:w-8 md:h-8 object-contain drop-shadow-[0_0_5px_rgba(255,255,255,0.3)]"
+                />
+              </div>
+
+              {/* Units Breakdown */}
+              <div className="flex flex-col gap-0.5">
+                <div className="flex items-center gap-1">
+                  {formation.rules.map((r, ri) => (
+                    <div key={ri} className="flex items-center" style={{ color: RARITY_COLOR[r.rarity] }}>
+                      <UnitIcon cls={r.unitClass} className="w-2.5 h-2.5" />
+                      <span className="text-[8px] md:text-[9px] font-black tracking-tighter opacity-80">{r.count}</span>
+                    </div>
+                  ))}
+                </div>
+                <span className="text-[6px] md:text-[7px] text-white/30 font-black uppercase tracking-widest">{b.keyword}</span>
               </div>
             </div>
           );
         };
 
         return (
-          <div className="flex items-center justify-between px-36 w-full -mb-10 gap-4">
-
-            {/* Container Kiri: Enemy */}
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {enemyGifts.map((b, i) => renderGiftItem(b, i, towerConfig.enemy.color))}
+          <div className="flex items-end justify-between px-2 md:px-12 w-full mb-3 gap-3 scale-90 md:scale-100 origin-bottom max-w-5xl mx-auto">
+            {/* Enemy Gifts (Left) */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {enemyGifts.slice(0, 3).map((b, i) => renderGiftItem(b, i, towerConfig.enemy.color))}
             </div>
-
-            {/* Container Kanan: Player */}
-            <div className="flex items-center gap-1.5 flex-wrap justify-end text-right">
-              {playerGifts.map((b, i) => renderGiftItem(b, i, towerConfig.player.color))}
+            {/* Player Gifts (Right) */}
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+              {playerGifts.slice(0, 3).map((b, i) => renderGiftItem(b, i, towerConfig.player.color))}
             </div>
-
           </div>
         );
       })()}
 
-      <div className="grid grid-cols-2 gap-2 md:gap-4">
-        {/* Team A */}
-        <div>
-          <div className="flex items-end justify-between mb-1">
-            <div>
-              <div className="flex items-center gap-1 mb-0.5">
-                <Shield className="w-2.5 h-2.5 text-indigo-400" />
-                <span className="text-[14px] md:text-[18px] uppercase tracking-widest text-white/50 font-black truncate max-w-[70px] md:max-w-none">
+      <div className="grid grid-cols-2 gap-4 md:gap-8 max-w-4xl mx-auto items-end">
+        {/* Team A HP Area */}
+        <div className="space-y-1">
+          <div className="flex items-end justify-between px-1">
+            <div className="flex flex-col">
+              <div className="flex items-center gap-1.5 mb-0.5">
+                <div className="w-2.5 h-2.5 bg-indigo-500 rounded-sm rotate-45" />
+                <span className="text-[10px] md:text-[14px] uppercase tracking-[0.2em] text-white/50 font-black truncate max-w-[80px] md:max-w-none">
                   {towerConfig?.player.name}
                 </span>
                 {towerConfig?.player.score !== undefined && towerConfig.player.score > 0 && (
-                  <span className="px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 text-[6px] font-black border border-indigo-500/30 ml-1">
-                    ★ {towerConfig.player.score}
-                  </span>
+                  <div className="px-1.5 py-0.5 rounded bg-indigo-500/30 text-indigo-200 text-[6px] font-black border border-indigo-500/40 ml-1">
+                    RANK {towerConfig.player.score}
+                  </div>
                 )}
               </div>
-              <span className="text-base md:text-xl font-black italic text-white tabular-nums leading-none">
-                {playerBaseHp.toLocaleString()}
-                <span className="text-[14px] md:text-[18px] text-indigo-400 not-italic ml-0.5">HP</span>
-              </span>
+              <div className="flex items-baseline gap-1">
+                <span className="text-xl md:text-2xl font-black italic text-white tracking-tighter">
+                  {Math.round(playerBaseHp).toLocaleString()}
+                </span>
+                <span className="text-[8px] md:text-[10px] text-indigo-400 font-black uppercase opacity-60">HP remaining</span>
+              </div>
             </div>
-            <div className="flex items-center gap-1 px-1.5 py-0.5 hud-glass rounded text-[12px] font-black text-indigo-300">
-              <Users className="w-2 h-2" /> {armyCounts.player}
+            <div className="flex items-center gap-1.5 px-2 py-1 bg-indigo-500/10 border border-indigo-500/20 rounded-lg text-[10px] font-black text-indigo-300">
+              <Users className="w-3 h-3" /> {armyCounts.player}
             </div>
           </div>
-          <div className="h-2.5 md:h-3 bg-black/60 rounded-full overflow-hidden border border-white/5">
+          <div className="h-3 md:h-4 bg-zinc-900/80 rounded-full overflow-hidden border border-white/5 p-0.5">
             <div
-              className="h-full rounded-full transition-all duration-700 ease-out relative"
-              style={{ width: `${pWidth}%`, backgroundColor: towerConfig?.player.color, boxShadow: `0 0 12px ${towerConfig?.player.color}44` }}
+              className="h-full rounded-full transition-all duration-700 ease-out relative group overflow-hidden"
+              style={{ width: `${pWidth}%`, background: `linear-gradient(to right, ${towerConfig?.player.color}, #6366f1)`, boxShadow: `0 0 15px ${towerConfig?.player.color}44` }}
             >
-              <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent" />
+              <div className="absolute inset-0 bg-[linear-gradient(45deg,rgba(255,255,255,0.1)_25%,transparent_25%,transparent_50%,rgba(255,255,255,0.1)_50%,rgba(255,255,255,0.1)_75%,transparent_75%,transparent)] bg-[length:20px_20px] animate-[shimmer_2s_linear_infinite]" />
+              <div className="absolute top-0 inset-x-0 h-1/2 bg-white/20" />
             </div>
           </div>
         </div>
 
-        {/* Team B */}
-        <div>
-          <div className="flex items-end justify-between mb-1">
-            <div className="flex items-center gap-1 px-1.5 py-0.5 hud-glass rounded text-[12px] font-black text-rose-300">
-              <Users className="w-2 h-2" /> {armyCounts.enemy}
+        {/* Team B HP Area */}
+        <div className="space-y-1">
+          <div className="flex items-end justify-between px-1">
+            <div className="flex items-center gap-1.5 px-2 py-1 bg-rose-500/10 border border-rose-500/20 rounded-lg text-[10px] font-black text-rose-300">
+              <Users className="w-3 h-3" /> {armyCounts.enemy}
             </div>
-            <div className="text-right">
-              <div className="flex items-center justify-end gap-1 mb-0.5">
+            <div className="flex flex-col items-end">
+              <div className="flex items-center gap-1.5 mb-0.5 justify-end">
                 {towerConfig?.enemy.score !== undefined && towerConfig.enemy.score > 0 && (
-                  <span className="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 text-[6px] font-black border border-rose-500/30 mr-1">
-                    ★ {towerConfig.enemy.score}
-                  </span>
+                  <div className="px-1.5 py-0.5 rounded bg-rose-500/30 text-rose-200 text-[6px] font-black border border-rose-500/40 mr-1">
+                    RANK {towerConfig.enemy.score}
+                  </div>
                 )}
-                <span className="text-[14px] md:text-[18px] uppercase tracking-widest text-white/50 font-black truncate max-w-[70px] md:max-w-none">
+                <span className="text-[10px] md:text-[14px] uppercase tracking-[0.2em] text-white/50 font-black truncate max-w-[80px] md:max-w-none">
                   {towerConfig?.enemy.name}
                 </span>
-                <Shield className="w-2.5 h-2.5 text-rose-400" />
+                <div className="w-2.5 h-2.5 bg-rose-500 rounded-sm rotate-45" />
               </div>
-              <span className="text-base md:text-xl font-black italic text-white tabular-nums leading-none">
-                <span className="text-[14px] md:text-[18px] text-rose-400 not-italic mr-0.5">HP</span>
-                {enemyBaseHp.toLocaleString()}
-              </span>
+              <div className="flex items-baseline gap-1 justify-end">
+                <span className="text-[8px] md:text-[10px] text-rose-400 font-black uppercase opacity-60">HP remaining</span>
+                <span className="text-xl md:text-2xl font-black italic text-white tracking-tighter">
+                  {Math.round(enemyBaseHp).toLocaleString()}
+                </span>
+              </div>
             </div>
           </div>
-          <div className="h-2.5 md:h-3 bg-black/60 rounded-full overflow-hidden border border-white/5">
+          <div className="h-3 md:h-4 bg-zinc-900/80 rounded-full overflow-hidden border border-white/5 p-0.5">
             <div
-              className="h-full rounded-full transition-all duration-700 ease-out relative ml-auto"
-              style={{ width: `${eWidth}%`, backgroundColor: towerConfig?.enemy.color, boxShadow: `0 0 12px ${towerConfig?.enemy.color}44` }}
+              className="h-full rounded-full transition-all duration-700 ease-out relative ml-auto overflow-hidden"
+              style={{ width: `${eWidth}%`, background: `linear-gradient(to left, ${towerConfig?.enemy.color}, #f43f5e)`, boxShadow: `0 0 15px ${towerConfig?.enemy.color}44` }}
             >
-              <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent" />
+              <div className="absolute inset-0 bg-[linear-gradient(-45deg,rgba(255,255,255,0.1)_25%,transparent_25%,transparent_50%,rgba(255,255,255,0.1)_50%,rgba(255,255,255,0.1)_75%,transparent_75%,transparent)] bg-[length:20px_20px] animate-[shimmer_2s_linear_infinite]" />
+              <div className="absolute top-0 inset-x-0 h-1/2 bg-white/20" />
             </div>
           </div>
         </div>
@@ -523,7 +621,7 @@ const TowerHPBars = React.memo(({ towerConfig }: { towerConfig: TowerConfig }) =
 });
 
 const ChatOverlay = React.memo(({ messages, onClose }: { messages: any[], onClose: () => void }) => (
-  <div className="absolute top-14 right-3 bottom-16 w-64 md:w-72 pointer-events-auto select-none animate-fade-in-scale">
+  <div className="absolute top-14 right-2 bottom-20 w-[240px] md:w-72 pointer-events-auto select-none animate-fade-in-scale scale-90 md:scale-100 origin-top-right">
     <div className="hud-glass rounded-2xl h-full flex flex-col overflow-hidden">
       <div className="flex items-center justify-between p-3 border-b border-white/5">
         <div className="flex items-center gap-2">
@@ -542,7 +640,7 @@ const ChatOverlay = React.memo(({ messages, onClose }: { messages: any[], onClos
             </div>
           ) : (
             messages.slice(-15).map((msg) => (
-              <div key={msg.id} className="bg-black/30 p-2 rounded-lg flex gap-2 animate-slide-up border border-white/5 backdrop-blur-md">
+              <div key={msg.id} className="bg-black/80 p-2 rounded-lg flex gap-2 animate-slide-up border border-white/5">
                 <div className="w-5 h-5 rounded-full bg-zinc-800 flex-shrink-0 flex items-center justify-center overflow-hidden border border-white/10">
                   {msg.profileImage ? (
                     <img src={msg.profileImage} alt="" className="w-full h-full object-cover" />
@@ -597,18 +695,18 @@ export const UIOverlay = ({
     <>
       {/* ======== SETUP WIZARD (Modal over canvas) ======== */}
       {gameState === "SETUP" && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 pointer-events-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 p-4 pointer-events-auto">
           {/* Autocomplete Datalist for Setup Screen */}
           <datalist id="gift-suggestions">
             {Object.keys(GIFT_DICTIONARY).map((giftName) => (
               <option key={giftName} value={giftName} />
             ))}
           </datalist>
-          <div className="w-full max-w-lg hud-glass rounded-3xl p-5 md:p-10 shadow-[0_0_80px_-20px_rgba(99,102,241,0.25)] relative overflow-hidden animate-fade-in-scale">
+          <div className="w-full max-w-lg hud-glass rounded-2xl md:rounded-3xl p-4 md:p-10 shadow-[0_0_80px_-20px_rgba(99,102,241,0.25)] relative overflow-hidden animate-fade-in-scale max-h-[95vh] overflow-y-auto">
             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-72 h-72 bg-indigo-600/8 blur-[100px] rounded-full -z-10" />
 
             <div className="flex flex-col items-center text-center gap-3 mb-6">
-              <div className="p-4 bg-indigo-500/10 rounded-2xl text-indigo-400 ring-1 ring-white/10 backdrop-blur-md shadow-xl animate-pulse-slow">
+              <div className="p-4 bg-indigo-900/80 rounded-2xl text-indigo-400 ring-1 ring-white/10 shadow-xl animate-pulse-slow">
                 <Settings2 className="w-7 h-7" />
               </div>
               <div className="space-y-1">
@@ -963,17 +1061,17 @@ export const UIOverlay = ({
 
           {/* Weather Indicator — Top Center (Below Scoreboard) */}
           {gameState === 'PLAYING' && (
-            <div className="absolute top-20 left-1/2 -translate-x-1/2 z-10 pointer-events-none animate-fade-in-scale">
-              <div className="hud-glass rounded-xl px-3 py-1.5 flex items-center gap-2">
-                {weather === 'CLEAR' && <Sun className="w-3.5 h-3.5 text-yellow-400" />}
-                {weather === 'RAIN' && <CloudRain className="w-3.5 h-3.5 text-blue-400" />}
-                {weather === 'STORM' && <Wind className="w-3.5 h-3.5 text-slate-400" />}
-                {weather === 'THUNDER' && <CloudLightning className="w-3.5 h-3.5 text-purple-400" />}
+            <div className="absolute top-16 md:top-20 left-1/2 -translate-x-1/2 z-10 pointer-events-none animate-fade-in-scale scale-75 md:scale-100 origin-top">
+              <div className="hud-glass rounded-xl px-2 py-1 flex items-center gap-1.5 border border-white/5">
+                {weather === 'CLEAR' && <Sun className="w-3 h-3 text-yellow-400" />}
+                {weather === 'RAIN' && <CloudRain className="w-3 h-3 text-blue-400" />}
+                {weather === 'STORM' && <Wind className="w-3 h-3 text-slate-400" />}
+                {weather === 'THUNDER' && <CloudLightning className="w-3 h-3 text-purple-400" />}
                 <div>
-                  <span className="text-[8px] font-black uppercase tracking-widest text-white block leading-tight">
+                  <span className="text-[7px] font-black uppercase tracking-widest text-white block leading-none">
                     {(WEATHER_CONFIG as any)[weather].name}
                   </span>
-                  <span className="text-[7px] font-bold text-white/40 uppercase tracking-tight block leading-tight">
+                  <span className="text-[6px] font-bold text-white/40 uppercase tracking-tight block leading-none">
                     {(WEATHER_CONFIG as any)[weather].boostText}
                   </span>
                 </div>

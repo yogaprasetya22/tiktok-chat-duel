@@ -137,6 +137,7 @@ export interface KillEvent {
     victimType: "unit" | "boss" | "base";
     timestamp: number;
     profileImage?: string;
+    rarity?: UnitRarity;
 }
 
 export interface BattleStats {

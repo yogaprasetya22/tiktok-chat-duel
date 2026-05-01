@@ -15,7 +15,7 @@
     "@types/three": "^0.183.1",
     "bitecs": "0.3.40",
     "leva": "^0.10.1",
-    "lucide-react": "^1.7.0",
+    "lucide-react": "^1.14.0",
     "meshoptimizer": "^1.1.0",
     "next": "16.2.2",
     "r3f-perf": "7.1.2",
