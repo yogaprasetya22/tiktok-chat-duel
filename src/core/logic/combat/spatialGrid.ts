@@ -105,4 +105,4 @@ export class SpatialHashGrid {
     }
 }
 
-export const battleGrid = new SpatialHashGrid(8); // Slightly larger cells for better performance
+export const battleGrid = new SpatialHashGrid(12); // Slightly larger cells for better performance

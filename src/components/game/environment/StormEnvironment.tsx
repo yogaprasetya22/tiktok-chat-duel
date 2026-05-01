@@ -155,14 +155,45 @@ const Forest = ({ potatoMode }: { potatoMode?: boolean }) => {
 
     useEffect(() => {
         if (treeData.current.length === 0) {
-            for (let i = 0; i < TREE_COUNT; i++) {
-                const r = 45 + Math.random() * 100;
-                const angle = Math.random() * Math.PI * 2;
-                treeData.current.push({
-                    x: r * Math.cos(angle),
-                    z: r * Math.sin(angle),
-                    s: 1.0 + Math.random() * 2.0,
-                });
+            for (let i = 0; i < TREE_COUNT; ) {
+                let valid = false;
+                let x = 0, z = 0, r = 0;
+                
+                // Try 50 times to find a valid spot
+                for (let attempt = 0; attempt < 50; attempt++) {
+                    r = 65 + Math.random() * 100; // Push them further out minimum radius
+                    const angle = Math.random() * Math.PI * 2;
+                    x = r * Math.cos(angle);
+                    z = r * Math.sin(angle);
+                    
+                    // FIX: Camera orbits around X = -55 to 55. Keep trees strictly OUTSIDE this zone
+                    // so they NEVER block the cinematic view
+                    if (Math.abs(x) < 65) continue;
+
+                    // FIX: Prevent trees from intersecting (pohon saling tembus)
+                    let overlap = false;
+                    for (let j = 0; j < i; j++) {
+                        const dx = x - treeData.current[j].x;
+                        const dz = z - treeData.current[j].z;
+                        if (dx * dx + dz * dz < 100) { // minimum distance 10 meters between trees
+                            overlap = true;
+                            break;
+                        }
+                    }
+                    if (!overlap) {
+                        valid = true;
+                        break;
+                    }
+                }
+                
+                if (valid) {
+                    treeData.current.push({ x, z, s: 1.0 + Math.random() * 2.0 });
+                    i++;
+                } else {
+                    // If we can't find a spot after 50 attempts, just force it to avoid infinite loop
+                    treeData.current.push({ x: 100 + Math.random() * 50, z: 100 + Math.random() * 50, s: 1.0 });
+                    i++;
+                }
             }
         }
     }, []);
@@ -217,9 +248,10 @@ const Forest = ({ potatoMode }: { potatoMode?: boolean }) => {
             return;
         }
 
-        // Throttle raycast to every 12 frames — human eye can't see faster flicker
+        // OPTIMIZATION: Throttle raycast to every 30 frames (~2x/sec).
+        // The opacity lerp is slow (delta*10) so the eye never notices delayed detection.
         occFrameRef.current++;
-        if (occFrameRef.current % 12 === 0) {
+        if (occFrameRef.current % 30 === 0) {
             const camPos = camera.position;
             _occDir.set(
                 cinematicState.focusX - camPos.x,
@@ -252,7 +284,7 @@ const Forest = ({ potatoMode }: { potatoMode?: boolean }) => {
                     ref={trunkMatRef}
                     color="#4d2915"
                     onBeforeCompile={(s: any) => applyPainterlyStyle(s as any)}
-                    transparent opacity={1} depthWrite={false}
+                    transparent opacity={1} depthWrite={true}
                 />
             </instancedMesh>
             <instancedMesh ref={topRef} args={[null as any, null as any, TREE_COUNT]} castShadow frustumCulled={false}>
@@ -261,7 +293,7 @@ const Forest = ({ potatoMode }: { potatoMode?: boolean }) => {
                     ref={topMatRef}
                     color="#1a3d1a"
                     onBeforeCompile={(s: any) => applyPainterlyStyle(s as any)}
-                    transparent opacity={1} depthWrite={false}
+                    transparent opacity={1} depthWrite={true}
                 />
             </instancedMesh>
         </group>
@@ -480,23 +512,24 @@ export const StormEnvironment = ({ baseDistance = 36, potatoMode = false }: { ba
     const isClear = weather === 'CLEAR';
     const isThunder = weather === 'THUNDER';
     
-    const tHemi = isClear ? 3.5 : (isThunder ? 3.0 : 2.8);
-    const tAmb  = isClear ? 2.2 : 2.0;
-    const tDir  = isClear ? 12.0 : 8.0;
+    const tHemi = isClear ? 8.0 : (isThunder ? 7.0 : 6.0);
+    const tAmb  = isClear ? 5.0 : 4.0;
+    const tDir  = isClear ? 40.0 : 25.0;
     
     // Smooth Lerp Intensities
     if (hemiRef.current) hemiRef.current.intensity = THREE.MathUtils.smoothstep(hemiRef.current.intensity, tHemi, 0.05);
     if (ambientRef.current) ambientRef.current.intensity = THREE.MathUtils.smoothstep(ambientRef.current.intensity, tAmb, 0.05);
     if (dirRef.current) dirRef.current.intensity = THREE.MathUtils.smoothstep(dirRef.current.intensity, tDir, 0.05);
     
-    // Direct Fog Update
+    // Direct Fog Update - Make it very far away so it doesn't obscure the battle
     if (fogRef.current) {
-        const targetFogCol = isClear ? "#333333" : "#8899aa";
+        const targetFogCol = isClear ? "#ffffff" : "#cccccc";
         targetColor.current.set(targetFogCol);
         fogRef.current.color.lerp(targetColor.current, 0.05);
-        fogRef.current.near = THREE.MathUtils.lerp(fogRef.current.near, isClear ? 180 : 100, 0.05);
-        fogRef.current.far = THREE.MathUtils.lerp(fogRef.current.far, isClear ? 800 : 500, 0.05);
+        fogRef.current.near = THREE.MathUtils.lerp(fogRef.current.near, 1000, 0.05);
+        fogRef.current.far = THREE.MathUtils.lerp(fogRef.current.far, 5000, 0.05);
     }
+
   });
 
   // Random Weather Cycle (Logic stays outside the hot loop)
@@ -536,22 +569,22 @@ export const StormEnvironment = ({ baseDistance = 36, potatoMode = false }: { ba
       <Environment 
         files={initialWeather === 'CLEAR' ? "/qwantani_sunset_1k.exr" : "/qwantani_night_1k.exr"} 
         background={true} 
-        environmentIntensity={2.5}
+        environmentIntensity={1.5}
       />
 
       <hemisphereLight
         ref={hemiRef}
-        intensity={2.0}
+        intensity={1.2}
         color={"#ffffff"}
         groundColor={"#222222"}
       />
       
-      <ambientLight ref={ambientRef} intensity={1.0} />
+      <ambientLight ref={ambientRef} intensity={0.8} />
       
       <directionalLight
         ref={dirRef}
-        position={[100, 15, -100]}
-        intensity={5.0}
+        position={[100, 40, -100]}
+        intensity={4.5}
         castShadow={!isSetup}
         shadow-mapSize={isSetup ? [512, 512] : [1024, 1024]}
         shadow-camera-far={120}

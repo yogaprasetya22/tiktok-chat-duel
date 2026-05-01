@@ -18,8 +18,6 @@ import { StormEnvironment } from "./environment/StormEnvironment";
 import { DamageHUDBatcher } from "./systems/DamageHUDBatcher";
 import { Perf } from "r3f-perf";
 
-import { EffectComposer, Bloom, ToneMapping } from "@react-three/postprocessing";
-
 import { TowerConfig, MapObstacle, UnitRuntimeData } from "@/src/core/domain/unit.types";
 import * as YUKA from "yuka";
 import { useStore } from "@/src/state/useStore";
@@ -34,10 +32,7 @@ const _camTarget    = new THREE.Vector3();
 const _lookSmooth   = new THREE.Vector3();
 
 // ---- Preallocated scratch buffers for frontline computation (zero-alloc per frame) ----
-const _scratchPZ = new Float32Array(4096); // player Z positions
-const _scratchPX = new Float32Array(4096); // player X positions
-const _scratchEZ = new Float32Array(4096); // enemy Z positions
-const _scratchEX = new Float32Array(4096); // enemy X positions
+
 let   _frontlineFrame = 0;                 // throttle counter
 let   _cachedRawFX = 0;                    // cached result between throttle frames
 let   _cachedRawFZ = 0;
@@ -143,12 +138,14 @@ const CameraDirector = ({
       introTimer.current += dt;
 
       // Check if units are actively fighting — accelerate to battle phase
-      const reg = unitRegistry?.current;
+      // OPTIMIZATION: Just check if any unit is alive (early exit on 4+)
+      const reg2 = unitRegistry?.current;
       let hasActiveCombat = false;
-      if (reg) {
+      if (reg2) {
         let count = 0;
-        for (let i = 0; i < reg.length; i++) {
-          if (reg[i]?.isActive && reg[i].hp > 0) { count++; if (count >= 4) { hasActiveCombat = true; break; } }
+        const len = Math.min(reg2.length, 50); // Only scan first 50 slots (early units)
+        for (let i = 0; i < len; i++) {
+          if (reg2[i]?.isActive && reg2[i].hp > 0) { count++; if (count >= 4) { hasActiveCombat = true; break; } }
         }
       }
 
@@ -191,92 +188,110 @@ const CameraDirector = ({
     }
 
     // ── True Frontline Meeting Point (throttled, zero-alloc) ─────────────────
-    // Compute every 4 frames to reduce CPU cost and smooth out rapid unit changes
+    // Compute every 8 frames to minimize CPU cost during high unit density
     _frontlineFrame++;
-    if (_frontlineFrame % 4 === 0) {
+    if (_frontlineFrame % 8 === 0) {
       const reg = unitRegistry?.current;
       if (reg && reg.length > 0) {
+        let pFrontZ = Infinity, pFrontX = 0;
+        let eFrontZ = -Infinity, eFrontX = 0;
         let pCount = 0, eCount = 0;
+        // OPTIMIZATION: Scan with stride (skip every other unit) for huge armies
+        // Camera interpolation is so slow (FOCUS_DECAY=0.5) that skipping half the scan is invisible
+        const stride = reg.length > 60 ? 2 : 1;
 
-        for (let i = 0; i < reg.length; i++) {
+        for (let i = 0; i < reg.length; i += stride) {
           const u = reg[i];
           if (!u || !u.isActive || u.hp <= 0) continue;
+          
           if (u.type === 'player') {
-            _scratchPZ[pCount] = u.position[2];
-            _scratchPX[pCount] = u.position[0];
             pCount++;
+            if (u.position[2] < pFrontZ) {
+              pFrontZ = u.position[2];
+              pFrontX = u.position[0];
+            }
           } else {
-            _scratchEZ[eCount] = u.position[2];
-            _scratchEX[eCount] = u.position[0];
             eCount++;
+            if (u.position[2] > eFrontZ) {
+              eFrontZ = u.position[2];
+              eFrontX = u.position[0];
+            }
           }
         }
 
+        let rZ = 0, rX = 0;
         if (pCount > 0 && eCount > 0) {
-          // Sort in-place (typed array slice avoids heap alloc)
-          const pZSlice = _scratchPZ.subarray(0, pCount);
-          const eZSlice = _scratchEZ.subarray(0, eCount);
-          pZSlice.sort(); // ascending — frontline is min Z for player
-          eZSlice.sort(); // ascending — frontline is max Z (end) for enemy
+          rZ = (pFrontZ + eFrontZ) / 2;
+          rX = (pFrontX + eFrontX) / 2;
+        } else if (pCount > 0) {
+          rZ = pFrontZ; rX = pFrontX;
+        } else if (eCount > 0) {
+          rZ = eFrontZ; rX = eFrontX;
+        }
 
-          const frontN = Math.max(1, Math.floor(Math.min(pCount, eCount) * 0.25));
-
-          let pFrontZ = 0, pFrontX = 0, eFrontZ = 0, eFrontX = 0;
-          for (let i = 0; i < frontN; i++) {
-            pFrontZ += pZSlice[i];              // lowest Z = most advanced player
-            eFrontZ += eZSlice[eCount - 1 - i]; // highest Z = most advanced enemy
-            pFrontX += _scratchPX[i];
-            eFrontX += _scratchEX[eCount - 1 - i];
-          }
-          pFrontZ /= frontN; eFrontZ /= frontN;
-          pFrontX /= frontN; eFrontX /= frontN;
-
-          let rZ = (pFrontZ + eFrontZ) / 2;
-          let rX = (pFrontX + eFrontX) / 2;
-
+        if (pCount > 0 || eCount > 0) {
           if (rZ > baseDistance - 6)  rZ = baseDistance - 2;
           else if (rZ < -baseDistance + 6) rZ = -baseDistance + 2;
-
           _cachedRawFX = rX;
           _cachedRawFZ = rZ;
         }
       }
     }
 
-    // Smooth focus toward cached raw value — very slow so camera never chases noise
-    const FOCUS_DECAY = 0.9; // was 2.5 — slower = much smoother under high unit count
-    const newFX = expDecay(focusX.current, _cachedRawFX, FOCUS_DECAY, dt);
-    const newFZ = expDecay(focusZ.current, _cachedRawFZ, FOCUS_DECAY, dt);
-    // Hard clamp: focus can never jump more than 0.25 units/frame (prevents jitter burst)
-    const MAX_STEP = 0.25;
-    focusX.current = Math.abs(newFX - focusX.current) > MAX_STEP
-      ? focusX.current + Math.sign(newFX - focusX.current) * MAX_STEP
-      : newFX;
-    focusZ.current = Math.abs(newFZ - focusZ.current) > MAX_STEP
-      ? focusZ.current + Math.sign(newFZ - focusZ.current) * MAX_STEP
-      : newFZ;
+    // Smooth focus toward cached raw value — much slower for cinematic smoothness
+    // Remove the hard clamp as it causes staircase jitter when following moving units
+    const FOCUS_DECAY = 0.5; 
+    focusX.current = expDecay(focusX.current, _cachedRawFX, FOCUS_DECAY, dt);
+    focusZ.current = expDecay(focusZ.current, _cachedRawFZ, FOCUS_DECAY, dt);
 
     const fx = focusX.current;
     const fz = focusZ.current;
 
-    // ── 7 Cinematic Angles — Medium distance for better action visibility ──
+    // ── Cinematic Angles ──
     const angle = angleIndex.current;
-    if (angle === 0) {
-      _targetPos.set(fx + 45, 22, fz);           // Side Right — balanced
-    } else if (angle === 1) {
-      _targetPos.set(fx + 35, 18, fz + 35);      // Hero Shot — balanced pull
-    } else if (angle === 2) {
-      _targetPos.set(fx + 45, 32, fz - 45);      // High Diagonal — balanced iso
-    } else if (angle === 3) {
-      _targetPos.set(fx - 45, 22, fz);           // Side Left Mirror — balanced
-    } else if (angle === 4) {
-      _targetPos.set(fx + 28, 18, fz + 45);      // Tracking Dolly — balanced behind
+    
+    // Check if we are in a "Siege" state (frontline is very close to either tower)
+    const isSiege = Math.abs(fz) >= baseDistance - 15;
+    const siegeSide = Math.sign(fz); // 1 = player tower side (z>0), -1 = enemy tower side (z<0)
+    
+    if (isSiege) {
+      // --- TOWER CINEMATIC ANGLES ---
+      const towerZ = siegeSide * baseDistance;
+      const siegeAngle = angle % 2;
+
+      if (siegeAngle === 0) {
+        // Angle 1: "Defender's View" 
+        // Kamera berada di sekitar tower, menatap ke arah pasukan yang menyerbu.
+        // Y dinaikkan ke 12 agar transisi dari battle normal tidak terlalu "anjlok".
+        _targetPos.set(siegeSide * 15, 12, towerZ - siegeSide * 12);
+        _focusPoint.set(fx, 2, fz); // Fokus ke tengah barisan depan pasukan
+      } else {
+        // Angle 2: "Frontal Siege" 
+        // Kamera di belakang pasukan (agak ke atas), menatap lurus ke arah tower.
+        _targetPos.set(-20, 15, fz - siegeSide * 22);
+        _focusPoint.set(0, 6, towerZ); // Fokus menengadah sedikit ke badan tower
+      }
     } else {
-      _targetPos.set(fx - 35, 18, fz - 35);      // Low Opposite Mirror — balanced
+      // --- NORMAL BATTLE ANGLES --- 
+      // Jarak seimbang untuk pandangan luas yang nyaman
+      if (angle === 0) {
+        _targetPos.set(fx + 45, 22, fz);           // Side Right — balanced
+      } else if (angle === 1) {
+        _targetPos.set(fx + 35, 18, fz + 35);      // Hero Shot — balanced pull
+      } else if (angle === 2) {
+        _targetPos.set(fx + 45, 32, fz - 45);      // High Diagonal — balanced iso
+      } else if (angle === 3) {
+        _targetPos.set(fx - 45, 22, fz);           // Side Left Mirror — balanced
+      } else if (angle === 4) {
+        _targetPos.set(fx + 28, 18, fz + 45);      // Tracking Dolly — balanced behind
+      } else {
+        _targetPos.set(fx - 35, 18, fz - 35);      // Low Opposite Mirror — balanced
+      }
+
+      // Titik fokus default saat bertarung di tengah map
+      _focusPoint.set(fx, 1.5, fz);
     }
-
-    _focusPoint.set(fx, 1.5, fz);
-
+    
     cinematicState.focusX = fx;
     cinematicState.focusY = 1.5;
     cinematicState.focusZ = fz;
@@ -432,7 +447,7 @@ export const GameCanvas = React.memo(({
           far: 500  // Dikurangi: depth buffer lebih presisi, less overdraw
         }}
         shadows={false}  // DIMATIKAN: PCFShadowMap sangat mahal, tidak visible dari atas
-        dpr={dpr}
+        dpr={[1, 1.5]}    // OPTIMIZATION: Cap at 1.5x instead of 2-3x for mobile high-res stability
         gl={{
           antialias: false,  // DIMATIKAN: 2x GPU cost. Bloom sudah memberi glow anti-alias visual
           powerPreference: "high-performance",
@@ -527,8 +542,9 @@ export const GameCanvas = React.memo(({
           ))}
         </VFXProvider>
 
-        {/* Post Processing — Ringan: threshold tinggi agar hanya efek bersinar yg kena bloom */}
+        {/* Post Processing — DIMATIKAN SEMENTARA UNTUK FPS MAKSIMAL */}
         {gameState !== 'SETUP' && !settingsRef.current.potatoMode && (
+          /*
           <EffectComposer enableNormalPass={false} multisampling={0}>
             <Bloom
               luminanceThreshold={1.2}
@@ -539,6 +555,8 @@ export const GameCanvas = React.memo(({
             />
             <ToneMapping adaptive={false} />
           </EffectComposer>
+          */
+          null
         )}
       </Canvas>
 

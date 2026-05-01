@@ -748,7 +748,7 @@ const BattleArmyComponent = ({
               position={[0, 2.6, 0]}
               renderOrder={102}
             >
-              <planeGeometry args={[0.9, 0.9]} />
+              <planeGeometry args={[0.7, 0.7]} />
               <shaderMaterial
                 ref={(el) => { nameImageMaterials.current[i] = el; }}
                 vertexShader={ProfileImageShader.vertexShader}
@@ -767,7 +767,7 @@ const BattleArmyComponent = ({
               position={[0, 2.6, -0.01]}
               renderOrder={101}
             >
-              <circleGeometry args={[0.45, 16]} />
+              <circleGeometry args={[0.35, 16]} />
               <meshBasicMaterial color="#ffffff" transparent opacity={0.72} />
             </mesh>
           </group>

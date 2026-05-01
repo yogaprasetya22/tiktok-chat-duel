@@ -125,6 +125,7 @@ function getBaseScale(classKey: ClassKey, level: number, isBoss: boolean): numbe
 const _hudTemp = new THREE.Object3D();
 const _healthColor = new THREE.Color();
 const _whiteColor = new THREE.Color('#ffffff');
+const _frustumSphere = new THREE.Sphere(new THREE.Vector3(), 5);
 let _ecsFrame = 0; // module-level frame counter for throttling
 
 
@@ -157,12 +158,14 @@ const getCachedMaterial = (
 
   applyPainterlyStyle(mat);
   mat.color.set(teamColor);
+  mat.roughness = 1.0; 
+  mat.metalness = 0.0; 
 
   const rarityColors: Record<string, string> = {
     common: '#333333', elite: '#2244ff', epic: '#aa22ff', legendary: '#ffaa00'
   };
   mat.emissive.set(rarityColors[rarity] || '#333333');
-  mat.emissiveIntensity = rarity === 'legendary' ? 5.0 : (rarity === 'common' ? 0.6 : 2.5);
+  mat.emissiveIntensity = rarity === 'legendary' ? 4.0 : (rarity === 'common' ? 0.3 : 1.5);
 
   _materialCache.set(key, mat);
   return mat;
@@ -336,6 +339,7 @@ const ECSArmyRendererInner = ({
     const camQ = state.camera.quaternion;
     const settings = settingsRef.current;
     const frustum = (state as any).battleFrustum;
+
     const nowMs = Date.now();
 
     _ecsFrame++;
@@ -478,9 +482,10 @@ const ECSArmyRendererInner = ({
 
         if (shadowRef.current && healthBarRef.current) {
           // Increase HUD detail radius to 200m so labels don't disappear when camera moves back
-          // HUD visible radius at 200m, but now with strict Frustum Culling per-unit
-          const HUD_DETAIL_DIST_SQ = 200 * 200;
-          const isVisible = frustum ? frustum.containsPoint(item.group.position) : true;
+          // HUD visible radius at 200m
+          const HUD_DETAIL_DIST_SQ = 10000; // 100m range
+          _frustumSphere.center.set(item.group.position.x, item.group.position.y + 2, item.group.position.z);
+          const isVisible = frustum ? frustum.intersectsSphere(_frustumSphere) : true;
           const showDetail = isVisible && (uData.isBoss || (uData.dSq || 0) < HUD_DETAIL_DIST_SQ);
 
           if (showDetail) {
@@ -582,9 +587,9 @@ const ECSArmyRendererInner = ({
         const isNearCenter = distFromCenterSq < 60 * 60; // 60u from origin
         // Skip frame: near center always full rate; far from camera slow down
         const sf = uData.isBoss ? 1
-          : isNearCenter ? 1                        // frontline: every frame
-          : (uData.dSq || 0) > 10000 ? 3           // far: every 3rd frame
-          : 1;                                       // close: every frame
+          : isNearCenter ? 2                        // frontline: 30 FPS animations (smooth enough for tiny units)
+          : (uData.dSq || 0) > 10000 ? 4           // far: 15 FPS animations
+          : 2;                                       // close: 30 FPS animations
 
         if (!tooFar && time - item.lastUpdate >= 0.016 * sf) {
           item.mixer.update(delta * sf);

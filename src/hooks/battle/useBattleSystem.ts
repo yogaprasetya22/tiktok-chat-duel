@@ -366,46 +366,46 @@ export const useBattleSystem = () => {
   );
 
   const [towerConfig, setTowerConfig] = useState<TowerConfig>({
-    player: {
-      name: "Boy [B]",
-      color: "#0066FF",
-      active: true,
-      commentKeyword: "B",
-      commentType: "contains",
-      // 10 gift 1-koin paling sering dengan gambar
-      giftBindings: [
-        { keyword: "rose",      formationId: "kroco_swarm"    },
-        { keyword: "gg",        formationId: "shield_wall"    },
-        { keyword: "tiktok",    formationId: "ranger_patrol"  },
-        { keyword: "thumbs up", formationId: "boss_arrival"   },
-        { keyword: "heart",     formationId: "royal_guard"    },
-        { keyword: "love you",  formationId: "arcane_council" },
-      ]
-    },
-    enemy: {
-      name: "Girl [G]",
-      color: "#FF0033",
-      active: true,
-      commentKeyword: "G",
-      commentType: "contains",
-      // 10 gift 1-koin paling sering dengan gambar
-      giftBindings: [
-        { keyword: "coffee",    formationId: "kroco_swarm"    },
-        { keyword: "heart me",  formationId: "shield_wall"    },
-        { keyword: "ice cream cone", formationId: "ranger_patrol" },
-        { keyword: "wink wink", formationId: "shadow_monarch" },
-        { keyword: "cake slice", formationId: "boss_arrival"   },
-        { keyword: "fairy wings", formationId: "dragon_slayers" },
-      ]
-    },
-    baseHp: 100000,
-    baseDistance: 40,
-    maxUnits: 15,
-    unitConfig: {
-      hpMultiplier: 1.0,
-      speedMultiplier: 1.0,
-      attackMultiplier: 1.0,
-    },
+      player: {
+          name: "Boy [B]",
+          color: "#0066FF",
+          active: true,
+          commentKeyword: "B",
+          commentType: "contains",
+          // 6 Gift 1-Koin khas penonton maskulin/umum
+          giftBindings: [
+              { keyword: "rose", formationId: "tier5_vanguard" }, // Tangguh di depan
+              { keyword: "gg", formationId: "tier5_artillery" }, // Serangan jarak jauh
+              { keyword: "tiktok", formationId: "tier5_sorcery" }, // Ledakan magic
+              { keyword: "weights", formationId: "tier5_assassins" }, // Burst damage mematikan
+              { keyword: "fire", formationId: "tier5_berserkers" }, // Pasukan barbar
+              { keyword: "thumbs up", formationId: "tier5_apocalypse" }, // Formasi dewa lengkap
+          ],
+      },
+      enemy: {
+          name: "Girl [G]",
+          color: "#FF0033",
+          active: true,
+          commentKeyword: "G",
+          commentType: "contains",
+          // 6 Gift 1-Koin khas penonton feminin/kasual
+          giftBindings: [
+              { keyword: "coffee", formationId: "tier5_vanguard" }, // Tangguh di depan
+              { keyword: "heart me", formationId: "tier5_artillery" }, // Serangan jarak jauh
+              { keyword: "ice cream cone", formationId: "tier5_sorcery" }, // Ledakan magic
+              { keyword: "perfume", formationId: "tier5_assassins" }, // Burst damage mematikan
+              { keyword: "lollipop", formationId: "tier5_berserkers" }, // Pasukan barbar
+              { keyword: "star", formationId: "tier5_apocalypse" }, // Formasi dewa lengkap
+          ],
+      },
+      baseHp: 100000,
+      baseDistance: 40,
+      maxUnits: 15, // Disarankan dinaikkan sedikit karena spam 1 koin akan sangat masif
+      unitConfig: {
+          hpMultiplier: 1.0,
+          speedMultiplier: 1.0,
+          attackMultiplier: 1.0,
+      },
   });
   const towerConfigRef = useRef(towerConfig);
   useEffect(() => {
@@ -418,6 +418,7 @@ export const useBattleSystem = () => {
       victim: string,
       victimType: KillEvent["victimType"],
       profileImage?: string,
+      rarity?: UnitRarity,
     ) => {
       useStore.getState().addKillEvent({
         id: Math.random().toString(36).substring(7),
@@ -426,6 +427,7 @@ export const useBattleSystem = () => {
         victimType,
         timestamp: Date.now(),
         profileImage,
+        rarity,
       });
     },
     [],
@@ -758,7 +760,7 @@ export const useBattleSystem = () => {
       physicsAccumulatorRef.current += simDelta;
 
       let steps = 0;
-      const MAX_STEPS_PER_FRAME = 3;
+      const MAX_STEPS_PER_FRAME = 1;
       while (
         physicsAccumulatorRef.current >= PHYSICS_STEP &&
         steps < MAX_STEPS_PER_FRAME
@@ -844,8 +846,8 @@ export const useBattleSystem = () => {
             : u.unitClass === "assassin"
               ? 60
               : 180;
-        const phaseOffset = i % 16;
-        const frameCheck = (Math.floor(simNow / 16) + phaseOffset) % 16 === 0;
+        const phaseOffset = i % 24;
+        const frameCheck = (Math.floor(simNow / 16) + phaseOffset) % 24 === 0;
 
         if (
           frameCheck &&
@@ -872,7 +874,7 @@ export const useBattleSystem = () => {
           const neighbors = battleGrid.queryRadius(
             uData.position[0],
             uData.position[2],
-            isFighter || isAssassin ? 32 : 12,
+            isFighter || isAssassin ? 16 : 12,
           );
           for (let j = 0; j < neighbors.length; j++) {
             const potential = neighbors[j];
@@ -1364,8 +1366,9 @@ export const useBattleSystem = () => {
                   addKillEvent(
                     u.userName,
                     currentTarget.userName,
-                    "unit",
+                    currentTarget.isBoss ? "boss" : "unit",
                     u.profileImage,
+                    currentTarget.rarity,
                   );
                   updateStats(u.userName, u.type, 0, true);
                 }
@@ -1423,8 +1426,9 @@ export const useBattleSystem = () => {
                             addKillEvent(
                               u.userName,
                               p.userName,
-                              "unit",
+                              p.isBoss ? "boss" : "unit",
                               u.profileImage,
+                              p.rarity,
                             );
                             updateStats(u.userName, u.type, 0, true);
                           }
@@ -1515,8 +1519,9 @@ export const useBattleSystem = () => {
                           addKillEvent(
                             u.userName,
                             cp.userName,
-                            "unit",
+                            cpUnit.isBoss ? "boss" : "unit",
                             u.profileImage,
+                            cpUnit.rarity,
                           );
                           updateStats(u.userName, u.type, cDmg);
                           accumulateDamage(
@@ -1546,8 +1551,9 @@ export const useBattleSystem = () => {
                   addKillEvent(
                     u.userName,
                     currentTarget.userName,
-                    "unit",
+                    currentTarget.isBoss ? "boss" : "unit",
                     u.profileImage,
+                    currentTarget.rarity,
                   );
                   updateStats(u.userName, u.type, 0, true);
                 }
@@ -1804,14 +1810,14 @@ export const useBattleSystem = () => {
             if (u.type === "player") {
               enemyBaseHpRef.current -= dmg;
               if (enemyBaseHpRef.current <= 0) {
-                addKillEvent(u.userName, "ENEMY BASE", "base", u.profileImage);
+                addKillEvent(u.userName, "ENEMY BASE", "base", u.profileImage, "legendary");
                 updateStats(u.userName, u.type, 0, true);
                 freezeTimeRef.current = 100;
               }
             } else {
               playerBaseHpRef.current -= dmg;
               if (playerBaseHpRef.current <= 0) {
-                addKillEvent(u.userName, "PLAYER BASE", "base", u.profileImage);
+                addKillEvent(u.userName, "PLAYER BASE", "base", u.profileImage, "legendary");
                 updateStats(u.userName, u.type, 0, true);
                 freezeTimeRef.current = 100;
               }
@@ -2169,7 +2175,7 @@ export const useBattleSystem = () => {
         }, 10000);
       }
 
-      if (simNow - lastStateUpdate.current > 100) {
+      if (simNow - lastStateUpdate.current > 250) {
         lastStateUpdate.current = simNow;
         let pC = 0,
           eC = 0;
