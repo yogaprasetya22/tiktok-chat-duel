@@ -374,16 +374,21 @@ const UnitInfoPanel = React.memo(({ towerConfig }: { towerConfig: TowerConfig })
             </div>
           </div>
 
-          {/* Step 2: Spawn */}
+          {/* Step 2: Spawn Unit */}
           <div className="flex items-start gap-2 group">
             <div className="w-5 h-5 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-500/20 transition-colors">
               <MessageSquare className="w-3 h-3 text-blue-400" />
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-[8px] text-white/40 uppercase font-black leading-none mb-1">Step 2: Spawn Unit</p>
-              <p className="text-[11px] text-white/90 leading-tight">
-                Ketik <span className="text-white font-black italic">tank, mage, marksman...</span>
-              </p>
+              <div className="flex flex-col gap-0.5">
+                <p className="text-[11px] text-white/90 leading-tight">
+                  Ketik <span className="text-white font-black italic">tank, mage, marksman...</span>
+                </p>
+                <p className="text-[8px] text-white/30 uppercase tracking-tighter">
+                  Contoh: <span className="text-amber-400/80 font-bold">{pKey} tank</span>
+                </p>
+              </div>
             </div>
           </div>
 
