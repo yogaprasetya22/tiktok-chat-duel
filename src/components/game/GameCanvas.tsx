@@ -154,13 +154,13 @@ const CameraDirector = ({
       
       if (introPhase.current === 0) {
         if (!isSwapped) {
-          // Normal: Start at Player Base — Super Wide
-          _targetPos.set(85, 45, baseDistance + 35);
-          _focusPoint.set(0, 4, baseDistance);
+          // Normal: Start at Player Base — Ultra Wide
+          _targetPos.set(120, 70, baseDistance + 50);
+          _focusPoint.set(0, 2, baseDistance * 0.8);
         } else {
-          // Swapped: Start at Enemy Base — Super Wide
-          _targetPos.set(-85, 45, -baseDistance - 35);
-          _focusPoint.set(0, 4, -baseDistance);
+          // Swapped: Start at Enemy Base — Ultra Wide
+          _targetPos.set(-120, 70, -baseDistance - 50);
+          _focusPoint.set(0, 2, -baseDistance * 0.8);
         }
         
         if (introTimer.current > 4.0 || hasActiveCombat) {
@@ -169,13 +169,13 @@ const CameraDirector = ({
         }
       } else if (introPhase.current === 1) {
         if (!isSwapped) {
-          // Normal: Move to Enemy Base — Super Wide
-          _targetPos.set(-85, 45, -baseDistance - 35);
-          _focusPoint.set(0, 4, -baseDistance);
+          // Normal: Move to Enemy Base — Ultra Wide
+          _targetPos.set(-120, 70, -baseDistance - 50);
+          _focusPoint.set(0, 2, -baseDistance * 0.8);
         } else {
-          // Swapped: Move to Player Base — Super Wide
-          _targetPos.set(85, 45, baseDistance + 35);
-          _focusPoint.set(0, 4, baseDistance);
+          // Swapped: Move to Player Base — Ultra Wide
+          _targetPos.set(120, 70, baseDistance + 50);
+          _focusPoint.set(0, 2, baseDistance * 0.8);
         }
 
         if (introTimer.current > 4.0 || hasActiveCombat) {
@@ -203,60 +203,61 @@ const CameraDirector = ({
       return;
     }
 
+    const angles = [
+      { pos: [-42, 30, 42], name: 'Side Left' },
+      { pos: [45, 32, -45], name: 'Diagonal Front' },
+      { pos: [55, 45, 55], name: 'High Diagonal' }, // Cinematic but closer than 75
+      { pos: [42, 30, 42], name: 'Side Right' },
+      { pos: [0, 35, 55], name: 'Dolly Track' },
+      { pos: [-45, 32, -45], name: 'Diagonal Back' },
+    ];
+
     // ── True Frontline Meeting Point (throttled, zero-alloc) ─────────────────
     // Compute every 15 frames (4x a second at 60fps) to minimize CPU cost during high unit density
     _frontlineFrame++;
     if (_frontlineFrame % 15 === 0) {
       const reg = unitRegistry?.current;
       if (reg && reg.length > 0) {
-        let pFrontZ = Infinity, pFrontX = 0;
-        let eFrontZ = -Infinity, eFrontX = 0;
+        let pFrontZ = -Infinity, pFrontX = 0;
+        let eFrontZ = Infinity, eFrontX = 0;
         let pCount = 0, eCount = 0;
         
-        // OPTIMIZATION: Scan with dynamic stride for huge armies
-        // Camera interpolation is so slow (FOCUS_DECAY=0.5) that skipping scan elements is invisible
-        const stride = reg.length > 150 ? 4 : (reg.length > 60 ? 2 : 1);
-
-        for (let i = 0; i < reg.length; i += stride) {
+        for (let i = 0; i < reg.length; i++) {
           const u = reg[i];
           if (!u || !u.isActive || u.hp <= 0) continue;
           
           if (u.type === 'player') {
             pCount++;
-            if (u.position[2] < pFrontZ) {
+            if (u.position[2] < pFrontZ || pFrontZ === -Infinity) {
               pFrontZ = u.position[2];
               pFrontX = u.position[0];
             }
           } else {
             eCount++;
-            if (u.position[2] > eFrontZ) {
+            if (u.position[2] > eFrontZ || eFrontZ === Infinity) {
               eFrontZ = u.position[2];
               eFrontX = u.position[0];
             }
           }
         }
 
-        let rZ = 0, rX = 0;
         if (pCount > 0 && eCount > 0) {
-          rZ = (pFrontZ + eFrontZ) / 2;
-          rX = (pFrontX + eFrontX) / 2;
+          _cachedRawFX = (pFrontX + eFrontX) / 2;
+          _cachedRawFZ = (pFrontZ + eFrontZ) / 2;
         } else if (pCount > 0) {
-          rZ = pFrontZ; rX = pFrontX;
+          _cachedRawFX = pFrontX; _cachedRawFZ = pFrontZ;
         } else if (eCount > 0) {
-          rZ = eFrontZ; rX = eFrontX;
+          _cachedRawFX = eFrontX; _cachedRawFZ = eFrontZ;
         }
 
         if (pCount > 0 || eCount > 0) {
-          if (rZ > baseDistance - 6)  rZ = baseDistance - 2;
-          else if (rZ < -baseDistance + 6) rZ = -baseDistance + 2;
-          _cachedRawFX = rX;
-          _cachedRawFZ = rZ;
+          if (_cachedRawFZ > baseDistance - 6)  _cachedRawFZ = baseDistance - 2;
+          else if (_cachedRawFZ < -baseDistance + 6) _cachedRawFZ = -baseDistance + 2;
         }
       }
     }
 
     // Smooth focus toward cached raw value — much slower for cinematic smoothness
-    // Remove the hard clamp as it causes staircase jitter when following moving units
     const FOCUS_DECAY = 0.5; 
     focusX.current = expDecay(focusX.current, _cachedRawFX, FOCUS_DECAY, dt);
     focusZ.current = expDecay(focusZ.current, _cachedRawFZ, FOCUS_DECAY, dt);
@@ -265,7 +266,8 @@ const CameraDirector = ({
     const fz = focusZ.current;
 
     // ── Cinematic Angles ──
-    const angle = angleIndex.current;
+    const angleIdx = angleIndex.current % angles.length;
+    const currentAngle = angles[angleIdx];
     
     // Check if we are in a "Siege" state (frontline is very close to either tower)
     const isSiege = Math.abs(fz) >= baseDistance - 15;
@@ -274,36 +276,27 @@ const CameraDirector = ({
     if (isSiege) {
       // --- TOWER CINEMATIC ANGLES ---
       const towerZ = siegeSide * baseDistance;
-      const siegeAngle = angle % 2;
+      const siegeAngle = angleIndex.current % 2;
 
       if (siegeAngle === 0) {
         // Angle 1: "Defender's View" 
         // Kamera diperjauh dan dinaikkan agar label terlihat jelas
-        _targetPos.set(siegeSide * 25, 28, towerZ - siegeSide * 28);
+        _targetPos.set(siegeSide * 35, 35, towerZ - siegeSide * 35);
         _focusPoint.set(fx, 2, fz); 
       } else {
         // Angle 2: "Frontal Siege" 
-        _targetPos.set(-30, 25, fz - siegeSide * 35);
+        _targetPos.set(-35, 30, fz - siegeSide * 40);
         _focusPoint.set(0, 6, towerZ); 
       }
     } else {
       // --- NORMAL BATTLE ANGLES --- 
-      // Jarak dioptimalkan agar label nama & profil terlihat sangat jelas (tidak terlalu dekat/jauh)
-      if (angle === 0) {
-        _targetPos.set(fx + 42, 32, fz);           // Side Right — CLOSER
-      } else if (angle === 1) {
-        _targetPos.set(fx + 45, 30, fz + 45);      // Diagonal Front Right
-      } else if (angle === 2) {
-        _targetPos.set(fx + 50, 38, fz - 50);      // High Diagonal Back Right
-      } else if (angle === 3) {
-        _targetPos.set(fx - 42, 32, fz);           // Side Left — CLOSER
-      } else if (angle === 4) {
-        _targetPos.set(fx + 35, 30, fz + 55);      // Tracking Dolly
+      // Use the pre-defined cinematic angles array
+      if (angleIdx === 4) { // Dolly Track (Follows the focus point)
+        _targetPos.set(fx + currentAngle.pos[0], currentAngle.pos[1], fz + currentAngle.pos[2]);
       } else {
-        _targetPos.set(fx - 45, 30, fz - 45);      // Diagonal Back Left
+        // Fixed position angles
+        _targetPos.set(currentAngle.pos[0], currentAngle.pos[1], currentAngle.pos[2]);
       }
-
-      // Titik fokus default saat bertarung di tengah map
       _focusPoint.set(fx, 1.5, fz);
     }
     
