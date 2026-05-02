@@ -304,6 +304,7 @@ const Forest = ({ potatoMode }: { potatoMode?: boolean }) => {
 
 
 // --- 2. GPU Accelerated Rain ---
+/*
 const RAIN_COUNT = 500;
 const RainMaterial = new THREE.ShaderMaterial({
   uniforms: {
@@ -331,64 +332,15 @@ const RainMaterial = new THREE.ShaderMaterial({
   transparent: true,
 });
 
+/*
 const Rain = () => {
-  const meshRef = useRef<THREE.InstancedMesh>(null);
-  const dummy = useMemo(() => new THREE.Object3D(), []);
-
-  useEffect(() => {
-    if (!meshRef.current) return;
-    for (let i = 0; i < RAIN_COUNT; i++) {
-      dummy.position.set(
-        (Math.random() - 0.5) * 200,
-        Math.random() * 60,
-        (Math.random() - 0.5) * 200
-      );
-      dummy.rotation.set(0.1, 0, -0.1);
-      dummy.updateMatrix();
-      meshRef.current.setMatrixAt(i, dummy.matrix);
-    }
-    meshRef.current.instanceMatrix.needsUpdate = true;
-  }, [dummy]);
-
-  useFrame((state) => {
-    RainMaterial.uniforms.time.value = state.clock.elapsedTime;
-  });
-
-  return (
-    <instancedMesh ref={meshRef} args={[undefined, undefined, RAIN_COUNT]} frustumCulled={false}>
-      <cylinderGeometry args={[0.015, 0.015, 1.2, 3]} />
-      <primitive object={RainMaterial} attach="material" />
-    </instancedMesh>
-  );
+...
 };
 
-
-// --- 3. Lightning Flash ---
 const Lightning = () => {
-  const lightRef = useRef<THREE.PointLight>(null);
-
-  useEffect(() => {
-    const trigger = () => {
-      if (lightRef.current) {
-        lightRef.current.intensity = 200 + Math.random() * 300;
-        setTimeout(() => { if (lightRef.current) lightRef.current.intensity = 0; }, 50);
-
-        if (Math.random() > 0.5) {
-          setTimeout(() => {
-            if (lightRef.current) lightRef.current.intensity = 150 + Math.random() * 150;
-            setTimeout(() => { if (lightRef.current) lightRef.current.intensity = 0; }, 50);
-          }, 100 + Math.random() * 100);
-        }
-      }
-      setTimeout(trigger, 3000 + Math.random() * 6000);
-    };
-
-    const timer = setTimeout(trigger, 2000);
-    return () => clearTimeout(timer);
-  }, []);
-
-  return <pointLight ref={lightRef} position={[0, 40, -10]} distance={200} decay={1.5} color="#cce6ff" intensity={0} castShadow={false} />;
+...
 };
+*/
 
 const GRASS_COUNT = 800;
 const GrassMaterial = new THREE.ShaderMaterial({
@@ -532,17 +484,9 @@ export const StormEnvironment = ({ baseDistance = 36, potatoMode = false }: { ba
 
   });
 
-  // Random Weather Cycle (Logic stays outside the hot loop)
+  // Random Weather Cycle Disabled
   useEffect(() => {
-    if (isSetup) return; // Don't cycle weather during setup
-    const cycle = () => {
-      const weathers: ("CLEAR" | "RAIN" | "STORM" | "THUNDER")[] = ["CLEAR", "RAIN", "STORM", "THUNDER"];
-      const next = weathers[Math.floor(Math.random() * weathers.length)];
-      setWeather(next);
-      setTimeout(cycle, 15000 + Math.random() * 20000); // 15-35s cycle
-    };
-    const timer = setTimeout(cycle, 40000); // Slower cycle
-    return () => clearTimeout(timer);
+    setWeather('CLEAR');
   }, [setWeather]);
 
   if (potatoMode) {
@@ -600,19 +544,12 @@ export const StormEnvironment = ({ baseDistance = 36, potatoMode = false }: { ba
       <Rock />
       <Forest potatoMode={potatoMode} />
       
-      <RainManager active={weatherRef.current !== 'CLEAR'} />
-      <LightningManager active={weatherRef.current === 'THUNDER'} />
+      {/* <RainManager active={weatherRef.current !== 'CLEAR'} />
+      <LightningManager active={weatherRef.current === 'THUNDER'} /> */}
       
       <fog ref={fogRef} attach="fog" args={["#111111", 80, 400]} />
     </group>
   );
 };
 
-// --- Sub-components for Rain/Lightning to avoid top-level re-renders ---
-const RainManager = ({ active }: { active: boolean }) => {
-    return active ? <Rain /> : null;
-};
-
-const LightningManager = ({ active }: { active: boolean }) => {
-    return active ? <Lightning /> : null;
-};
+// Weather sub-components disabled

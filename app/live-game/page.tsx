@@ -97,13 +97,20 @@ export default function GamePage() {
     lastProcessedId.current = newMessages[newMessages.length - 1].id;
 
     newMessages.forEach((msg: any) => {
-      // 1. FEVER TIME LOGIC (Likes)
+      // 1. TACTICAL SUPPORT LOGIC (Likes → random effect every 500 likes)
       if (msg.type === "like") {
         cumulativeLikesRef.current += (msg.likeCount || 1);
         if (cumulativeLikesRef.current - likeCounterRef.current >= 500) {
           likeCounterRef.current += 500;
-          // Trigger global fever time for 10s (handled in useStore later)
-          useStore.getState().triggerFeverTime();
+          // Randomly pick 1 of 3 tactical effects
+          const roll = Math.random();
+          if (roll < 0.33) {
+            useStore.getState().triggerFeverTime();
+          } else if (roll < 0.66) {
+            useStore.getState().triggerOrbitalLightning();
+          } else {
+            useStore.getState().triggerMedicalSupply();
+          }
         }
       }
 
@@ -226,8 +233,8 @@ export default function GamePage() {
 
   if (!mounted) {
     return (
-      <div className="fixed inset-0 w-screen h-[100dvh] overflow-hidden touch-none select-none bg-zinc-950 flex items-center justify-center">
-        <div className="text-zinc-700 uppercase font-black tracking-[0.3em] animate-pulse text-sm">
+      <div className="fixed inset-0 w-screen h-[100dvh] overflow-hidden touch-none select-none bg-[#3E3024] flex items-center justify-center">
+        <div className="text-[#B5A642] uppercase font-black tracking-[0.3em] animate-pulse text-sm">
           Initializing Battle Engine...
         </div>
       </div>
@@ -237,7 +244,7 @@ export default function GamePage() {
   const mvpData = getMVPData();
 
   return (
-    <div className="fixed inset-0 w-screen h-[100dvh] overflow-hidden touch-none select-none bg-zinc-950">
+    <div className="fixed inset-0 w-screen h-[100dvh] overflow-hidden touch-none select-none bg-[#3E3024]">
       {/* ===== LAYER 0: Three.js Canvas (always full-screen) ===== */}
       <div className="absolute inset-0 w-full h-full z-0">
         <GameCanvas

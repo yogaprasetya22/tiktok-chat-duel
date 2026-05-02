@@ -346,10 +346,12 @@ const BattleArmyComponent = ({
   const nameAvailableSlots = useRef<number[]>(Array.from({ length: NAME_POOL_SIZE }, (_, i) => i));
   const nameGroupRefs = useRef<(THREE.Group | null)[]>(Array(NAME_POOL_SIZE).fill(null));
   const nameTextRefs = useRef<(any | null)[]>(Array(NAME_POOL_SIZE).fill(null));
+  const nameBadgeRefs = useRef<(any | null)[]>(Array(NAME_POOL_SIZE).fill(null));
   const nameImageRefs = useRef<(THREE.Mesh | null)[]>(Array(NAME_POOL_SIZE).fill(null));
   const nameImageMaterials = useRef<(THREE.ShaderMaterial | null)[]>(Array(NAME_POOL_SIZE).fill(null));
   const nameBorderRefs = useRef<(THREE.Mesh | null)[]>(Array(NAME_POOL_SIZE).fill(null));
   const nameSlotContent = useRef<string[]>(Array(NAME_POOL_SIZE).fill(''));
+  const nameSlotBadge = useRef<string[]>(Array(NAME_POOL_SIZE).fill(''));
   const nameSlotColor = useRef<string[]>(Array(NAME_POOL_SIZE).fill('#ffffff'));
   const nameSlotImage = useRef<string[]>(Array(NAME_POOL_SIZE).fill(''));
   // Tracks which unit ID currently owns each slot — prevents cross-unit texture contamination
@@ -362,7 +364,6 @@ const BattleArmyComponent = ({
   const lastNameCullTime = useRef(0);
   const cachedActiveUnits = useRef<any[]>([]);
   const frameCountRef = useRef(0);
-  const hudDirtyRef = useRef(true); // FIX: Track if HUD needs GPU upload
   useFrame((state, delta) => {
     // 0. Update Frustum for class animators
     _projMatrix.multiplyMatrices(state.camera.projectionMatrix, state.camera.matrixWorldInverse);
@@ -380,7 +381,7 @@ const BattleArmyComponent = ({
     frameCountRef.current++;
 
     // PERFORMANCE: Use consistent constants at the top
-    const HUD_DETAIL_DIST_SQ = 4900; // 70 * 70
+    const HUD_DETAIL_DIST_SQ = 22500; // 150 * 150 (Increased for cinematic wide shots)
     const HUD_MAX_RANGE_SQ = 7350; // 4900 * 1.5
 
     // PERFORMANCE: Throttle sorting and unit filtering to every 20 frames
@@ -505,17 +506,25 @@ const BattleArmyComponent = ({
           slotGeneration.current[slot]++;
           nameSlotImage.current[slot] = ''; // Force re-evaluation of image
           const mesh = nameTextRefs.current[slot];
+          const badgeMesh = nameBadgeRefs.current[slot];
           const group = nameGroupRefs.current[slot];
 
           if (mesh) {
             const badge = getRarityBadge(u.rarity);
-            const label = badge + (u.userName || 'Guest');
+            const userName = (u.userName || 'Guest');
 
             let needsSync = false;
-            if (nameSlotContent.current[slot] !== label) {
-              mesh.text = label;
-              nameSlotContent.current[slot] = label;
+            if (nameSlotContent.current[slot] !== userName) {
+              mesh.text = userName;
+              nameSlotContent.current[slot] = userName;
               needsSync = true;
+            }
+
+            if (badgeMesh && nameSlotBadge.current[slot] !== badge) {
+              badgeMesh.text = badge;
+              nameSlotBadge.current[slot] = badge;
+              badgeMesh.sync();
+              badgeMesh.visible = true;
             }
 
             const rawCol = u.type === 'player' ? towerConfig.player.color : towerConfig.enemy.color;
@@ -524,6 +533,7 @@ const BattleArmyComponent = ({
 
             if (nameSlotColor.current[slot] !== teamStyle) {
               mesh.color = teamStyle;
+              if (badgeMesh) badgeMesh.color = teamStyle;
               nameSlotColor.current[slot] = teamStyle;
               const borderMesh = nameBorderRefs.current[slot];
               if (borderMesh) {
@@ -536,11 +546,16 @@ const BattleArmyComponent = ({
             const targetFontSize = u.isBoss ? 1.0 : 0.45;
             if (mesh.fontSize !== targetFontSize) {
               mesh.fontSize = targetFontSize;
+              if (badgeMesh) badgeMesh.fontSize = targetFontSize * 0.85; // Badge slightly smaller than name
               needsSync = true;
             }
 
             mesh.outlineWidth = 0.08;
             mesh.outlineColor = "#000000";
+            if (badgeMesh) {
+              badgeMesh.outlineWidth = 0.08;
+              badgeMesh.outlineColor = "#000000";
+            }
 
             if (needsSync && updatesThisFrame < MAX_UPDATES_PER_FRAME) {
               mesh.sync();
@@ -642,11 +657,8 @@ const BattleArmyComponent = ({
       }
     }
 
-
-
-    // 3. Signal Updates — Only upload GPU buffers when data actually changed
-    hudDirtyRef.current = true; // Mark dirty on any frame with active units
-    if (hudDirtyRef.current) {
+    // ─── 5. Signal Updates — Only upload GPU buffers when data actually changed
+    if (activeUnits.length > 0) {
       if (shadowRef.current) {
         shadowRef.current.instanceMatrix.needsUpdate = true;
         if (shadowRef.current.instanceColor) shadowRef.current.instanceColor.needsUpdate = true;
@@ -729,6 +741,21 @@ const BattleArmyComponent = ({
             position={[0, -200, 0]}
           >
             <Text
+              ref={(el) => { nameBadgeRefs.current[i] = el; }}
+              visible={false}
+              fontSize={0.45}
+              color="#ffffff"
+              outlineWidth={0.06}
+              outlineColor="#000000"
+              anchorX="center"
+              anchorY="middle"
+              position={[0, 0.45, 0]} // Center Above Name
+              renderOrder={100}
+              depthOffset={-10}
+            >
+              {' '}
+            </Text>
+            <Text
               ref={(el) => { nameTextRefs.current[i] = el; }}
               visible={false}
               fontSize={0.4}
@@ -737,6 +764,7 @@ const BattleArmyComponent = ({
               outlineColor="#000000"
               anchorX="center"
               anchorY="middle"
+              position={[0, 0, 0]} // Perfectly centered over bar
               renderOrder={100}
               depthOffset={-10}
             >
@@ -745,7 +773,7 @@ const BattleArmyComponent = ({
             <mesh
               ref={(el) => { nameImageRefs.current[i] = el; }}
               visible={false}
-              position={[0, 2.6, 0]}
+              position={[0, 3.2, 0]} // Higher to avoid badge
               renderOrder={102}
             >
               <planeGeometry args={[0.7, 0.7]} />
@@ -764,7 +792,7 @@ const BattleArmyComponent = ({
             <mesh
               ref={(el) => { nameBorderRefs.current[i] = el; }}
               visible={false}
-              position={[0, 2.6, -0.01]}
+              position={[0, 3.2, -0.01]}
               renderOrder={101}
             >
               <circleGeometry args={[0.35, 16]} />

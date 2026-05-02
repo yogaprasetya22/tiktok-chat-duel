@@ -17,11 +17,12 @@ import { WhimsicalDiorama } from "./environment/WhimsicalDiorama";
 import { StormEnvironment } from "./environment/StormEnvironment";
 import { DamageHUDBatcher } from "./systems/DamageHUDBatcher";
 import { Perf } from "r3f-perf";
-
+import { useStore } from "@/src/state/useStore";
+import { OrbitalLightning3D } from "./vfx/OrbitalLightning3D";
+import { MedicalSupply3D } from "./vfx/MedicalSupply3D";
+import React, { useRef, useState } from "react";
 import { TowerConfig, MapObstacle, UnitRuntimeData } from "@/src/core/domain/unit.types";
 import * as YUKA from "yuka";
-import { useStore } from "@/src/state/useStore";
-import React, { useState, useRef } from "react";
 import * as THREE from 'three';
 import { cinematicState } from "@/src/state/cinematicState";
 
@@ -65,6 +66,9 @@ const CameraDirector = ({
   const introPhase = useRef(0);
   const introTimer = useRef(0);
 
+  // Track which side to start the intro with (alternates every game)
+  const introStartSide = useRef(0); // 0 = Player first, 1 = Enemy first
+
   // Reset intro when cinematic is toggled on
   React.useEffect(() => {
     if (!isCinematic) {
@@ -72,7 +76,8 @@ const CameraDirector = ({
       introTimer.current = 0;
       return;
     }
-    // Reset intro sequence
+    // Alternate the starting side for the next intro
+    introStartSide.current = (introStartSide.current + 1) % 2;
     introPhase.current = 0;
     introTimer.current = 0;
   }, [isCinematic]);
@@ -84,7 +89,7 @@ const CameraDirector = ({
     const scheduleNextSwitch = () => {
       timer = setTimeout(() => {
         if (introPhase.current >= 2) {
-          angleIndex.current = (angleIndex.current + 1) % 7;
+          angleIndex.current = (angleIndex.current + 1) % 6;
         }
         scheduleNextSwitch();
       }, 8000 + Math.random() * 10000);
@@ -131,40 +136,51 @@ const CameraDirector = ({
     cinematicState.isActive = true;
 
     // ── Intro Sweep (before battle) ───────────────────────────────────────────
-    // Phase 0: wide shot of player base (Z = +baseDistance)
-    // Phase 1: sweep across to enemy base (Z = -baseDistance)
-    // Phase 2: transition into battle tracking
     if (introPhase.current < 2) {
       introTimer.current += dt;
 
-      // Check if units are actively fighting — accelerate to battle phase
-      // OPTIMIZATION: Just check if any unit is alive (early exit on 4+)
       const reg2 = unitRegistry?.current;
       let hasActiveCombat = false;
       if (reg2) {
         let count = 0;
-        const len = Math.min(reg2.length, 50); // Only scan first 50 slots (early units)
+        const len = Math.min(reg2.length, 50); 
         for (let i = 0; i < len; i++) {
           if (reg2[i]?.isActive && reg2[i].hp > 0) { count++; if (count >= 4) { hasActiveCombat = true; break; } }
         }
       }
 
+      // Logic: If introStartSide is 1, we swap the targets for Phase 0 and Phase 1
+      const isSwapped = introStartSide.current === 1;
+      
       if (introPhase.current === 0) {
-        // Slow wide pan from player base side
-        _targetPos.set(50, 22, baseDistance + 15);
-        _focusPoint.set(0, 4, baseDistance);
+        if (!isSwapped) {
+          // Normal: Start at Player Base — Ultra Wide
+          _targetPos.set(120, 70, baseDistance + 50);
+          _focusPoint.set(0, 2, baseDistance * 0.8);
+        } else {
+          // Swapped: Start at Enemy Base — Ultra Wide
+          _targetPos.set(-120, 70, -baseDistance - 50);
+          _focusPoint.set(0, 2, -baseDistance * 0.8);
+        }
+        
         if (introTimer.current > 4.0 || hasActiveCombat) {
           introPhase.current = 1;
           introTimer.current = 0;
         }
       } else if (introPhase.current === 1) {
-        // Sweep to enemy base
-        _targetPos.set(-50, 22, -baseDistance - 15);
-        _focusPoint.set(0, 4, -baseDistance);
+        if (!isSwapped) {
+          // Normal: Move to Enemy Base — Ultra Wide
+          _targetPos.set(-120, 70, -baseDistance - 50);
+          _focusPoint.set(0, 2, -baseDistance * 0.8);
+        } else {
+          // Swapped: Move to Player Base — Ultra Wide
+          _targetPos.set(120, 70, baseDistance + 50);
+          _focusPoint.set(0, 2, baseDistance * 0.8);
+        }
+
         if (introTimer.current > 4.0 || hasActiveCombat) {
           introPhase.current = 2;
           introTimer.current = 0;
-          // Seed focusX/Z near center for smooth transition into tracking
           focusX.current = 0;
           focusZ.current = 0;
         }
@@ -187,59 +203,61 @@ const CameraDirector = ({
       return;
     }
 
+    const angles = [
+      { pos: [-42, 30, 42], name: 'Side Left' },
+      { pos: [45, 32, -45], name: 'Diagonal Front' },
+      { pos: [55, 45, 55], name: 'High Diagonal' }, // Cinematic but closer than 75
+      { pos: [42, 30, 42], name: 'Side Right' },
+      { pos: [0, 35, 55], name: 'Dolly Track' },
+      { pos: [-45, 32, -45], name: 'Diagonal Back' },
+    ];
+
     // ── True Frontline Meeting Point (throttled, zero-alloc) ─────────────────
-    // Compute every 8 frames to minimize CPU cost during high unit density
+    // Compute every 15 frames (4x a second at 60fps) to minimize CPU cost during high unit density
     _frontlineFrame++;
-    if (_frontlineFrame % 8 === 0) {
+    if (_frontlineFrame % 15 === 0) {
       const reg = unitRegistry?.current;
       if (reg && reg.length > 0) {
-        let pFrontZ = Infinity, pFrontX = 0;
-        let eFrontZ = -Infinity, eFrontX = 0;
+        let pFrontZ = -Infinity, pFrontX = 0;
+        let eFrontZ = Infinity, eFrontX = 0;
         let pCount = 0, eCount = 0;
-        // OPTIMIZATION: Scan with stride (skip every other unit) for huge armies
-        // Camera interpolation is so slow (FOCUS_DECAY=0.5) that skipping half the scan is invisible
-        const stride = reg.length > 60 ? 2 : 1;
-
-        for (let i = 0; i < reg.length; i += stride) {
+        
+        for (let i = 0; i < reg.length; i++) {
           const u = reg[i];
           if (!u || !u.isActive || u.hp <= 0) continue;
           
           if (u.type === 'player') {
             pCount++;
-            if (u.position[2] < pFrontZ) {
+            if (u.position[2] < pFrontZ || pFrontZ === -Infinity) {
               pFrontZ = u.position[2];
               pFrontX = u.position[0];
             }
           } else {
             eCount++;
-            if (u.position[2] > eFrontZ) {
+            if (u.position[2] > eFrontZ || eFrontZ === Infinity) {
               eFrontZ = u.position[2];
               eFrontX = u.position[0];
             }
           }
         }
 
-        let rZ = 0, rX = 0;
         if (pCount > 0 && eCount > 0) {
-          rZ = (pFrontZ + eFrontZ) / 2;
-          rX = (pFrontX + eFrontX) / 2;
+          _cachedRawFX = (pFrontX + eFrontX) / 2;
+          _cachedRawFZ = (pFrontZ + eFrontZ) / 2;
         } else if (pCount > 0) {
-          rZ = pFrontZ; rX = pFrontX;
+          _cachedRawFX = pFrontX; _cachedRawFZ = pFrontZ;
         } else if (eCount > 0) {
-          rZ = eFrontZ; rX = eFrontX;
+          _cachedRawFX = eFrontX; _cachedRawFZ = eFrontZ;
         }
 
         if (pCount > 0 || eCount > 0) {
-          if (rZ > baseDistance - 6)  rZ = baseDistance - 2;
-          else if (rZ < -baseDistance + 6) rZ = -baseDistance + 2;
-          _cachedRawFX = rX;
-          _cachedRawFZ = rZ;
+          if (_cachedRawFZ > baseDistance - 6)  _cachedRawFZ = baseDistance - 2;
+          else if (_cachedRawFZ < -baseDistance + 6) _cachedRawFZ = -baseDistance + 2;
         }
       }
     }
 
     // Smooth focus toward cached raw value — much slower for cinematic smoothness
-    // Remove the hard clamp as it causes staircase jitter when following moving units
     const FOCUS_DECAY = 0.5; 
     focusX.current = expDecay(focusX.current, _cachedRawFX, FOCUS_DECAY, dt);
     focusZ.current = expDecay(focusZ.current, _cachedRawFZ, FOCUS_DECAY, dt);
@@ -248,7 +266,8 @@ const CameraDirector = ({
     const fz = focusZ.current;
 
     // ── Cinematic Angles ──
-    const angle = angleIndex.current;
+    const angleIdx = angleIndex.current % angles.length;
+    const currentAngle = angles[angleIdx];
     
     // Check if we are in a "Siege" state (frontline is very close to either tower)
     const isSiege = Math.abs(fz) >= baseDistance - 15;
@@ -257,38 +276,27 @@ const CameraDirector = ({
     if (isSiege) {
       // --- TOWER CINEMATIC ANGLES ---
       const towerZ = siegeSide * baseDistance;
-      const siegeAngle = angle % 2;
+      const siegeAngle = angleIndex.current % 2;
 
       if (siegeAngle === 0) {
         // Angle 1: "Defender's View" 
-        // Kamera berada di sekitar tower, menatap ke arah pasukan yang menyerbu.
-        // Y dinaikkan ke 12 agar transisi dari battle normal tidak terlalu "anjlok".
-        _targetPos.set(siegeSide * 15, 12, towerZ - siegeSide * 12);
-        _focusPoint.set(fx, 2, fz); // Fokus ke tengah barisan depan pasukan
+        // Kamera diperjauh dan dinaikkan agar label terlihat jelas
+        _targetPos.set(siegeSide * 35, 35, towerZ - siegeSide * 35);
+        _focusPoint.set(fx, 2, fz); 
       } else {
         // Angle 2: "Frontal Siege" 
-        // Kamera di belakang pasukan (agak ke atas), menatap lurus ke arah tower.
-        _targetPos.set(-20, 15, fz - siegeSide * 22);
-        _focusPoint.set(0, 6, towerZ); // Fokus menengadah sedikit ke badan tower
+        _targetPos.set(-35, 30, fz - siegeSide * 40);
+        _focusPoint.set(0, 6, towerZ); 
       }
     } else {
       // --- NORMAL BATTLE ANGLES --- 
-      // Jarak seimbang untuk pandangan luas yang nyaman
-      if (angle === 0) {
-        _targetPos.set(fx + 45, 22, fz);           // Side Right — balanced
-      } else if (angle === 1) {
-        _targetPos.set(fx + 35, 18, fz + 35);      // Hero Shot — balanced pull
-      } else if (angle === 2) {
-        _targetPos.set(fx + 45, 32, fz - 45);      // High Diagonal — balanced iso
-      } else if (angle === 3) {
-        _targetPos.set(fx - 45, 22, fz);           // Side Left Mirror — balanced
-      } else if (angle === 4) {
-        _targetPos.set(fx + 28, 18, fz + 45);      // Tracking Dolly — balanced behind
+      // Use the pre-defined cinematic angles array
+      if (angleIdx === 4) { // Dolly Track (Follows the focus point)
+        _targetPos.set(fx + currentAngle.pos[0], currentAngle.pos[1], fz + currentAngle.pos[2]);
       } else {
-        _targetPos.set(fx - 35, 18, fz - 35);      // Low Opposite Mirror — balanced
+        // Fixed position angles
+        _targetPos.set(currentAngle.pos[0], currentAngle.pos[1], currentAngle.pos[2]);
       }
-
-      // Titik fokus default saat bertarung di tengah map
       _focusPoint.set(fx, 1.5, fz);
     }
     
@@ -364,6 +372,24 @@ export const GameCanvas = React.memo(({
   const setEnvironment = useStore(s => s.setEnvironment);
 
   // ---- Engine Tuning (Leva) ----
+  useControls("Tactical Support", {
+    triggerFever: {
+      label: "🔥 Trigger Fever Time",
+      value: false,
+      onChange: (v) => { if(v) { useStore.getState().triggerFeverTime(); } }
+    },
+    triggerLightning: {
+      label: "⚡ Trigger Orbital Strike",
+      value: false,
+      onChange: (v) => { if(v) { useStore.getState().triggerOrbitalLightning(); } }
+    },
+    triggerHeal: {
+      label: "📦 Trigger Medical Supply",
+      value: false,
+      onChange: (v) => { if(v) { useStore.getState().triggerMedicalSupply(); } }
+    }
+  }, { collapsed: false });
+
   useControls("Military Tuning", {
     hpMult: {
       value: settingsRef.current.globalHpMultiplier, min: 0.1, max: 5, step: 0.1, label: "HP Multiplier",
@@ -495,6 +521,9 @@ export const GameCanvas = React.memo(({
           <DiagnosticsBridge />
           <CameraDirector isCinematic={_isCinematic} baseDistance={towerConfig.baseDistance || 36} unitRegistry={unitRegistry} />
           <DamageHUDBatcher damageQueue={damageQueue} />
+
+          <OrbitalLightning3D />
+          <MedicalSupply3D />
 
           <BattleArmy
             unitRegistry={unitRegistry}

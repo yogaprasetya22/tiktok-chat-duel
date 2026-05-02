@@ -54,18 +54,50 @@ export default function TrainingPage() {
         "Spawn Mage": button(() => spawnUnit(1, "Training", "player", false, "mage")),
         "Spawn Marksman": button(() => spawnUnit(1, "Training", "player", false, "marksman")),
         "Spawn Assassin": button(() => spawnUnit(1, "Training", "player", false, "assassin")),
-        "Spawn Target Dummy": button(() => spawnUnit(1, "Training", "enemy", true, "fighter")),
-        "Spawn Enemy Fighter": button(() => spawnUnit(1, "Training", "enemy", false, "fighter")),
-        "Spawn Enemy Tank": button(() => spawnUnit(1, "Training", "enemy", false, "tank")),
-        "Spawn Enemy Mage": button(() => spawnUnit(1, "Training", "enemy", false, "mage")),
-        "Spawn Enemy Marksman": button(() => spawnUnit(1, "Training", "enemy", false, "marksman")),
-        "Spawn Enemy Assassin": button(() => spawnUnit(1, "Training", "enemy", false, "assassin")),
+        "Spawn Enemy Boss": button(() => spawnUnit(10, "BOSS", "enemy", true, "fighter", undefined, "legendary")),
+        "Spawn Enemy Swarm": button(() => { for(let i=0; i<10; i++) spawnUnit(1, "Swarm", "enemy"); }),
       }),
+
+      "Gift Tester": folder({
+        "Simulate Rose (Elite)": button(() => {
+          // Simulate a simple 5-unit elite squad
+          for(let i=0; i<3; i++) spawnUnit(1, "Donor", "player", false, "fighter", undefined, "elite");
+          for(let i=0; i<2; i++) spawnUnit(1, "Donor", "player", false, "marksman", undefined, "elite");
+        }),
+        "Simulate TikTok (Epic)": button(() => {
+          // Epic Squad
+          spawnUnit(1, "Donor", "player", true, "tank", undefined, "epic");
+          for(let i=0; i<4; i++) spawnUnit(1, "Donor", "player", false, "mage", undefined, "epic");
+        }),
+        "Simulate Lion (Legendary)": button(() => {
+          // Legendary Boss Raid
+          spawnUnit(1, "Donor", "player", true, "fighter", undefined, "legendary");
+          for(let i=0; i<3; i++) spawnUnit(1, "Donor", "player", false, "assassin", undefined, "legendary");
+        }),
+        "Simulate Universe (APOCALYPSE)": button(() => {
+          spawnUnit(1, "Donor", "player", true, "fighter", undefined, "legendary");
+          spawnUnit(1, "Donor", "player", false, "tank", undefined, "legendary");
+          spawnUnit(1, "Donor", "player", false, "mage", undefined, "legendary");
+          spawnUnit(1, "Donor", "player", false, "marksman", undefined, "legendary");
+          spawnUnit(1, "Donor", "player", false, "assassin", undefined, "legendary");
+        }),
+      }),
+
+      "Tactical Support": folder({
+        "Orbital Lightning": button(() => useStore.getState().triggerOrbitalLightning()),
+        "Medical Supply": button(() => useStore.getState().triggerMedicalSupply()),
+        "Fever Time": button(() => useStore.getState().triggerFeverTime()),
+      }),
+
       "Arena": folder({
-        "Clear All Units": button(() => resetBattle()),
+        "Clear All Units": button(() => {
+          resetBattle();
+          updateSettingsRef({ potatoMode: false }); // Force potato off on reset
+        }),
       }),
 
       "Simulation Settings": folder({
+        "Potato Mode": { value: settingsRef.current.potatoMode, onChange: (v) => updateSettingsRef({ potatoMode: v }) },
         "Game Speed": { value: settingsRef.current.timeScale, min: 0.1, max: 5.0, step: 0.1, onChange: (v) => updateSettingsRef({ timeScale: v }) },
         "Unit Move Speed": { value: settingsRef.current.globalSpeedMultiplier, min: 0.2, max: 3.0, step: 0.1, onChange: (v) => updateSettingsRef({ globalSpeedMultiplier: v }) },
         "Unit HP Scale": { value: settingsRef.current.globalHpMultiplier, min: 0.5, max: 10.0, step: 0.5, onChange: (v) => updateSettingsRef({ globalHpMultiplier: v }) },
@@ -107,7 +139,7 @@ export default function TrainingPage() {
       <header className=" select-none touch-none px-8 py-6 bg-zinc-900/50 backdrop-blur-xl border-b border-white/5 flex items-center justify-between z-[100]">
         <div className=" select-none touch-none flex items-center gap-6">
           <Link
-            href="/game"
+            href="/live-game"
             className=" select-none touch-none p-3 bg-zinc-800 hover:bg-zinc-700 rounded-2xl text-zinc-400 hover:text-white transition-all group"
           >
             <ChevronLeft className=" select-none touch-none w-6 h-6 group-hover:-translate-x-1 transition-transform" />
