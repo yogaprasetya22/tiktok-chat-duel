@@ -65,6 +65,14 @@ interface BattleState {
   // Tug of War Mechanics
   isFeverTime: boolean;
   triggerFeverTime: () => void;
+
+  // Orbital Lightning Effect
+  orbitalLightningActive: boolean;
+  triggerOrbitalLightning: () => void;
+
+  // Medical Supply Effect
+  medicalSupplyActive: boolean;
+  triggerMedicalSupply: () => void;
   
   rouletteEvent: { id: string, username: string, team: "player" | "enemy" } | null;
   triggerRoulette: (username: string, team: "player" | "enemy") => void;
@@ -146,10 +154,21 @@ export const useStore = create<BattleState>((set) => ({
   isFeverTime: false,
   triggerFeverTime: () => {
     set({ isFeverTime: true });
-    // Auto turn off fever time after 10s
-    setTimeout(() => {
-      set({ isFeverTime: false });
-    }, 10000);
+    setTimeout(() => set({ isFeverTime: false }), 10000);
+  },
+
+  // Orbital Lightning (8s window for R3F to pick up)
+  orbitalLightningActive: false,
+  triggerOrbitalLightning: () => {
+    set({ orbitalLightningActive: true });
+    setTimeout(() => set({ orbitalLightningActive: false }), 8000);
+  },
+
+  // Medical Supply (8s heal window)
+  medicalSupplyActive: false,
+  triggerMedicalSupply: () => {
+    set({ medicalSupplyActive: true });
+    setTimeout(() => set({ medicalSupplyActive: false }), 8000);
   },
   
   rouletteEvent: null,

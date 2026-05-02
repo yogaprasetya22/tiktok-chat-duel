@@ -3,13 +3,13 @@ import { GiftBinding, KillEvent } from "@/src/core/domain/unit.types";
 import {
   Settings2, Sword, Zap, Trophy, Users, MessageSquare, Gift,
   CheckCircle2, Camera, Loader2, AlertTriangle, ChevronRight,
-  CloudRain, Wind, CloudLightning, Sun, Shield, X, MessageCircle,
+  Shield, X, MessageCircle,
   Activity, RefreshCw, Target, Flame, Sparkles,
 } from "lucide-react";
 import React, { useState, useEffect, useRef } from "react";
 import { MVPScreen } from "../../ui/MVPScreen";
 import { useStore } from "@/src/state/useStore";
-import { WEATHER_CONFIG } from "@/src/core/logic/combat/constants";
+// import { WEATHER_CONFIG } from "@/src/core/logic/combat/constants";
 import { GIFT_FORMATIONS, lookupGiftByKeyword, GIFT_DICTIONARY } from "@/src/core/logic/gift/giftDictionary";
 import Link from "next/link";
 
@@ -104,18 +104,18 @@ const KillFeed = React.memo(({ killEvents, towerConfig }: { killEvents: KillEven
       const rarity = event.rarity || 'common';
       const rColor = RARITY_COLOR[rarity];
       const isBoss = event.victimType === 'boss';
-      
+
       return (
-        <div key={event.id} 
-             className="animate-slide-up flex items-center gap-2 px-3 py-1.5 rounded-lg border relative overflow-hidden group"
-             style={{ 
-               backgroundColor: isBoss ? 'rgba(239, 68, 68, 0.2)' : 'rgba(0,0,0,0.85)',
-               borderColor: isBoss ? '#ef4444' : `${rColor}33`,
-               boxShadow: isBoss ? '0 0 15px rgba(239,68,68,0.3)' : `0 0 10px ${rColor}11`
-             }}>
+        <div key={event.id}
+          className="animate-slide-up flex items-center gap-2 px-3 py-1.5 rounded-lg border relative overflow-hidden group"
+          style={{
+            backgroundColor: isBoss ? 'rgba(239, 68, 68, 0.2)' : 'rgba(0,0,0,0.85)',
+            borderColor: isBoss ? '#ef4444' : `${rColor}33`,
+            boxShadow: isBoss ? '0 0 15px rgba(239,68,68,0.3)' : `0 0 10px ${rColor}11`
+          }}>
           {/* Rarity Accent */}
           <div className="absolute left-0 top-0 bottom-0 w-1" style={{ backgroundColor: isBoss ? '#ef4444' : rColor }} />
-          
+
           {/* Profile Image (Killer) */}
           {event.profileImage && (
             <div className="w-5 h-5 rounded-full overflow-hidden border border-white/20 flex-shrink-0 shadow-sm">
@@ -124,8 +124,8 @@ const KillFeed = React.memo(({ killEvents, towerConfig }: { killEvents: KillEven
           )}
 
           <div className="flex items-center gap-1.5 min-w-0 flex-1">
-            <span className="text-[9px] font-black italic tracking-tight truncate text-white" 
-                  style={{ textShadow: `0 0 4px ${towerConfig.player.color}88` }}>
+            <span className="text-[9px] font-black italic tracking-tight truncate text-white"
+              style={{ textShadow: `0 0 4px ${towerConfig.player.color}88` }}>
               {event.killer}
             </span>
             <div className="flex-shrink-0 flex items-center justify-center p-0.5 rounded bg-white/5">
@@ -216,7 +216,7 @@ const Scoreboard = React.memo(({ towerConfig }: { towerConfig: TowerConfig }) =>
   const tensionPercent = (armyCounts.player / totalArmy) * 100;
 
   return (
-    <div className="absolute top-0 left-1/2 -translate-x-1/2 flex flex-col items-center z-40 pointer-events-none select-none w-full max-w-[280px] md:max-w-[320px] scale-90 md:scale-100 origin-top">
+    <div className="absolute -top-8 left-1/2 -translate-x-1/2 flex flex-col items-center z-40 pointer-events-none select-none w-full max-w-[280px] md:max-w-[320px] scale-90 md:scale-100 origin-top">
       <div className="w-full bg-gradient-to-b from-zinc-900/95 to-black/95 rounded-b-3xl border-x border-b border-white/10 shadow-2xl overflow-hidden">
         {/* Header Specular Highlight */}
         <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
@@ -278,6 +278,8 @@ const FeverTimeOverlay = React.memo(() => {
   return (
     <div className="absolute inset-0 pointer-events-none z-30 flex items-center justify-center overflow-hidden">
       <div className="absolute inset-0 bg-red-600/10 animate-pulse mix-blend-overlay" />
+      {/* Red vignette */}
+      <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse at center, transparent 40%, rgba(180,0,0,0.25) 100%)' }} />
       <div className="absolute top-1/4 animate-bounce-slow flex flex-col items-center">
         <div className="flex items-center gap-4">
           <Flame className="w-12 h-12 md:w-20 md:h-20 text-orange-500 fill-orange-500/20 blur-[2px] animate-pulse" />
@@ -288,6 +290,60 @@ const FeverTimeOverlay = React.memo(() => {
         </div>
         <p className="text-center text-white/90 font-black tracking-[0.3em] uppercase text-sm mt-2 drop-shadow-md">
           2x Speed & Attack!
+        </p>
+      </div>
+    </div>
+  );
+});
+
+const OrbitalLightningOverlay = React.memo(() => {
+  const active = useStore(s => s.orbitalLightningActive);
+
+  if (!active) return null;
+  return (
+    <div className="absolute inset-0 pointer-events-none z-30 overflow-hidden">
+      {/* Flash & Vignette */}
+      <div className="absolute inset-0 bg-blue-200/10 animate-pulse" />
+      <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse at center, transparent 30%, rgba(0,0,80,0.3) 100%)' }} />
+      
+      {/* Banner */}
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2">
+        <div className="flex items-center gap-3">
+          <Zap className="w-10 h-10 md:w-16 md:h-16 text-blue-300 fill-blue-400/30 animate-pulse" />
+          <h1 className="text-5xl md:text-7xl font-black italic uppercase tracking-tighter text-transparent bg-clip-text bg-gradient-to-b from-white to-blue-400 drop-shadow-[0_0_30px_rgba(99,102,241,0.9)]">
+            ORBITAL STRIKE
+          </h1>
+          <Zap className="w-10 h-10 md:w-16 md:h-16 text-blue-300 fill-blue-400/30 animate-pulse" />
+        </div>
+        <p className="text-center text-blue-200/90 font-black tracking-[0.3em] uppercase text-sm drop-shadow-md">
+          ⚡ Enemy Forces Annihilated!
+        </p>
+      </div>
+    </div>
+  );
+});
+
+const MedicalSupplyOverlay = React.memo(() => {
+  const active = useStore(s => s.medicalSupplyActive);
+
+  if (!active) return null;
+  return (
+    <div className="absolute inset-0 pointer-events-none z-30 overflow-hidden flex items-center justify-center">
+      {/* Green Ambient Glow */}
+      <div className="absolute inset-0 bg-emerald-500/10 animate-pulse" />
+      <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse at center, rgba(16,185,129,0.15) 0%, transparent 70%)' }} />
+
+      {/* Banner */}
+      <div className="absolute top-1/4 flex flex-col items-center gap-2">
+        <div className="flex items-center gap-3">
+          <Sparkles className="w-10 h-10 md:w-14 md:h-14 text-emerald-300 fill-emerald-400/30 animate-pulse" />
+          <h1 className="text-5xl md:text-7xl font-black italic uppercase tracking-tighter text-transparent bg-clip-text bg-gradient-to-b from-white to-emerald-400 drop-shadow-[0_0_30px_rgba(16,185,129,0.9)]">
+            MEDIC SUPPLY
+          </h1>
+          <Sparkles className="w-10 h-10 md:w-14 md:h-14 text-emerald-300 fill-emerald-400/30 animate-pulse" />
+        </div>
+        <p className="text-center text-emerald-200/90 font-black tracking-[0.3em] uppercase text-sm drop-shadow-md">
+          💚 Player Forces Healing!
         </p>
       </div>
     </div>
@@ -359,7 +415,7 @@ const UnitInfoPanel = React.memo(({ towerConfig }: { towerConfig: TowerConfig })
           <Target className="w-3 h-3 text-emerald-400" />
           <span className="text-[10px] md:text-[11px] font-black text-white uppercase tracking-[0.15em]">How to Play</span>
         </div>
-        
+
         <div className="p-2.5 flex flex-col gap-2">
           {/* Step 1: Join */}
           <div className="flex items-start gap-2 group">
@@ -689,7 +745,7 @@ export const UIOverlay = ({
   const isSettingsOpen = useStore(s => s.isSettingsOpen);
   const setIsSettingsOpen = useStore(s => s.setIsSettingsOpen);
   const settings = useStore(s => s.settings);
-  const weather = useStore(s => s.weather);
+  // const weather = useStore(s => s.weather);
   const [step, setStep] = useState(1);
   const [username, setUsername] = useState("");
 
@@ -1056,6 +1112,12 @@ export const UIOverlay = ({
           {/* Fever Time Overlay */}
           <FeverTimeOverlay />
 
+          {/* Orbital Lightning Overlay */}
+          <OrbitalLightningOverlay />
+
+          {/* Medical Supply Overlay */}
+          <MedicalSupplyOverlay />
+
           {/* Roulette Overlay */}
           <RouletteOverlay />
 
@@ -1064,8 +1126,8 @@ export const UIOverlay = ({
             <Scoreboard towerConfig={towerConfig} />
           </div>
 
-          {/* Weather Indicator — Top Center (Below Scoreboard) */}
-          {gameState === 'PLAYING' && (
+          {/* Weather Indicator Disabled */}
+          {/* {gameState === 'PLAYING' && (
             <div className="absolute top-16 md:top-20 left-1/2 -translate-x-1/2 z-10 pointer-events-none animate-fade-in-scale scale-75 md:scale-100 origin-top">
               <div className="hud-glass rounded-xl px-2 py-1 flex items-center gap-1.5 border border-white/5">
                 {weather === 'CLEAR' && <Sun className="w-3 h-3 text-yellow-400" />}
@@ -1082,7 +1144,7 @@ export const UIOverlay = ({
                 </div>
               </div>
             </div>
-          )}
+          )} */}
 
           {/* Status Indicators — Top Left Corner */}
           <StatusIndicators connected={connected} />

@@ -521,7 +521,11 @@ export const useBattleSystem = () => {
 
     for (let i = 0; i < WORLD_UNIT_POOL_SIZE; i++) {
       unitPoolRef.current[i].isActive = false;
+      unitPoolRef.current[i].hp = 0;
       unitDataPoolRef.current[i].isActive = false;
+      unitDataPoolRef.current[i].position[1] = -100;
+      _vActive[i] = 0;
+      _py[i] = -100;
       entityManager.remove(vehiclePoolRef.current[i]);
     }
     unitIndexRef.current.clear();
@@ -529,7 +533,13 @@ export const useBattleSystem = () => {
     damageQueueRef.current.length = 0;
     spellsRef.current.forEach((s) => (s.active = false));
     mmSpellsRef.current.forEach((s) => (s.active = false));
+    fighterSpellsRef.current.forEach((s) => (s.active = false));
+    tankSpellsRef.current.forEach((s) => (s.active = false));
+    assassinSpellsRef.current.forEach((s) => (s.active = false));
     activeIndicesRef.current = [];
+    
+    // Reset performance throttling settings
+    settingsRef.current.potatoMode = false;
   }, [entityManager]);
 
   const spawnUnit = useCallback(
@@ -641,7 +651,7 @@ export const useBattleSystem = () => {
         spawnZ + (Math.random() - 0.5) * 4,
       );
       v.maxSpeed = u.speed;
-      v.maxForce = unitClass === "assassin" ? 20 : 10; // Reduced from 100/30 to prevent zipping
+      v.maxForce = unitClass === "assassin" ? 50 : 30; // Increased to improve responsiveness
       v.velocity.set(0, 0, 0);
       v.steering.behaviors.length = 0;
 
@@ -742,6 +752,11 @@ export const useBattleSystem = () => {
       const weatherCfg = (WEATHER_CONFIG as any)[weather] || {};
       const weatherMults = weatherCfg.multipliers || {};
 
+      // --- TACTICAL SUPPORT EFFECTS ---
+      const isMedicalSupply = state.medicalSupplyActive;
+      const isLightning = state.orbitalLightningActive;
+
+
       let activeCount = 0;
       const eidArr = eidMap.current;
       const activeArr = _vActive;
@@ -760,7 +775,7 @@ export const useBattleSystem = () => {
       physicsAccumulatorRef.current += simDelta;
 
       let steps = 0;
-      const MAX_STEPS_PER_FRAME = 1;
+      const MAX_STEPS_PER_FRAME = 3; // Catch-up enabled: prevent slow-motion at start
       while (
         physicsAccumulatorRef.current >= PHYSICS_STEP &&
         steps < MAX_STEPS_PER_FRAME
@@ -828,6 +843,26 @@ export const useBattleSystem = () => {
             freezeTimeRef.current = 200;
           }
           continue;
+        }
+
+        // --- MEDICAL SUPPLY: Heal player units within 10m of center (0,0,0) ---
+        if (isMedicalSupply && u.type === 'player' && !u.isDying && _vh[i] > 0) {
+          const distFromCenterSq = _px[i] * _px[i] + _pz[i] * _pz[i];
+          if (distFromCenterSq < 100) { // 10m radius (10*10 = 100)
+            const healCap = _vmh[i];
+            const healed = Math.min(_vh[i] + healCap * 0.008, healCap); 
+            _vh[i] = healed;
+          }
+        }
+
+        // --- ORBITAL LIGHTNING: AOE Damage to ALL units (Player & Enemy) ---
+        if (isLightning && !u.isDying && _vh[i] > 0 && Math.random() < 0.015) {
+          // Deal 15% of max HP damage - not too painful, but noticeable
+          const damage = _vmh[i] * 0.15;
+          _vh[i] = Math.max(0, _vh[i] - damage);
+          
+          // Add damage to queue for visual feedback
+          accumulateDamage(u.id, damage, uData.position, "#93c5fd");
         }
 
         if (u.isDying) {

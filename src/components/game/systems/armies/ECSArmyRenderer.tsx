@@ -483,7 +483,7 @@ const ECSArmyRendererInner = ({
         if (shadowRef.current && healthBarRef.current) {
           // Increase HUD detail radius to 200m so labels don't disappear when camera moves back
           // HUD visible radius at 200m
-          const HUD_DETAIL_DIST_SQ = 10000; // 100m range
+          const HUD_DETAIL_DIST_SQ = 22500; // 150m range (Increased for cinematic wide shots)
           _frustumSphere.center.set(item.group.position.x, item.group.position.y + 2, item.group.position.z);
           const isVisible = frustum ? frustum.intersectsSphere(_frustumSphere) : true;
           const showDetail = isVisible && (uData.isBoss || (uData.dSq || 0) < HUD_DETAIL_DIST_SQ);
@@ -546,17 +546,15 @@ const ECSArmyRendererInner = ({
             if (flash < 100) _healthColor.lerp(_whiteColor, 1.0 - flash / 100);
             healthBarRef.current.setColorAt(hIdx, _healthColor);
 
-            // Billboard position & rotation sync
-            if (namePoolMap.current.has(id)) {
-              const nameSlot = namePoolMap.current.get(id)!;
-              const nameGroup = nameGroupRefs.current[nameSlot];
-              if (nameGroup) {
-                // Perfect Stack: Names sit exactly 0.8 units above the health bar
-                // FIX: Use vPos instead of cp to sync with visual model
-                nameGroup.position.set(vPos.x, vPos.y + by + 0.8, vPos.z);
-                nameGroup.quaternion.copy(camQ);
-                // Only make visible AFTER position is correct — prevents flash at (0,0,0)
-                nameGroup.visible = true;
+            // ── Label Sync: Username & Profile (Grouped with Health for Perfect Lock) ──
+            const slot = namePoolMap?.current?.get(id);
+            if (slot !== undefined && nameGroupRefs?.current) {
+              const labelGroup = nameGroupRefs.current[slot];
+              if (labelGroup) {
+                // Standard offset: 0.8 units above the health bar
+                labelGroup.position.set(vPos.x, vPos.y + by + 0.8, vPos.z);
+                labelGroup.quaternion.copy(camQ);
+                labelGroup.visible = true;
               }
             }
           } else {
