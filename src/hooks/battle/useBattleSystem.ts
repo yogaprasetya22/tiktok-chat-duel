@@ -525,8 +525,10 @@ export const useBattleSystem = () => {
       unitDataPoolRef.current[i].isActive = false;
       unitDataPoolRef.current[i].position[1] = -100;
       _vActive[i] = 0;
-      _py[i] = -100;
-      entityManager.remove(vehiclePoolRef.current[i]);
+      const v = vehiclePoolRef.current[i];
+      if (v.manager === entityManager) {
+        entityManager.remove(v);
+      }
     }
     unitIndexRef.current.clear();
     damageBufferRef.current.clear();
@@ -660,7 +662,9 @@ export const useBattleSystem = () => {
         new YUKA.SeekBehavior(new YUKA.Vector3(laneOffset, -0.4, targetZ)),
       );
 
-      entityManager.add(v);
+      if (v.manager !== entityManager) {
+        entityManager.add(v);
+      }
 
       uData.isActive = true;
       uData.id = u.id;
@@ -764,10 +768,10 @@ export const useBattleSystem = () => {
         const eid = eidArr[i];
         if (eid !== -1 && activeArr[i]) activeCount++;
       }
-      if (activeCount === 0 && gameStateRef.current !== "PLAYING") return; // OPTIMIZATION: Reduce grid update frequency to once every 5 frames (was 2).
-      // This reclaim CPU time for VFX while maintaining accurate targeting.
-
-      if (frameCountRef.current % 5 === 0) {
+      if (activeCount === 0 && gameStateRef.current !== "PLAYING") return; 
+      
+      // OPTIMIZATION: Reduce grid update frequency to once every 6 frames.
+      if (frameCountRef.current % 6 === 0) {
         battleGrid.update(unitDataPoolRef.current, activeIndicesRef.current);
       }
 
@@ -817,36 +821,39 @@ export const useBattleSystem = () => {
 
         const u = uPool[i];
         const uData = uiPool[i];
-        const v = vPool[i]; // PRIMARY DEATH CHECK: use eid-indexed buffer for instant cleanup
-
+        const v = vPool[i];
+        // PRIMARY DEATH CHECK
         if (_vh[i] <= 0) {
-          uData.position[1] = -100;
-          _py[i] = -100;
-          v.velocity.set(0, 0, 0);
-          _vActive[i] = 0;
-          u.isActive = false;
-          uData.isActive = false;
-          unitIndexRef.current.delete(u.id); // FIX: Cleanup unitIndex on fast death path
-          continue;
-        } // SECONDARY: trigger dying animation on first frame at 0 HP
+          if (!u.isDying) {
+            u.isDying = true;
+            u.deathTime = simNow;
+            uData.isDying = true;
+            v.maxSpeed = 0;
+            v.velocity.set(0, 0, 0);
+            v.steering.behaviors.length = 0;
+            if (v.manager === entityManager) {
+              entityManager.remove(v);
+            }
 
-        if (_vh[i] <= 0 && !u.isDying) {
-          u.isDying = true;
-          u.deathTime = simNow;
-          uData.isDying = true;
-          v.maxSpeed = 0;
-          v.velocity.set(0, 0, 0);
-          v.steering.behaviors.length = 0;
-          entityManager.remove(v);
+            if (u.isBoss) {
+              freezeTimeRef.current = 200;
+            }
+          }
 
-          if (u.isBoss) {
-            freezeTimeRef.current = 200;
+          // Cleanup after corpse despawn time
+          if (simNow - (u.deathTime || 0) > CORPSE_DESPAWN_MS) {
+            uData.position[1] = -100;
+            _py[i] = -100;
+            _vActive[i] = 0;
+            u.isActive = false;
+            uData.isActive = false;
+            unitIndexRef.current.delete(u.id);
           }
           continue;
         }
 
         // --- MEDICAL SUPPLY: Heal player units within 10m of center (0,0,0) ---
-        if (isMedicalSupply && u.type === 'player' && !u.isDying && _vh[i] > 0) {
+        if (isMedicalSupply && u.type === 'player') {
           const distFromCenterSq = _px[i] * _px[i] + _pz[i] * _pz[i];
           if (distFromCenterSq < 100) { // 10m radius (10*10 = 100)
             const healCap = _vmh[i];
@@ -856,22 +863,13 @@ export const useBattleSystem = () => {
         }
 
         // --- ORBITAL LIGHTNING: AOE Damage to ALL units (Player & Enemy) ---
-        if (isLightning && !u.isDying && _vh[i] > 0 && Math.random() < 0.015) {
+        if (isLightning && Math.random() < 0.015) {
           // Deal 15% of max HP damage - not too painful, but noticeable
           const damage = _vmh[i] * 0.15;
           _vh[i] = Math.max(0, _vh[i] - damage);
           
           // Add damage to queue for visual feedback
           accumulateDamage(u.id, damage, uData.position, "#93c5fd");
-        }
-
-        if (u.isDying) {
-          if (simNow - (u.deathTime || 0) > CORPSE_DESPAWN_MS) {
-            u.isActive = false;
-            uData.isActive = false;
-            unitIndexRef.current.delete(u.id);
-          }
-          continue;
         } // PERFORMANCE: Spread 'Thinking' logic across 16 frames instead of 8.
         // This reduces the per-frame cost of spatial queries by 50% in high-density combat.
 
@@ -909,7 +907,7 @@ export const useBattleSystem = () => {
           const neighbors = battleGrid.queryRadius(
             uData.position[0],
             uData.position[2],
-            isFighter || isAssassin ? 16 : 12,
+            isFighter || isAssassin ? 14 : 10, // Slightly tighter radii for performance
           );
           for (let j = 0; j < neighbors.length; j++) {
             const potential = neighbors[j];
@@ -953,12 +951,12 @@ export const useBattleSystem = () => {
           }
         }
 
-        const simFrame = Math.floor(simNow * 60); // PERFORMANCE: Spread collision/separation logic over 12 frames instead of 6.
-        const moveCheck = (simFrame + i) % 12 === 0;
+        const simFrame = Math.floor(simNow * 0.06); 
+        const moveCheck = (simFrame + i) % 15 === 0; // PERFORMANCE: Spread collision/separation logic over 15 frames instead of 12.
 
         if (moveCheck && !u.isDying) {
-          const sepWeight = 0.5;
-          const neighbors = battleGrid.queryRadius(_px[i], _pz[i], 1.2);
+          const sepWeight = 0.4;
+          const neighbors = battleGrid.queryRadius(_px[i], _pz[i], 1.0);
           for (let j = 0; j < neighbors.length; j++) {
             const potential = neighbors[j];
             if (potential.id === u.id) continue;
@@ -967,10 +965,10 @@ export const useBattleSystem = () => {
             const dz = _pz[i] - potential.position[2];
             const dSq = dx * dx + dz * dz;
 
-            if (dSq < 1.0 && dSq > 0.001) {
-              const d = Math.sqrt(dSq);
-              v.velocity.x += (dx / d) * sepWeight;
-              v.velocity.z += (dz / d) * sepWeight;
+            if (dSq < 0.8 && dSq > 0.001) {
+              const dInv = 1.0 / Math.sqrt(dSq);
+              v.velocity.x += (dx * dInv) * sepWeight;
+              v.velocity.z += (dz * dInv) * sepWeight;
             }
           }
         }
@@ -1393,11 +1391,6 @@ export const useBattleSystem = () => {
                 tData.hp = _vh[tIdx];
                 currentTarget.hp = _vh[tIdx];
                 if (_vh[tIdx] <= 0) {
-                  _vActive[tIdx] = 0;
-                  currentTarget.isActive = false;
-                  tData.isActive = false;
-                  tData.position[1] = -100;
-                  _py[tIdx] = -100;
                   addKillEvent(
                     u.userName,
                     currentTarget.userName,
@@ -1453,11 +1446,6 @@ export const useBattleSystem = () => {
                           pData.hp = _vh[pIdx];
                           pUnit.hp = _vh[pIdx];
                           if (_vh[pIdx] <= 0) {
-                            _vActive[pIdx] = 0;
-                            pUnit.isActive = false;
-                            pData.isActive = false;
-                            pData.position[1] = -100;
-                            _py[pIdx] = -100;
                             addKillEvent(
                               u.userName,
                               p.userName,
@@ -1491,11 +1479,6 @@ export const useBattleSystem = () => {
                 tData.hp = _vh[tIdx];
                 currentTarget.hp = _vh[tIdx];
                 if (_vh[tIdx] <= 0) {
-                  _vActive[tIdx] = 0;
-                  currentTarget.isActive = false;
-                  tData.isActive = false;
-                  tData.position[1] = -100;
-                  _py[tIdx] = -100;
                   addKillEvent(
                     u.userName,
                     currentTarget.userName,
@@ -1546,11 +1529,6 @@ export const useBattleSystem = () => {
                         cpData.hp = _vh[cIdx];
                         cpUnit.hp = _vh[cIdx];
                         if (_vh[cIdx] <= 0) {
-                          _vActive[cIdx] = 0;
-                          cpUnit.isActive = false;
-                          cpData.isActive = false;
-                          cpData.position[1] = -100;
-                          _py[cIdx] = -100;
                           addKillEvent(
                             u.userName,
                             cp.userName,
@@ -1578,11 +1556,6 @@ export const useBattleSystem = () => {
                 tData.hp = _vh[tIdx];
                 currentTarget.hp = _vh[tIdx];
                 if (_vh[tIdx] <= 0) {
-                  _vActive[tIdx] = 0;
-                  currentTarget.isActive = false;
-                  tData.isActive = false;
-                  tData.position[1] = -100;
-                  _py[tIdx] = -100;
                   addKillEvent(
                     u.userName,
                     currentTarget.userName,

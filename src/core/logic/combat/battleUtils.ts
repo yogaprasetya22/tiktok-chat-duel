@@ -26,7 +26,7 @@ export const getUnitStats = (
     magicPen: 0,
     lifesteal: 0,
     spellVamp: 0,
-    speed: 3.2 * config.speedMultiplier * settings.globalSpeedMultiplier,
+    speed: 5.5 * config.speedMultiplier * settings.globalSpeedMultiplier,
     range: 3.0 * settings.unitScale,
     tenacity: 0,
     cooldownReduction: 0,

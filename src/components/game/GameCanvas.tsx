@@ -204,12 +204,12 @@ const CameraDirector = ({
     }
 
     const angles = [
-      { pos: [-42, 30, 42], name: 'Side Left' },
-      { pos: [45, 32, -45], name: 'Diagonal Front' },
-      { pos: [55, 45, 55], name: 'High Diagonal' }, // Cinematic but closer than 75
-      { pos: [42, 30, 42], name: 'Side Right' },
-      { pos: [0, 35, 55], name: 'Dolly Track' },
-      { pos: [-45, 32, -45], name: 'Diagonal Back' },
+      { pos: [-36, 28, 36], name: 'Side Left Close' },
+      { pos: [40, 30, -40], name: 'Diagonal Front Close' },
+      { pos: [45, 40, 45], name: 'High Diagonal Close' },
+      { pos: [36, 28, 36], name: 'Side Right Close' },
+      { pos: [0, 32, 45], name: 'Dolly Track Close' },
+      { pos: [-40, 30, -40], name: 'Diagonal Back Close' },
     ];
 
     // ── True Frontline Meeting Point (throttled, zero-alloc) ─────────────────

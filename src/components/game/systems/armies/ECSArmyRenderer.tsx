@@ -551,9 +551,15 @@ const ECSArmyRendererInner = ({
             if (slot !== undefined && nameGroupRefs?.current) {
               const labelGroup = nameGroupRefs.current[slot];
               if (labelGroup) {
-                // Standard offset: 0.8 units above the health bar
-                labelGroup.position.set(vPos.x, vPos.y + by + 0.8, vPos.z);
+                // Scale the vertical gap as well so it doesn't get buried in the head
+                const labelYOffset = 0.8 * totalVisualScale;
+                labelGroup.position.set(vPos.x, vPos.y + by + labelYOffset, vPos.z);
                 labelGroup.quaternion.copy(camQ);
+                
+                // Scale the HUD slightly based on unit scale, but clamp it for readability
+                const labelScale = 1.0 + (totalVisualScale - 1.0) * 0.5;
+                labelGroup.scale.set(labelScale, labelScale, 1);
+                
                 labelGroup.visible = true;
               }
             }
