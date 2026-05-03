@@ -116,9 +116,9 @@ function resolveDeathAnim(actions: Record<string, THREE.AnimationAction>): strin
 
 function getBaseScale(classKey: ClassKey, level: number, isBoss: boolean): number {
   if (isBoss) {
-    return classKey === 'tank' ? 6.5 : (classKey === 'fighter' ? 4.5 : 4.0);
+    return classKey === 'tank' ? 1.6 : (classKey === 'fighter' ? 1.4 : 1.2);
   }
-  return classKey === 'tank' ? (2.5 + level * 0.15) : (1.4 + level * 0.1);
+  return classKey === 'tank' ? (1.1 + level * 0.05) : (0.8 + level * 0.04);
 }
 
 // ─── Scratch objects (zero-alloc) ────────────────────────────────────────────
@@ -408,15 +408,19 @@ const ECSArmyRendererInner = ({
 
         const baseScale = getBaseScale(classKey, uData.level || 1, uData.isBoss);
         const rarity = uData.rarity || 'common';
-        const rScale = uData.isBoss ? 1.0 : (rarity === 'legendary' ? 1.8 : (rarity === 'epic' ? 1.4 : (rarity === 'elite' ? 1.2 : 1.0)));
+        // ULTRA-TIGHT SCALING: Max 12% difference between Common and Legendary to keep perpertumuran looks balanced.
+        const rScale = uData.isBoss ? 1.25 : (rarity === 'legendary' ? 1.12 : (rarity === 'epic' ? 1.07 : (rarity === 'elite' ? 1.03 : 1.0)));
+
+        // NEW: Proximity Scaling — Make units larger when attacking/near the target tower
+        const proximityScale = 1.0;
 
         // UNIQUE VARIATION: Subtle height variation based on ID for an 'Organic Army' feel
         const idNum = uData.poolIdx;
         const hVar = 1.0 + ((idNum % 7) - 3) * 0.015; // +/- 4.5% height variation
         item.group.scale.set(
-          baseScale * settings.unitScale * rScale,
-          baseScale * settings.unitScale * rScale * hVar,
-          baseScale * settings.unitScale * rScale
+          baseScale * settings.unitScale * rScale * proximityScale,
+          baseScale * settings.unitScale * rScale * hVar * proximityScale,
+          baseScale * settings.unitScale * rScale * proximityScale
         );
 
         // ASSIGN SHARED MATERIAL FROM CACHED MASTER
@@ -481,17 +485,22 @@ const ECSArmyRendererInner = ({
         const hIdx = hudBase + slotIdx;
 
         if (shadowRef.current && healthBarRef.current) {
+          const totalVisualScale = baseScale * settings.unitScale * rScale;
+
+          // Expand frustum sphere to properly cover the tall Epic/Legendary labels
+          // Centers the sphere higher up and scales radius dynamically so it doesn't vanish in cinematic mode
+          _frustumSphere.center.set(item.group.position.x, item.group.position.y + 4 * totalVisualScale, item.group.position.z);
+          _frustumSphere.radius = 8 * Math.max(1, totalVisualScale);
+
           // Increase HUD detail radius to 200m so labels don't disappear when camera moves back
           // HUD visible radius at 200m
           const HUD_DETAIL_DIST_SQ = 22500; // 150m range (Increased for cinematic wide shots)
-          _frustumSphere.center.set(item.group.position.x, item.group.position.y + 2, item.group.position.z);
+          
           const isVisible = frustum ? frustum.intersectsSphere(_frustumSphere) : true;
           const showDetail = isVisible && (uData.isBoss || (uData.dSq || 0) < HUD_DETAIL_DIST_SQ);
 
           if (showDetail) {
             const vPos = item.group.position;
-            const totalVisualScale = baseScale * settings.unitScale * rScale;
-
             const by = (uData.isBoss ? 3.6 : 4.0) * totalVisualScale;
             const bs = (uData.isBoss ? 0.7 : 0.8) * totalVisualScale;
             const ss = 1.1 * totalVisualScale;
@@ -551,14 +560,20 @@ const ECSArmyRendererInner = ({
             if (slot !== undefined && nameGroupRefs?.current) {
               const labelGroup = nameGroupRefs.current[slot];
               if (labelGroup) {
-                // Standard offset: 0.8 units above the health bar
-                labelGroup.position.set(vPos.x, vPos.y + by + 0.8, vPos.z);
+                // Scale the vertical gap as well so it doesn't get buried in the head
+                const labelYOffset = 0.8 * totalVisualScale;
+                labelGroup.position.set(vPos.x, vPos.y + by + labelYOffset, vPos.z);
                 labelGroup.quaternion.copy(camQ);
+                
+                // Scale the HUD slightly based on unit scale, but clamp it for readability
+                const labelScale = 1.0 + (totalVisualScale - 1.0) * 0.5;
+                labelGroup.scale.set(labelScale, labelScale, 1);
+                
                 labelGroup.visible = true;
               }
             }
           } else {
-            // Far: shadow only
+            // Far or out of camera: shadow only, hide labels
             _hudTemp.position.set(cp.x, -0.45, cp.z);
             _hudTemp.quaternion.identity(); // Pre-rotated geo
             _hudTemp.scale.set(uData.isBoss ? 4.5 : 1.6, uData.isBoss ? 4.5 : 1.6, 1);
@@ -569,6 +584,13 @@ const ECSArmyRendererInner = ({
             _hudTemp.updateMatrix();
             healthBarRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
             cooldownRef.current?.setMatrixAt(hIdx, _hudTemp.matrix);
+
+            // KEY FIX: Hide the label when unit is out of camera view!
+            const slot = namePoolMap?.current?.get(id);
+            if (slot !== undefined && nameGroupRefs?.current) {
+              const labelGroup = nameGroupRefs.current[slot];
+              if (labelGroup) labelGroup.visible = false;
+            }
           }
         }
 
@@ -584,7 +606,8 @@ const ECSArmyRendererInner = ({
         const distFromCenterSq = uData.position[0] * uData.position[0] + uData.position[2] * uData.position[2];
         const isNearCenter = distFromCenterSq < 60 * 60; // 60u from origin
         // Skip frame: near center always full rate; far from camera slow down
-        const sf = uData.isBoss ? 1
+        const isLegendary = uData.rarity === 'legendary';
+        const sf = (uData.isBoss || isLegendary) ? 1  // Bosses & Legendary: FULL 60 FPS animations
           : isNearCenter ? 2                        // frontline: 30 FPS animations (smooth enough for tiny units)
           : (uData.dSq || 0) > 10000 ? 4           // far: 15 FPS animations
           : 2;                                       // close: 30 FPS animations

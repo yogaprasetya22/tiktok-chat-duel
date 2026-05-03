@@ -65,6 +65,8 @@ export const useBattleSystem = () => {
   const playerBaseHpRef = useRef(1000);
   const enemyBaseHpRef = useRef(1000);
   const gameStateRef = useRef<"SETUP" | "PLAYING" | "WON" | "LOST">("SETUP");
+  const lastPlayerBaseDamageTime = useRef(0);
+  const lastEnemyBaseDamageTime = useRef(0);
 
   const liveSettings = useStore((s) => s.settings);
   const settingsRef = useRef<SimulationSettings>(INITIAL_SETTINGS);
@@ -142,6 +144,8 @@ export const useBattleSystem = () => {
       rarity: "common",
     })),
   );
+  
+  const killEventQueueRef = useRef<KillEvent[]>([]);
   const mmSpellsRef = useRef<any[]>(
     Array.from({ length: 800 }, () => ({
       fromX: 0,
@@ -197,7 +201,7 @@ export const useBattleSystem = () => {
   );
 
   const simulationTimeRef = useRef<number>(0);
-  const physicsAccumulatorRef = useRef(0);
+  // const physicsAccumulatorRef = useRef(0);
   const lastStateUpdate = useRef<number>(0); // --- BITECS ECS ARCHITECTURE ---
 
   const world = useMemo(() => createWorld(), []);
@@ -343,16 +347,15 @@ export const useBattleSystem = () => {
   }, []);
 
   const accumulateDamage = useCallback(
-    (targetId: string, value: number, position: number[], color: string) => {
+    (targetId: string, value: number, position: number[], color: string, now: number) => {
       const existing = damageBufferRef.current.get(targetId);
       if (existing) {
         existing.total += value;
         existing.position[0] = position[0];
         existing.position[1] = position[1];
         existing.position[2] = position[2];
-        existing.lastHit = performance.now(); // FIX: Use performance.now() to match flushDamageBuffer
+        existing.lastHit = now;
       } else {
-        const now = performance.now();
         damageBufferRef.current.set(targetId, {
           total: value,
           position: [position[0], position[1], position[2]],
@@ -420,7 +423,7 @@ export const useBattleSystem = () => {
       profileImage?: string,
       rarity?: UnitRarity,
     ) => {
-      useStore.getState().addKillEvent({
+      killEventQueueRef.current.push({
         id: Math.random().toString(36).substring(7),
         killer,
         victim,
@@ -525,12 +528,17 @@ export const useBattleSystem = () => {
       unitDataPoolRef.current[i].isActive = false;
       unitDataPoolRef.current[i].position[1] = -100;
       _vActive[i] = 0;
-      _py[i] = -100;
-      entityManager.remove(vehiclePoolRef.current[i]);
+      const v = vehiclePoolRef.current[i];
+      if (v.manager === entityManager) {
+        entityManager.remove(v);
+      }
     }
     unitIndexRef.current.clear();
+    lastPlayerBaseDamageTime.current = 0;
+    lastEnemyBaseDamageTime.current = 0;
     damageBufferRef.current.clear();
     damageQueueRef.current.length = 0;
+    killEventQueueRef.current.length = 0;
     spellsRef.current.forEach((s) => (s.active = false));
     mmSpellsRef.current.forEach((s) => (s.active = false));
     fighterSpellsRef.current.forEach((s) => (s.active = false));
@@ -643,12 +651,18 @@ export const useBattleSystem = () => {
 
       const dist = towerConfigRef.current.baseDistance ?? 24;
       const spawnZ = type === "player" ? dist - 2 : -dist + 2;
-      const laneOffset = isBoss ? 0 : pickRandom(LANE_OFFSETS);
+
+      const isUnderAttack = type === "player" 
+        ? (simulationTimeRef.current - lastPlayerBaseDamageTime.current < 3000)
+        : (simulationTimeRef.current - lastEnemyBaseDamageTime.current < 3000);
+
+      const laneOffset = (isBoss || isUnderAttack) ? 0 : pickRandom(LANE_OFFSETS);
+      const spread = isUnderAttack ? 1.5 : 4.0;
 
       v.position.set(
-        laneOffset + (Math.random() - 0.5) * 4,
+        laneOffset + (Math.random() - 0.5) * spread,
         -0.4,
-        spawnZ + (Math.random() - 0.5) * 4,
+        spawnZ + (Math.random() - 0.5) * spread,
       );
       v.maxSpeed = u.speed;
       v.maxForce = unitClass === "assassin" ? 50 : 30; // Increased to improve responsiveness
@@ -660,7 +674,9 @@ export const useBattleSystem = () => {
         new YUKA.SeekBehavior(new YUKA.Vector3(laneOffset, -0.4, targetZ)),
       );
 
-      entityManager.add(v);
+      if (v.manager !== entityManager) {
+        entityManager.add(v);
+      }
 
       uData.isActive = true;
       uData.id = u.id;
@@ -740,7 +756,7 @@ export const useBattleSystem = () => {
       }
 
       let simDelta = delta * (settingsRef.current.timeScale || 1.0);
-      if (simDelta > 0.064) simDelta = 0.064; // FIX: Cap maximum delta to prevent teleporting and fast-forward catch up
+      if (simDelta > 0.045) simDelta = 0.045; // Tighter cap to prevent physics jitter during heavy frame drops
       simulationTimeRef.current += simDelta * 1000;
       const simNow = simulationTimeRef.current;
       const settings = settingsRef.current;
@@ -764,32 +780,16 @@ export const useBattleSystem = () => {
         const eid = eidArr[i];
         if (eid !== -1 && activeArr[i]) activeCount++;
       }
-      if (activeCount === 0 && gameStateRef.current !== "PLAYING") return; // OPTIMIZATION: Reduce grid update frequency to once every 5 frames (was 2).
-      // This reclaim CPU time for VFX while maintaining accurate targeting.
-
-      if (frameCountRef.current % 5 === 0) {
+      if (activeCount === 0 && gameStateRef.current !== "PLAYING") return; 
+      
+      // OPTIMIZATION: Update grid every 2 frames for better accuracy with low unit counts.
+      if (frameCountRef.current % 2 === 0) {
         battleGrid.update(unitDataPoolRef.current, activeIndicesRef.current);
       }
 
-      const PHYSICS_STEP = 0.016;
-      physicsAccumulatorRef.current += simDelta;
-
-      let steps = 0;
-      const MAX_STEPS_PER_FRAME = 3; // Catch-up enabled: prevent slow-motion at start
-      while (
-        physicsAccumulatorRef.current >= PHYSICS_STEP &&
-        steps < MAX_STEPS_PER_FRAME
-      ) {
-        entityManager.update(PHYSICS_STEP);
-        physicsAccumulatorRef.current -= PHYSICS_STEP;
-        steps++;
-      }
-
-      // FIX: Discard remaining accumulator if we hit the limit, prevents "fast forward" visual catch-up
-      if (physicsAccumulatorRef.current >= PHYSICS_STEP) {
-        physicsAccumulatorRef.current =
-          physicsAccumulatorRef.current % PHYSICS_STEP;
-      }
+      // PERFECT SYNC: Use variable delta directly for physics so visual movement perfectly matches frame time.
+      // This eliminates the 'tersendat-sendat' jitter caused by accumulator step mismatches.
+      entityManager.update(simDelta);
       flushDamageBuffer(now);
 
       const eids = eidMap.current;
@@ -817,36 +817,46 @@ export const useBattleSystem = () => {
 
         const u = uPool[i];
         const uData = uiPool[i];
-        const v = vPool[i]; // PRIMARY DEATH CHECK: use eid-indexed buffer for instant cleanup
+        const v = vPool[i];
 
+        // NaN SAFETY: Reset to origin if physics collapses (prevents HalfFloat errors)
+        if (isNaN(v.position.x) || isNaN(v.position.z)) {
+          v.position.set(0, -0.4, 0);
+          v.velocity.set(0, 0, 0);
+        }
+        
+        // PRIMARY DEATH CHECK
         if (_vh[i] <= 0) {
-          uData.position[1] = -100;
-          _py[i] = -100;
-          v.velocity.set(0, 0, 0);
-          _vActive[i] = 0;
-          u.isActive = false;
-          uData.isActive = false;
-          unitIndexRef.current.delete(u.id); // FIX: Cleanup unitIndex on fast death path
-          continue;
-        } // SECONDARY: trigger dying animation on first frame at 0 HP
+          if (!u.isDying) {
+            u.isDying = true;
+            u.deathTime = simNow;
+            uData.isDying = true;
+            v.maxSpeed = 0;
+            v.velocity.set(0, 0, 0);
+            v.steering.behaviors.length = 0;
+            if (v.manager === entityManager) {
+              entityManager.remove(v);
+            }
 
-        if (_vh[i] <= 0 && !u.isDying) {
-          u.isDying = true;
-          u.deathTime = simNow;
-          uData.isDying = true;
-          v.maxSpeed = 0;
-          v.velocity.set(0, 0, 0);
-          v.steering.behaviors.length = 0;
-          entityManager.remove(v);
+            if (u.isBoss) {
+              freezeTimeRef.current = 200;
+            }
+          }
 
-          if (u.isBoss) {
-            freezeTimeRef.current = 200;
+          // Cleanup after corpse despawn time
+          if (simNow - (u.deathTime || 0) > CORPSE_DESPAWN_MS) {
+            uData.position[1] = -100;
+            _py[i] = -100;
+            _vActive[i] = 0;
+            u.isActive = false;
+            uData.isActive = false;
+            unitIndexRef.current.delete(u.id);
           }
           continue;
         }
 
         // --- MEDICAL SUPPLY: Heal player units within 10m of center (0,0,0) ---
-        if (isMedicalSupply && u.type === 'player' && !u.isDying && _vh[i] > 0) {
+        if (isMedicalSupply && u.type === 'player') {
           const distFromCenterSq = _px[i] * _px[i] + _pz[i] * _pz[i];
           if (distFromCenterSq < 100) { // 10m radius (10*10 = 100)
             const healCap = _vmh[i];
@@ -856,22 +866,13 @@ export const useBattleSystem = () => {
         }
 
         // --- ORBITAL LIGHTNING: AOE Damage to ALL units (Player & Enemy) ---
-        if (isLightning && !u.isDying && _vh[i] > 0 && Math.random() < 0.015) {
+        if (isLightning && Math.random() < 0.015) {
           // Deal 15% of max HP damage - not too painful, but noticeable
           const damage = _vmh[i] * 0.15;
           _vh[i] = Math.max(0, _vh[i] - damage);
           
           // Add damage to queue for visual feedback
-          accumulateDamage(u.id, damage, uData.position, "#93c5fd");
-        }
-
-        if (u.isDying) {
-          if (simNow - (u.deathTime || 0) > CORPSE_DESPAWN_MS) {
-            u.isActive = false;
-            uData.isActive = false;
-            unitIndexRef.current.delete(u.id);
-          }
-          continue;
+          accumulateDamage(u.id, damage, uData.position, "#93c5fd", simNow);
         } // PERFORMANCE: Spread 'Thinking' logic across 16 frames instead of 8.
         // This reduces the per-frame cost of spatial queries by 50% in high-density combat.
 
@@ -903,13 +904,13 @@ export const useBattleSystem = () => {
 
           const towerWeight = 0.01;
           bestScore = towerWeight / (distToBaseSq + 0.1);
-          const targetedBaseId =
-            u.type === "player" ? "enemy-base" : "player-base";
+          const targetedBaseId = u.type === "player" ? "enemy-base" : "player-base";
+          const myBaseId = u.type === "player" ? "player-base" : "enemy-base";
 
           const neighbors = battleGrid.queryRadius(
             uData.position[0],
             uData.position[2],
-            isFighter || isAssassin ? 16 : 12,
+            isFighter || isAssassin ? 16 : 14, // Slightly wider to ensure defenders see base attackers
           );
           for (let j = 0; j < neighbors.length; j++) {
             const potential = neighbors[j];
@@ -937,6 +938,11 @@ export const useBattleSystem = () => {
               weight = 2.0;
             }
 
+            // PRIORITY DEFENSE: Heavily prioritize enemies attacking our base!
+            if (potential.targetId === myBaseId) {
+              weight *= 50.0;
+            }
+
             const score = weight / (dSq + 0.1);
             if (score > bestScore) {
               bestScore = score;
@@ -953,12 +959,12 @@ export const useBattleSystem = () => {
           }
         }
 
-        const simFrame = Math.floor(simNow * 60); // PERFORMANCE: Spread collision/separation logic over 12 frames instead of 6.
-        const moveCheck = (simFrame + i) % 12 === 0;
+        const simFrame = Math.floor(simNow * 0.06); 
+        const moveCheck = (simFrame + i) % 15 === 0; // PERFORMANCE: Spread collision/separation logic over 15 frames instead of 12.
 
         if (moveCheck && !u.isDying) {
-          const sepWeight = 0.5;
-          const neighbors = battleGrid.queryRadius(_px[i], _pz[i], 1.2);
+          const sepWeight = 0.4;
+          const neighbors = battleGrid.queryRadius(_px[i], _pz[i], 1.0);
           for (let j = 0; j < neighbors.length; j++) {
             const potential = neighbors[j];
             if (potential.id === u.id) continue;
@@ -967,10 +973,10 @@ export const useBattleSystem = () => {
             const dz = _pz[i] - potential.position[2];
             const dSq = dx * dx + dz * dz;
 
-            if (dSq < 1.0 && dSq > 0.001) {
-              const d = Math.sqrt(dSq);
-              v.velocity.x += (dx / d) * sepWeight;
-              v.velocity.z += (dz / d) * sepWeight;
+            if (dSq < 0.8 && dSq > 0.001) {
+              const dInv = 1.0 / Math.sqrt(dSq);
+              v.velocity.x += (dx * dInv) * sepWeight;
+              v.velocity.z += (dz * dInv) * sepWeight;
             }
           }
         }
@@ -1052,10 +1058,10 @@ export const useBattleSystem = () => {
                   if (tnIdx >= 0) {
                     const tarUnit = unitIndexRef.current.get(tar.id);
                     if (tarUnit && tarUnit.isShield) {
-                      accumulateDamage(tar.id, 0, tar.position, "#FFFFFF");
+                      accumulateDamage(tar.id, 0, tar.position, "#FFFFFF", simNow);
                     } else {
                       _vh[tnIdx] -= dmg;
-                      accumulateDamage(tar.id, dmg, tar.position, "#fff");
+                      accumulateDamage(tar.id, dmg, tar.position, "#fff", simNow);
                     }
                   }
                 }
@@ -1122,7 +1128,7 @@ export const useBattleSystem = () => {
             const targets = battleGrid.queryRadius(
               _px[i],
               _pz[i],
-              cfg.skill_range,
+              30, // Optimized radius (reduced from potential cfg.skill_range which could be 60+)
             );
             let bestTarget = null;
             let minDSq = Infinity;
@@ -1172,7 +1178,7 @@ export const useBattleSystem = () => {
             const targets = battleGrid.queryRadius(
               _px[i],
               _pz[i],
-              cfg.skill_range,
+              40, // Capped radius for performance
             );
             let bestTarget = null;
             let minHp = Infinity;
@@ -1271,7 +1277,7 @@ export const useBattleSystem = () => {
               tPos = targetData.position as [number, number, number];
             } else {
               // Target mati, cari target baru terdekat
-              const newTargets = battleGrid.queryRadius(_px[i], _pz[i], 60);
+              const newTargets = battleGrid.queryRadius(_px[i], _pz[i], 35); // Optimized radius
               for (let t2 = 0; t2 < newTargets.length; t2++) {
                 const nt = newTargets[t2];
                 if (nt.type !== u.type && nt.isActive && !nt.isDying) {
@@ -1344,7 +1350,7 @@ export const useBattleSystem = () => {
                   _vh[tPoolIdx] = newHp;
                   targetUnit.hp = newHp;
                   targetData.hp = newHp;
-                  accumulateDamage(tId, dmg, tPos, color);
+                  accumulateDamage(tId, dmg, tPos, color, simNow);
                 }
               }
             }
@@ -1373,7 +1379,12 @@ export const useBattleSystem = () => {
           const dzT = _pz[i] - tData.position[2];
           const dSq = dxT * dxT + dzT * dzT;
 
-          if (dSq < rangeSq) {
+          // HYSTERESIS LOGIC: Prevent micro-stutters (stop-and-go jitter)
+          // If already attacking, increase the effective range by 30% to account for target drift.
+          const isAttacking = uData.status === "attacking";
+          const effectiveRangeSq = isAttacking ? rangeSq * 1.69 : rangeSq; // 1.3^2 = 1.69
+
+          if (dSq < effectiveRangeSq) {
             uData.status = "attacking";
             v.maxSpeed = (uData.isRolling ? u.speed * 4.0 : 0) * feverSpeedMult;
             const currentCooldown = u.attackCooldown * feverCooldownMult;
@@ -1393,11 +1404,6 @@ export const useBattleSystem = () => {
                 tData.hp = _vh[tIdx];
                 currentTarget.hp = _vh[tIdx];
                 if (_vh[tIdx] <= 0) {
-                  _vActive[tIdx] = 0;
-                  currentTarget.isActive = false;
-                  tData.isActive = false;
-                  tData.position[1] = -100;
-                  _py[tIdx] = -100;
                   addKillEvent(
                     u.userName,
                     currentTarget.userName,
@@ -1415,6 +1421,7 @@ export const useBattleSystem = () => {
                   u.type === "player"
                     ? towerConfigRef.current.player.color
                     : towerConfigRef.current.enemy.color,
+                  simNow
                 );
                 hits++;
 
@@ -1435,50 +1442,35 @@ export const useBattleSystem = () => {
                   )
                     continue;
 
-                  const dx = tData.position[0] - p.position[0];
-                  const dz = tData.position[2] - p.position[2];
-                  const dSq = dx * dx + dz * dz;
-
-                  if (dSq < searchRadius * searchRadius) {
-                    const pIdx = p.poolIdx;
-                    if (pIdx >= 0) {
-                      const pUnit = unitIndexRef.current.get(p.id);
-                      if (pUnit && pUnit.isShield) {
-                        // IMMUNE
-                        accumulateDamage(p.id, 0, p.position, "#FFFFFF");
-                      } else {
-                        _vh[pIdx] -= dmg;
-                        const pData = unitDataPoolRef.current[pIdx];
-                        if (pData && pUnit) {
-                          pData.hp = _vh[pIdx];
-                          pUnit.hp = _vh[pIdx];
-                          if (_vh[pIdx] <= 0) {
-                            _vActive[pIdx] = 0;
-                            pUnit.isActive = false;
-                            pData.isActive = false;
-                            pData.position[1] = -100;
-                            _py[pIdx] = -100;
-                            addKillEvent(
-                              u.userName,
-                              p.userName,
-                              p.isBoss ? "boss" : "unit",
-                              u.profileImage,
-                              p.rarity,
-                            );
-                            updateStats(u.userName, u.type, 0, true);
-                          }
-                          updateStats(u.userName, u.type, dmg);
-                          accumulateDamage(
-                            p.id,
-                            dmg,
-                            pData.position,
-                            u.type === "player"
-                              ? towerConfigRef.current.player.color
-                              : towerConfigRef.current.enemy.color,
-                          );
-                          hits++;
-                        }
+                  const pIdx = p.poolIdx;
+                  if (pIdx >= 0) {
+                    const pUnit = unitDataPoolRef.current[pIdx]; // REPLACED: Map lookup with direct array access
+                    if (pUnit && pUnit.isShield) {
+                      accumulateDamage(p.id, 0, p.position, "#FFFFFF", simNow);
+                    } else if (pUnit) {
+                      _vh[pIdx] -= dmg;
+                      pUnit.hp = _vh[pIdx];
+                      if (_vh[pIdx] <= 0) {
+                        addKillEvent(
+                          u.userName,
+                          p.userName,
+                          p.isBoss ? "boss" : "unit",
+                          u.profileImage,
+                          p.rarity,
+                        );
+                        updateStats(u.userName, u.type, 0, true);
                       }
+                      updateStats(u.userName, u.type, dmg);
+                      accumulateDamage(
+                        p.id,
+                        dmg,
+                        p.position,
+                        u.type === "player"
+                          ? towerConfigRef.current.player.color
+                          : towerConfigRef.current.enemy.color,
+                        simNow
+                      );
+                      hits++;
                     }
                   }
                 }
@@ -1491,11 +1483,6 @@ export const useBattleSystem = () => {
                 tData.hp = _vh[tIdx];
                 currentTarget.hp = _vh[tIdx];
                 if (_vh[tIdx] <= 0) {
-                  _vActive[tIdx] = 0;
-                  currentTarget.isActive = false;
-                  tData.isActive = false;
-                  tData.position[1] = -100;
-                  _py[tIdx] = -100;
                   addKillEvent(
                     u.userName,
                     currentTarget.userName,
@@ -1512,6 +1499,7 @@ export const useBattleSystem = () => {
                   u.type === "player"
                     ? towerConfigRef.current.player.color
                     : towerConfigRef.current.enemy.color,
+                  simNow
                 );
 
                 const cleaveNearby = battleGrid.queryRadius(
@@ -1534,41 +1522,32 @@ export const useBattleSystem = () => {
                     continue;
                   const cIdx = cp.poolIdx;
                   if (cIdx >= 0) {
-                    const cpUnit = unitIndexRef.current.get(cp.id);
+                    const cpUnit = unitDataPoolRef.current[cIdx]; // REPLACED: Map lookup with direct array access
                     if (cpUnit && cpUnit.isShield) {
-                      // IMMUNE
-                      accumulateDamage(cp.id, 0, cp.position, "#FFFFFF");
-                    } else {
+                      accumulateDamage(cp.id, 0, cp.position, "#FFFFFF", simNow);
+                    } else if (cpUnit) {
                       const cDmg = dmg * cleavePerc;
                       _vh[cIdx] -= cDmg;
-                      const cpData = unitDataPoolRef.current[cIdx];
-                      if (cpData && cpUnit) {
-                        cpData.hp = _vh[cIdx];
-                        cpUnit.hp = _vh[cIdx];
-                        if (_vh[cIdx] <= 0) {
-                          _vActive[cIdx] = 0;
-                          cpUnit.isActive = false;
-                          cpData.isActive = false;
-                          cpData.position[1] = -100;
-                          _py[cIdx] = -100;
-                          addKillEvent(
-                            u.userName,
-                            cp.userName,
-                            cpUnit.isBoss ? "boss" : "unit",
-                            u.profileImage,
-                            cpUnit.rarity,
-                          );
-                          updateStats(u.userName, u.type, cDmg);
-                          accumulateDamage(
-                            cp.id,
-                            cDmg,
-                            cpData.position,
-                            u.type === "player"
-                              ? towerConfigRef.current.player.color
-                              : towerConfigRef.current.enemy.color,
-                          );
-                          cleaveCount++;
-                        }
+                      cpUnit.hp = _vh[cIdx];
+                      if (_vh[cIdx] <= 0) {
+                        addKillEvent(
+                          u.userName,
+                          cp.userName,
+                          cpUnit.isBoss ? "boss" : "unit",
+                          u.profileImage,
+                          cpUnit.rarity,
+                        );
+                        updateStats(u.userName, u.type, cDmg);
+                        accumulateDamage(
+                          cp.id,
+                          cDmg,
+                          cp.position,
+                          u.type === "player"
+                            ? towerConfigRef.current.player.color
+                            : towerConfigRef.current.enemy.color,
+                          simNow
+                        );
+                        cleaveCount++;
                       }
                     }
                   }
@@ -1578,11 +1557,6 @@ export const useBattleSystem = () => {
                 tData.hp = _vh[tIdx];
                 currentTarget.hp = _vh[tIdx];
                 if (_vh[tIdx] <= 0) {
-                  _vActive[tIdx] = 0;
-                  currentTarget.isActive = false;
-                  tData.isActive = false;
-                  tData.position[1] = -100;
-                  _py[tIdx] = -100;
                   addKillEvent(
                     u.userName,
                     currentTarget.userName,
@@ -1600,6 +1574,7 @@ export const useBattleSystem = () => {
                   u.type === "player"
                     ? towerConfigRef.current.player.color
                     : towerConfigRef.current.enemy.color,
+                  simNow
                 );
               }
               uData.lastAttackTime = simNow;
@@ -1844,6 +1819,7 @@ export const useBattleSystem = () => {
             updateStats(u.userName, u.type, dmg);
             if (u.type === "player") {
               enemyBaseHpRef.current -= dmg;
+              lastEnemyBaseDamageTime.current = simNow;
               if (enemyBaseHpRef.current <= 0) {
                 addKillEvent(u.userName, "ENEMY BASE", "base", u.profileImage, "legendary");
                 updateStats(u.userName, u.type, 0, true);
@@ -1851,6 +1827,7 @@ export const useBattleSystem = () => {
               }
             } else {
               playerBaseHpRef.current -= dmg;
+              lastPlayerBaseDamageTime.current = simNow;
               if (playerBaseHpRef.current <= 0) {
                 addKillEvent(u.userName, "PLAYER BASE", "base", u.profileImage, "legendary");
                 updateStats(u.userName, u.type, 0, true);
@@ -1864,6 +1841,7 @@ export const useBattleSystem = () => {
               u.type === "player"
                 ? towerConfigRef.current.player.color
                 : towerConfigRef.current.enemy.color,
+              simNow
             );
 
             uData.lastAttackTime = simNow; // COMBAT EFFECTS FOR TOWER ATTACK
@@ -2088,7 +2066,7 @@ export const useBattleSystem = () => {
           }
         }
 
-        v.velocity.multiplyScalar(Math.pow(0.1, simDelta));
+        v.velocity.multiplyScalar(1.0 - 0.9 * simDelta); // Faster linear damping approximation
 
         if (
           uData.status === "attacking" ||
@@ -2138,16 +2116,17 @@ export const useBattleSystem = () => {
           const aoeTargets = battleGrid.queryRadius(s.toX, s.toZ, aoeRadius);
           const attackPower = (s as any).attackPower || 100;
           const dmg = attackPower * ((s as any).iceDmgMult || 5.5); // Use ice mult or fallback
+          const ownerType = (s as any).ownerType;
 
           for (let ti = 0; ti < aoeTargets.length; ti++) {
             const target = aoeTargets[ti];
-            if (target.type === (s as any).ownerType) continue;
+            if (target.type === ownerType) continue;
 
             const tIdx = target.poolIdx;
             if (tIdx >= 0) {
               const tUnit = unitIndexRef.current.get(target.id);
               if (tUnit && tUnit.isShield) {
-                accumulateDamage(target.id, 0, target.position, "#FFFFFF");
+                accumulateDamage(target.id, 0, target.position, "#FFFFFF", simNow);
               } else {
                 _vh[tIdx] -= dmg;
                 const td = unitDataPoolRef.current[tIdx];
@@ -2158,7 +2137,10 @@ export const useBattleSystem = () => {
                     target.id,
                     dmg,
                     target.position,
-                    s.color || towerConfigRef.current.player.color,
+                    ownerType === "player"
+                      ? towerConfigRef.current.player.color
+                      : towerConfigRef.current.enemy.color,
+                    simNow
                   );
                 }
               }
@@ -2228,7 +2210,22 @@ export const useBattleSystem = () => {
         useStore
           .getState()
           .setBaseHp(playerBaseHpRef.current, enemyBaseHpRef.current);
-        useStore.getState().setLiveStats({ ...statsRef.current });
+        useStore.getState().setLiveStats({ 
+          ...statsRef.current,
+          playerKills: { ...statsRef.current.playerKills },
+          enemyKills: { ...statsRef.current.enemyKills },
+          playerDamage: { ...statsRef.current.playerDamage },
+          enemyDamage: { ...statsRef.current.enemyDamage },
+          profileImages: { ...statsRef.current.profileImages }
+        });
+        
+        if (killEventQueueRef.current.length > 0) {
+          useStore.setState(state => {
+            const newEvents = [...state.killEvents, ...killEventQueueRef.current];
+            return { killEvents: newEvents.slice(-5) };
+          });
+          killEventQueueRef.current = [];
+        }
       }
     },
     [entityManager, flushDamageBuffer, accumulateDamage, addKillEvent],
@@ -2328,7 +2325,7 @@ export const useBattleSystem = () => {
         if (u.isActive && u.type === side && !u.isDying) {
           u.hp -= u.maxHp * 0.4;
           uiPool[i].hp = u.hp;
-          accumulateDamage(u.id, u.maxHp * 0.4, uiPool[i].position, "#FFFFFF");
+          accumulateDamage(u.id, u.maxHp * 0.4, uiPool[i].position, "#FFFFFF", Date.now());
         }
       }
     },

@@ -28,9 +28,13 @@ export const calculateProcessedDamage = (
     }
         
     const armorPierce = attacker.unitClass === 'marksman' ? 0.4 : 0;
-    const effectiveDefense = targetDefense * (1 - armorPierce);
+    const effectiveDefense = Math.max(0, targetDefense * (1 - armorPierce));
     
-    dmg = Math.max(dmg * 0.1, dmg - effectiveDefense);
+    // Percentage-based damage reduction (MOBA style)
+    // 100 defense = 50% damage taken, 200 defense = 33% damage taken, 400 defense = 20% damage taken
+    const damageMultiplier = 100 / (100 + effectiveDefense);
+    
+    dmg = Math.max(1, dmg * damageMultiplier);
 
     // Fortress Shield (Immunity - 100% Damage Reduction)
     if (target.isShield) {

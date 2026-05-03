@@ -1,15 +1,14 @@
 import { TowerConfig } from "@/src/hooks/battle/useBattleSystem";
-import { GiftBinding, KillEvent } from "@/src/core/domain/unit.types";
+import { GiftBinding } from "@/src/core/domain/unit.types";
 import {
   Settings2, Sword, Zap, Trophy, Users, MessageSquare, Gift,
   CheckCircle2, Camera, Loader2, AlertTriangle, ChevronRight,
   Shield, X, MessageCircle,
-  Activity, RefreshCw, Target, Flame, Sparkles,
+  Activity, Target, Flame, Sparkles,
 } from "lucide-react";
 import React, { useState, useEffect, useRef } from "react";
 import { MVPScreen } from "../../ui/MVPScreen";
 import { useStore } from "@/src/state/useStore";
-// import { WEATHER_CONFIG } from "@/src/core/logic/combat/constants";
 import { GIFT_FORMATIONS, lookupGiftByKeyword, GIFT_DICTIONARY } from "@/src/core/logic/gift/giftDictionary";
 import Link from "next/link";
 
@@ -43,8 +42,6 @@ interface UIOverlayProps {
   testingMode: boolean;
   onToggleTesting: () => void;
   displayMessages: any[];
-  downloadPerfLogs: () => void;
-  clearVFXCache: () => void;
 }
 
 const StatusIndicators = React.memo(({ connected }: { connected: boolean }) => {
@@ -65,7 +62,6 @@ const StatusIndicators = React.memo(({ connected }: { connected: boolean }) => {
         frameCount.current = 0;
         lastTime.current = now;
 
-        // Mock ping based on connection
         if (connected) {
           setPing(Math.floor(20 + Math.random() * 30));
         } else {
@@ -93,12 +89,10 @@ const StatusIndicators = React.memo(({ connected }: { connected: boolean }) => {
   );
 });
 
-// ============================================
-// SUB-COMPONENTS (Memoized for performance)
-// ============================================
-
-const KillFeed = React.memo(({ killEvents, towerConfig }: { killEvents: KillEvent[], towerConfig: any }) => (
-  <div className="absolute top-12 left-2 w-48 md:w-64 flex flex-col gap-1 pointer-events-none select-none z-50">
+const KillFeed = React.memo(({ towerConfig }: { towerConfig: any }) => {
+  const killEvents = useStore(s => s.killEvents);
+  return (
+  <div className="absolute top-12 left-2 w-48 md:w-48 flex flex-col gap-1 pointer-events-none select-none z-50">
     {killEvents.slice(-4).map((event) => {
       if (!event?.id) return null;
       const rarity = event.rarity || 'common';
@@ -113,10 +107,8 @@ const KillFeed = React.memo(({ killEvents, towerConfig }: { killEvents: KillEven
             borderColor: isBoss ? '#ef4444' : `${rColor}33`,
             boxShadow: isBoss ? '0 0 15px rgba(239,68,68,0.3)' : `0 0 10px ${rColor}11`
           }}>
-          {/* Rarity Accent */}
           <div className="absolute left-0 top-0 bottom-0 w-1" style={{ backgroundColor: isBoss ? '#ef4444' : rColor }} />
 
-          {/* Profile Image (Killer) */}
           {event.profileImage && (
             <div className="w-5 h-5 rounded-full overflow-hidden border border-white/20 flex-shrink-0 shadow-sm">
               <img src={event.profileImage} alt="" className="w-full h-full object-cover" />
@@ -141,7 +133,6 @@ const KillFeed = React.memo(({ killEvents, towerConfig }: { killEvents: KillEven
             </div>
           </div>
 
-          {/* Luxury Shimmer Effect for Legendaries */}
           {rarity === 'legendary' && (
             <div className="absolute inset-0 bg-gradient-to-r from-transparent via-yellow-500/10 to-transparent -translate-x-full animate-[shimmer_2s_infinite]" />
           )}
@@ -149,22 +140,21 @@ const KillFeed = React.memo(({ killEvents, towerConfig }: { killEvents: KillEven
       );
     })}
   </div>
-));
+  ); });
 
 const Leaderboard = React.memo(({ team, color, name }: { team: 'player' | 'enemy', color: string, name: string }) => {
   const isPlayer = team === 'player';
-  const liveStats = useStore(s => s.liveStats);
-  const kills = isPlayer ? liveStats.playerKills : liveStats.enemyKills;
-  const profileImages = liveStats.profileImages || {};
+  const kills = useStore(s => isPlayer ? s.liveStats.playerKills : s.liveStats.enemyKills);
+  const profileImages = useStore(s => s.liveStats.profileImages);
 
   return (
-    <div className={`absolute top-48 md:top-56 ${isPlayer ? 'left-2' : 'right-2'} w-28 md:w-44 select-none scale-90 md:scale-100 origin-top-${isPlayer ? 'left' : 'right'}`}>
-      <div className="hud-glass rounded-xl p-1.5 md:p-3 space-y-1.5 animate-fade-in-scale border border-white/5">
-        <div className="flex items-center gap-1 border-b border-white/5 pb-1">
-          <Trophy className="w-2.5 h-2.5" style={{ color }} />
-          <span className="text-[7px] md:text-[9px] font-black text-white/70 uppercase tracking-widest truncate">{name}</span>
+    <div className={`absolute top-48 md:top-56 ${isPlayer ? 'left-4' : 'right-4'} w-32 md:w-48 select-none scale-80 md:scale-90 origin-top-${isPlayer ? 'left' : 'right'}`}>
+      <div className="hud-glass rounded-2xl p-2 md:p-4 space-y-2 animate-fade-in-scale border border-white/10 shadow-2xl">
+        <div className="flex items-center gap-2 border-b border-white/10 pb-2">
+          <Trophy className="w-3.5 h-3.5" style={{ color }} />
+          <span className="text-[9px] md:text-[12px] font-black text-white uppercase tracking-[0.2em] truncate">{name} LEADERBOARD</span>
         </div>
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           {Object.entries(kills || {})
             .sort(([, a]: any, [, b]: any) => b - a)
             .slice(0, 5)
@@ -173,33 +163,33 @@ const Leaderboard = React.memo(({ team, color, name }: { team: 'player' | 'enemy
               const rankColor = i === 0 ? '#fbbf24' : i === 1 ? '#cbd5e1' : i === 2 ? '#cd7f32' : color;
               return (
                 <div key={username} className="flex items-center justify-between group transition-all duration-300 hover:translate-x-1">
-                  <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                    <div className={`w-4 h-4 md:w-5 md:h-5 rounded flex items-center justify-center font-black text-[7px] md:text-[8px] transition-all shadow-lg ${i === 0 ? 'animate-pulse scale-110' : ''
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <div className={`w-5 h-5 md:w-7 md:h-7 rounded-lg flex items-center justify-center font-black text-[10px] md:text-[12px] transition-all shadow-xl ${i === 0 ? 'animate-pulse scale-110 shadow-yellow-500/20' : ''
                       }`}
                       style={{
                         backgroundColor: isTop3 ? `${rankColor}33` : 'rgba(255,255,255,0.05)',
                         borderColor: isTop3 ? rankColor : 'rgba(255,255,255,0.1)',
-                        borderWidth: '1px',
+                        borderWidth: '1.5px',
                         color: isTop3 ? rankColor : '#ffffff44'
                       }}>
                       {i + 1}
                     </div>
                     {profileImages[username] && (
-                      <div className={`w-3.5 h-3.5 rounded-full overflow-hidden border flex-shrink-0 ${i === 0 ? 'ring-1 ring-yellow-400 ring-offset-1 ring-offset-black/50' : 'border-white/10'}`}>
+                      <div className={`w-5 h-5 md:w-7 md:h-7 rounded-full overflow-hidden border-2 flex-shrink-0 ${i === 0 ? 'border-yellow-400 shadow-lg shadow-yellow-400/20' : 'border-white/10'}`}>
                         <img src={profileImages[username]} alt="" className="w-full h-full object-cover" />
                       </div>
                     )}
-                    <span className={`text-[8px] md:text-[9px] font-black truncate uppercase tracking-tight ${i === 0 ? 'text-white' : 'text-white/60'}`}>{username}</span>
+                    <span className={`text-[10px] md:text-[13px] font-black truncate uppercase tracking-tight ${i === 0 ? 'text-white' : 'text-white/60'}`}>{username}</span>
                   </div>
-                  <span className="text-[8px] md:text-[10px] font-black italic pl-1 flex items-center gap-0.5" style={{ color: isTop3 ? rankColor : '#ffffff88' }}>
+                  <span className="text-[11px] md:text-[14px] font-black italic pl-2 flex items-center gap-1" style={{ color: isTop3 ? rankColor : '#ffffff88' }}>
                     {value as number}
-                    {i === 0 && <span className="text-[6px] not-italic opacity-50">K</span>}
+                    <Sword className="w-2.5 h-2.5 md:w-3 md:h-3 opacity-50" />
                   </span>
                 </div>
               );
             })}
           {Object.keys(kills || {}).length === 0 && (
-            <p className="text-[6px] uppercase tracking-[0.15em] text-white/20 font-black text-center py-1">No Data</p>
+            <p className="text-[8px] uppercase tracking-[0.2em] text-white/20 font-black text-center py-2 italic">Waiting for kills...</p>
           )}
         </div>
       </div>
@@ -211,49 +201,43 @@ const Scoreboard = React.memo(({ towerConfig }: { towerConfig: TowerConfig }) =>
   const playerWins = useStore(s => s.playerWins);
   const enemyWins = useStore(s => s.enemyWins);
   const armyCounts = useStore(s => s.armyCounts);
-
   const totalArmy = Math.max(1, armyCounts.player + armyCounts.enemy);
   const tensionPercent = (armyCounts.player / totalArmy) * 100;
 
   return (
-    <div className="absolute -top-8 left-1/2 -translate-x-1/2 flex flex-col items-center z-40 pointer-events-none select-none w-full max-w-[280px] md:max-w-[320px] scale-90 md:scale-100 origin-top">
-      <div className="w-full bg-gradient-to-b from-zinc-900/95 to-black/95 rounded-b-3xl border-x border-b border-white/10 shadow-2xl overflow-hidden">
-        {/* Header Specular Highlight */}
+    <div className="w-full max-w-[320px] md:max-w-[380px] -mt-8 scale-90 md:scale-95 origin-top mx-auto">
+      <div className="bg-gradient-to-b from-zinc-900/60 to-black/60 rounded-b-[2rem] border-x border-b border-white/10 shadow-2xl overflow-hidden relative">
         <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
 
-        <div className="flex items-center justify-between px-5 py-2 md:px-6 md:py-3">
-          {/* Team A Score */}
+        <div className="flex items-center justify-between px-6 py-3 md:px-8 md:py-4">
           <div className="flex flex-col items-start min-w-0 flex-1">
-            <div className="flex items-center gap-1.5 w-full">
-              <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 shadow-[0_0_8px_#6366f1]" />
-              <span className="text-[10px] md:text-[12px] font-black uppercase text-indigo-400 tracking-[0.15em] truncate">
+            <div className="flex items-center gap-2 w-full">
+              <div className="w-2 h-2 rounded-full bg-indigo-500 shadow-[0_0_10px_#6366f1]" />
+              <span className="text-[11px] md:text-[14px] font-black uppercase text-indigo-400 tracking-[0.2em] truncate">
                 {towerConfig?.player.name || "TEAM A"}
               </span>
             </div>
             <span className="text-2xl md:text-3xl font-black italic text-white leading-none tracking-tighter drop-shadow-lg">{playerWins}</span>
           </div>
 
-          {/* VS Center Badge */}
-          <div className="px-3 flex flex-col items-center justify-center relative">
-            <div className="absolute inset-0 bg-white/5 blur-xl rounded-full" />
+          <div className="px-4 flex flex-col items-center justify-center relative">
+            <div className="absolute inset-0 bg-white/5 blur-2xl rounded-full" />
             <div className="w-8 h-8 rounded-full bg-zinc-900 border border-white/10 flex items-center justify-center relative z-10 shadow-inner">
               <span className="text-[10px] font-black italic text-white/40 tracking-tighter">VS</span>
             </div>
           </div>
 
-          {/* Team B Score */}
           <div className="flex flex-col items-end min-w-0 flex-1 text-right">
-            <div className="flex items-center justify-end gap-1.5 w-full">
-              <span className="text-[10px] md:text-[12px] font-black uppercase text-rose-400 tracking-[0.15em] truncate">
+            <div className="flex items-center justify-end gap-2 w-full">
+              <span className="text-[10px] md:text-[12px] font-black uppercase text-rose-400 tracking-[0.2em] truncate">
                 {towerConfig?.enemy.name || "TEAM B"}
               </span>
-              <div className="w-1.5 h-1.5 rounded-full bg-rose-500 shadow-[0_0_8px_#f43f5e]" />
+              <div className="w-2 h-2 rounded-full bg-rose-500 shadow-[0_0_10px_#f43f5e]" />
             </div>
             <span className="text-2xl md:text-3xl font-black italic text-white leading-none tracking-tighter drop-shadow-lg">{enemyWins}</span>
           </div>
         </div>
 
-        {/* Tension Bar (Clash System) */}
         <div className="h-2 w-full bg-black/40 flex relative">
           <div className="h-full bg-gradient-to-r from-indigo-600 to-indigo-400 transition-all duration-700 ease-out relative"
             style={{ width: `${tensionPercent}%`, boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.2)' }}>
@@ -263,7 +247,6 @@ const Scoreboard = React.memo(({ towerConfig }: { towerConfig: TowerConfig }) =>
             style={{ width: `${100 - tensionPercent}%`, boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.2)' }}>
             <div className="absolute inset-0 bg-white/10 opacity-30 animate-pulse" />
           </div>
-          {/* Central Clash Point */}
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1 h-6 bg-white shadow-[0_0_15px_#fff] z-10 rotate-12"
             style={{ left: `${tensionPercent}%` }} />
         </div>
@@ -278,7 +261,6 @@ const FeverTimeOverlay = React.memo(() => {
   return (
     <div className="absolute inset-0 pointer-events-none z-30 flex items-center justify-center overflow-hidden">
       <div className="absolute inset-0 bg-red-600/10 animate-pulse mix-blend-overlay" />
-      {/* Red vignette */}
       <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse at center, transparent 40%, rgba(180,0,0,0.25) 100%)' }} />
       <div className="absolute top-1/4 animate-bounce-slow flex flex-col items-center">
         <div className="flex items-center gap-4">
@@ -302,11 +284,9 @@ const OrbitalLightningOverlay = React.memo(() => {
   if (!active) return null;
   return (
     <div className="absolute inset-0 pointer-events-none z-30 overflow-hidden">
-      {/* Flash & Vignette */}
       <div className="absolute inset-0 bg-blue-200/10 animate-pulse" />
       <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse at center, transparent 30%, rgba(0,0,80,0.3) 100%)' }} />
       
-      {/* Banner */}
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2">
         <div className="flex items-center gap-3">
           <Zap className="w-10 h-10 md:w-16 md:h-16 text-blue-300 fill-blue-400/30 animate-pulse" />
@@ -329,11 +309,9 @@ const MedicalSupplyOverlay = React.memo(() => {
   if (!active) return null;
   return (
     <div className="absolute inset-0 pointer-events-none z-30 overflow-hidden flex items-center justify-center">
-      {/* Green Ambient Glow */}
       <div className="absolute inset-0 bg-emerald-500/10 animate-pulse" />
       <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse at center, rgba(16,185,129,0.15) 0%, transparent 70%)' }} />
 
-      {/* Banner */}
       <div className="absolute top-1/4 flex flex-col items-center gap-2">
         <div className="flex items-center gap-3">
           <Sparkles className="w-10 h-10 md:w-14 md:h-14 text-emerald-300 fill-emerald-400/30 animate-pulse" />
@@ -350,8 +328,6 @@ const MedicalSupplyOverlay = React.memo(() => {
   );
 });
 
-// Unit class descriptions shown in CMD panels
-// Unit class icon mapping
 const UnitIcon = ({ cls, className = "w-3 h-3" }: { cls: string, className?: string }) => {
   switch (cls) {
     case 'fighter': return <Sword className={className} />;
@@ -375,94 +351,84 @@ const RARITY_COLOR: Record<string, string> = {
   common: '#94a3b8', elite: '#60a5fa', epic: '#c084fc', legendary: '#fbbf24',
 };
 
-
-
-// Single compact unit info panel — right side, above leaderboard
 const UnitInfoPanel = React.memo(({ towerConfig }: { towerConfig: TowerConfig }) => {
   const pKey = towerConfig.player.commentKeyword;
   const eKey = towerConfig.enemy.commentKeyword;
 
   return (
-    // Menggunakan bottom-[100px] agar tidak tertutup HP bar di mobile, flex-col di layar kecil
-    <div className="absolute bottom-28 md:bottom-10 left-2 right-2 pointer-events-none select-none flex flex-row justify-between items-end gap-2 scale-75 md:scale-100 origin-bottom">
+    <div className="absolute bottom-28 md:bottom-42 -left-10 -right-10 pointer-events-none select-none flex flex-row justify-between items-end gap-4 scale-80 md:scale-90 origin-bottom">
 
-      {/* KIRI: Unit Guide */}
-      <div className="w-1/2 max-w-[200px] bg-black/85 rounded-xl border border-white/10 shadow-xl overflow-hidden">
-        <div className="flex items-center gap-1 px-2 py-1 border-b border-white/5 bg-gradient-to-r from-amber-500/20 to-transparent">
-          <Sword className="w-2.5 h-2.5 text-amber-400" />
-          <span className="text-[11px] font-black text-white uppercase tracking-widest">Units</span>
+      <div className="w-1/2 max-w-[240px] bg-black/85 rounded-2xl border border-white/10 shadow-xl overflow-hidden">
+        <div className="flex items-center gap-1.5 px-3 py-2 border-b border-white/5 bg-gradient-to-r from-amber-500/20 to-transparent">
+          <Sword className="w-3.5 h-3.5 text-amber-400" />
+          <span className="text-[13px] font-black text-white uppercase tracking-widest">Units</span>
         </div>
-        <div className="px-2 py-1.5 flex flex-col gap-1">
+        <div className="px-3 py-2 flex flex-col gap-1.5">
           {Object.entries(UNIT_ABILITIES).map(([cls, info]) => (
-            <div key={cls} className="flex items-center gap-1.5">
-              <div className="w-5 h-5 rounded bg-white/5 flex items-center justify-center border border-white/5" style={{ color: info.color }}>
-                <UnitIcon cls={cls} className="w-2.5 h-2.5" />
+            <div key={cls} className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded bg-white/5 flex items-center justify-center border border-white/5" style={{ color: info.color }}>
+                <UnitIcon cls={cls} className="w-3.5 h-3.5" />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-black text-white capitalize">{cls}</span>
+                  <span className="text-[12px] font-black text-white capitalize leading-none">{cls}</span>
                 </div>
-                <div className="text-[11px] text-white/40 leading-tight truncate">{info.desc}</div>
+                <div className="text-[10px] text-white/40 leading-tight truncate">{info.desc}</div>
               </div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* KANAN: How to Play Guide */}
-      <div className="w-1/2 max-w-[220px] bg-black/90 rounded-2xl border border-white/10 shadow-2xl overflow-hidden">
+      <div className="w-1/2 max-w-[260px] bg-black/90 rounded-2xl border border-white/10 shadow-2xl overflow-hidden">
         <div className="flex items-center gap-1.5 px-3 py-2 border-b border-white/5 bg-gradient-to-r from-emerald-500/20 to-transparent">
           <Target className="w-3 h-3 text-emerald-400" />
           <span className="text-[10px] md:text-[11px] font-black text-white uppercase tracking-[0.15em]">How to Play</span>
         </div>
 
-        <div className="p-2.5 flex flex-col gap-2">
-          {/* Step 1: Join */}
-          <div className="flex items-start gap-2 group">
-            <div className="w-5 h-5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-500/20 transition-colors">
-              <Users className="w-3 h-3 text-emerald-400" />
+        <div className="p-3 flex flex-col gap-2.5">
+          <div className="flex items-start gap-2.5 group">
+            <div className="w-6 h-6 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-500/20 transition-colors">
+              <Users className="w-3.5 h-3.5 text-emerald-400" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-[8px] text-white/40 uppercase font-black leading-none mb-1">Step 1: Join Team</p>
-              <p className="text-[11px] text-white/90 leading-tight">
+              <p className="text-[10px] text-white/40 uppercase font-black leading-none mb-1">Step 1: Join Team</p>
+              <p className="text-[13px] text-white/90 leading-tight">
                 Ketik <span className="text-emerald-400 font-black">"{pKey}"</span> atau <span className="text-rose-400 font-black">"{eKey}"</span>
               </p>
             </div>
           </div>
 
-          {/* Step 2: Spawn Unit */}
-          <div className="flex items-start gap-2 group">
-            <div className="w-5 h-5 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-500/20 transition-colors">
-              <MessageSquare className="w-3 h-3 text-blue-400" />
+          <div className="flex items-start gap-2.5 group">
+            <div className="w-6 h-6 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-500/20 transition-colors">
+              <MessageSquare className="w-3.5 h-3.5 text-blue-400" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-[8px] text-white/40 uppercase font-black leading-none mb-1">Step 2: Spawn Unit</p>
+              <p className="text-[10px] text-white/40 uppercase font-black leading-none mb-1">Step 2: Spawn Unit</p>
               <div className="flex flex-col gap-0.5">
-                <p className="text-[11px] text-white/90 leading-tight">
+                <p className="text-[13px] text-white/90 leading-tight">
                   Ketik <span className="text-white font-black italic">tank, mage, marksman...</span>
                 </p>
-                <p className="text-[8px] text-white/30 uppercase tracking-tighter">
+                <p className="text-[10px] text-white/30 uppercase tracking-tighter">
                   Contoh: <span className="text-amber-400/80 font-bold">{pKey} tank</span>
                 </p>
               </div>
             </div>
           </div>
 
-          {/* Step 3: Support */}
-          <div className="flex items-start gap-2 group">
-            <div className="w-5 h-5 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center flex-shrink-0 group-hover:bg-amber-500/20 transition-colors">
-              <Gift className="w-3 h-3 text-amber-400" />
+          <div className="flex items-start gap-2.5 group">
+            <div className="w-6 h-6 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center flex-shrink-0 group-hover:bg-amber-500/20 transition-colors">
+              <Gift className="w-3.5 h-3.5 text-amber-400" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-[8px] text-white/40 uppercase font-black leading-none mb-1">Step 3: Mass Spawn</p>
-              <p className="text-[11px] text-white/90 leading-tight">
+              <p className="text-[10px] text-white/40 uppercase font-black leading-none mb-1">Step 3: Mass Spawn</p>
+              <p className="text-[13px] text-white/90 leading-tight">
                 Kirim <span className="text-amber-400 font-black italic">Gift</span> untuk pasukan besar!
               </p>
             </div>
           </div>
         </div>
 
-        {/* Footer Accent */}
         <div className="px-2.5 py-1.5 bg-white/5 flex items-center justify-center border-t border-white/5">
           <p className="text-[7px] text-white/30 font-black uppercase tracking-widest animate-pulse">Waiting for your command...</p>
         </div>
@@ -471,7 +437,6 @@ const UnitInfoPanel = React.memo(({ towerConfig }: { towerConfig: TowerConfig })
     </div>
   );
 });
-
 
 const RouletteOverlay = React.memo(() => {
   const rouletteEvent = useStore(s => s.rouletteEvent);
@@ -482,8 +447,8 @@ const RouletteOverlay = React.memo(() => {
       setSpinState("spinning");
       const timer = setTimeout(() => {
         setSpinState("result");
-        setTimeout(() => setSpinState("hidden"), 1000); // Hide after 1s of showing result
-      }, 2000); // 2s spin
+        setTimeout(() => setSpinState("hidden"), 1000);
+      }, 2000);
       return () => clearTimeout(timer);
     }
   }, [rouletteEvent]);
@@ -517,14 +482,9 @@ const VictoryWipe = React.memo(({ state }: { state: string }) => {
 
   return (
     <div className="fixed inset-0 z-[100] pointer-events-none overflow-hidden">
-      {/* Intense Initial Flash */}
       <div className="absolute inset-0 bg-white animate-flash-out" />
-
-      {/* Colored Mood Overlay */}
       <div className={`absolute inset-0 ${state === 'WON' ? 'bg-indigo-600/40' : 'bg-rose-600/40'} animate-fade-in`}
         style={{ animationDelay: '0.2s' }} />
-
-      {/* Dynamic Scanlines / Glitch */}
       <div className="absolute inset-0 opacity-30">
         <div className="w-full h-1/2 bg-gradient-to-b from-white/0 via-white/20 to-white/0 absolute top-0 animate-glitch-line-1" />
         <div className="w-full h-1/2 bg-gradient-to-b from-white/0 via-white/10 to-white/0 absolute bottom-0 animate-glitch-line-2" />
@@ -543,7 +503,6 @@ const TowerHPBars = React.memo(({ towerConfig }: { towerConfig: TowerConfig }) =
 
   return (
     <div className="absolute bottom-3 left-4 right-4 pointer-events-none select-none">
-      {/* ── Gift Info Bar: Premium Badges above HP bars ──────────────────── */}
       {(() => {
         const playerGifts = towerConfig.player.giftBindings || [];
         const enemyGifts = towerConfig.enemy.giftBindings || [];
@@ -557,12 +516,10 @@ const TowerHPBars = React.memo(({ towerConfig }: { towerConfig: TowerConfig }) =
           return (
             <div
               key={i}
-              className="flex items-center gap-2 bg-zinc-950/90 rounded-xl px-2.5 py-1.5 border border-white/5 shadow-lg flex-shrink-0 relative overflow-hidden"
+              className="flex items-center justify-between gap-2 bg-zinc-950/90 rounded-xl px-2.5 py-1.5 border border-white/5 shadow-lg flex-shrink-0 relative overflow-hidden"
             >
-              {/* Team Accent Top Border */}
               <div className="absolute top-0 inset-x-0 h-[2px]" style={{ backgroundColor: teamColor, boxShadow: `0 0 8px ${teamColor}` }} />
 
-              {/* Gift Icon */}
               <div className="relative group">
                 <div className="absolute inset-0 bg-white/10 blur-md rounded-full scale-0 group-hover:scale-100 transition-transform" />
                 <img
@@ -572,8 +529,7 @@ const TowerHPBars = React.memo(({ towerConfig }: { towerConfig: TowerConfig }) =
                 />
               </div>
 
-              {/* Units Breakdown */}
-              <div className="flex flex-col gap-0.5">
+              {/* <div className="flex flex-col gap-0.5">
                 <div className="flex items-center gap-1">
                   {formation.rules.map((r, ri) => (
                     <div key={ri} className="flex items-center" style={{ color: RARITY_COLOR[r.rarity] }}>
@@ -583,95 +539,91 @@ const TowerHPBars = React.memo(({ towerConfig }: { towerConfig: TowerConfig }) =
                   ))}
                 </div>
                 <span className="text-[6px] md:text-[7px] text-white/30 font-black uppercase tracking-widest">{b.keyword}</span>
-              </div>
+              </div> */}
             </div>
           );
         };
 
         return (
-          <div className="flex items-end justify-between px-2 md:px-12 w-full mb-3 gap-3 scale-90 md:scale-100 origin-bottom max-w-5xl mx-auto">
-            {/* Enemy Gifts (Left) */}
-            <div className="flex items-center gap-2 flex-wrap">
-              {enemyGifts.slice(0, 3).map((b, i) => renderGiftItem(b, i, towerConfig.enemy.color))}
-            </div>
-            {/* Player Gifts (Right) */}
-            <div className="flex items-center gap-2 flex-wrap justify-end">
+          <div className="flex items-center justify-between w-full gap-8 md:gap-16 scale-90 md:scale-95 origin-bottom mx-auto">
+            <div className="flex items-center gap-3 flex-wrap justify-end">
               {playerGifts.slice(0, 3).map((b, i) => renderGiftItem(b, i, towerConfig.player.color))}
+            </div>
+            <div className="flex items-center gap-3 flex-wrap justify-start">
+              {enemyGifts.slice(0, 3).map((b, i) => renderGiftItem(b, i, towerConfig.enemy.color))}
             </div>
           </div>
         );
       })()}
 
       <div className="grid grid-cols-2 gap-4 md:gap-8 max-w-4xl mx-auto items-end">
-        {/* Team A HP Area */}
-        <div className="space-y-1">
+        <div className="space-y-1.5">
           <div className="flex items-end justify-between px-1">
             <div className="flex flex-col">
-              <div className="flex items-center gap-1.5 mb-0.5">
-                <div className="w-2.5 h-2.5 bg-indigo-500 rounded-sm rotate-45" />
-                <span className="text-[10px] md:text-[14px] uppercase tracking-[0.2em] text-white/50 font-black truncate max-w-[80px] md:max-w-none">
+              <div className="flex items-center gap-2 mb-1">
+                <div className="w-3 h-3 bg-indigo-500 rounded-sm rotate-45 shadow-[0_0_8px_#6366f1]" />
+                <span className="text-[12px] md:text-[18px] uppercase tracking-[0.25em] text-white/70 font-black truncate max-w-[80px] md:max-w-none">
                   {towerConfig?.player.name}
                 </span>
                 {towerConfig?.player.score !== undefined && towerConfig.player.score > 0 && (
-                  <div className="px-1.5 py-0.5 rounded bg-indigo-500/30 text-indigo-200 text-[6px] font-black border border-indigo-500/40 ml-1">
+                  <div className="px-1.5 py-0.5 rounded bg-indigo-500/30 text-indigo-200 text-[7px] font-black border border-indigo-500/40 ml-1">
                     RANK {towerConfig.player.score}
                   </div>
                 )}
               </div>
-              <div className="flex items-baseline gap-1">
-                <span className="text-xl md:text-2xl font-black italic text-white tracking-tighter">
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-xl md:text-3xl font-black italic text-white tracking-tighter drop-shadow-lg">
                   {Math.round(playerBaseHp).toLocaleString()}
                 </span>
-                <span className="text-[8px] md:text-[10px] text-indigo-400 font-black uppercase opacity-60">HP remaining</span>
+                <span className="text-[8px] md:text-[10px] text-indigo-400 font-black uppercase opacity-60">HP</span>
               </div>
             </div>
-            <div className="flex items-center gap-1.5 px-2 py-1 bg-indigo-500/10 border border-indigo-500/20 rounded-lg text-[10px] font-black text-indigo-300">
-              <Users className="w-3 h-3" /> {armyCounts.player}
+            <div className="flex items-center gap-1.5 px-2 py-1 bg-indigo-500/15 border border-indigo-500/30 rounded-lg text-[10px] font-black text-indigo-300 shadow-lg">
+              <Users className="w-3.5 h-3.5" /> {armyCounts.player}
             </div>
           </div>
-          <div className="h-3 md:h-4 bg-zinc-900/80 rounded-full overflow-hidden border border-white/5 p-0.5">
+          <div className="h-3 md:h-5 bg-zinc-950/80 rounded-full overflow-hidden border border-white/10 p-0.5 shadow-inner">
             <div
               className="h-full rounded-full transition-all duration-700 ease-out relative group overflow-hidden"
-              style={{ width: `${pWidth}%`, background: `linear-gradient(to right, ${towerConfig?.player.color}, #6366f1)`, boxShadow: `0 0 15px ${towerConfig?.player.color}44` }}
+              style={{ width: `${pWidth}%`, background: `linear-gradient(to right, ${towerConfig?.player.color}, #6366f1)`, boxShadow: `0 0 20px ${towerConfig?.player.color}66` }}
             >
-              <div className="absolute inset-0 bg-[linear-gradient(45deg,rgba(255,255,255,0.1)_25%,transparent_25%,transparent_50%,rgba(255,255,255,0.1)_50%,rgba(255,255,255,0.1)_75%,transparent_75%,transparent)] bg-[length:20px_20px] animate-[shimmer_2s_linear_infinite]" />
+              <div className="absolute inset-0 bg-[linear-gradient(45deg,rgba(255,255,255,0.15)_25%,transparent_25%,transparent_50%,rgba(255,255,255,0.15)_50%,rgba(255,255,255,0.15)_75%,transparent_75%,transparent)] bg-[length:30px_30px] animate-[shimmer_2s_linear_infinite]" />
               <div className="absolute top-0 inset-x-0 h-1/2 bg-white/20" />
             </div>
           </div>
         </div>
 
-        {/* Team B HP Area */}
-        <div className="space-y-1">
+        <div className="space-y-1.5">
           <div className="flex items-end justify-between px-1">
-            <div className="flex items-center gap-1.5 px-2 py-1 bg-rose-500/10 border border-rose-500/20 rounded-lg text-[10px] font-black text-rose-300">
-              <Users className="w-3 h-3" /> {armyCounts.enemy}
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-rose-500/15 border border-rose-500/30 rounded-xl text-[12px] font-black text-rose-300 shadow-lg">
+              <Users className="w-4 h-4" /> {armyCounts.enemy}
             </div>
             <div className="flex flex-col items-end">
-              <div className="flex items-center gap-1.5 mb-0.5 justify-end">
+              <div className="flex items-center gap-2 mb-1 justify-end">
                 {towerConfig?.enemy.score !== undefined && towerConfig.enemy.score > 0 && (
-                  <div className="px-1.5 py-0.5 rounded bg-rose-500/30 text-rose-200 text-[6px] font-black border border-rose-500/40 mr-1">
+                  <div className="px-2 py-1 rounded bg-rose-500/30 text-rose-200 text-[8px] font-black border border-rose-500/40 mr-1">
                     RANK {towerConfig.enemy.score}
                   </div>
                 )}
-                <span className="text-[10px] md:text-[14px] uppercase tracking-[0.2em] text-white/50 font-black truncate max-w-[80px] md:max-w-none">
+                <span className="text-[12px] md:text-[18px] uppercase tracking-[0.25em] text-white/70 font-black truncate max-w-[100px] md:max-w-none">
                   {towerConfig?.enemy.name}
                 </span>
-                <div className="w-2.5 h-2.5 bg-rose-500 rounded-sm rotate-45" />
+                <div className="w-3 h-3 bg-rose-500 rounded-sm rotate-45 shadow-[0_0_8px_#f43f5e]" />
               </div>
-              <div className="flex items-baseline gap-1 justify-end">
-                <span className="text-[8px] md:text-[10px] text-rose-400 font-black uppercase opacity-60">HP remaining</span>
-                <span className="text-xl md:text-2xl font-black italic text-white tracking-tighter">
+              <div className="flex items-baseline gap-1.5 justify-end">
+                <span className="text-[10px] md:text-[12px] text-rose-400 font-black uppercase opacity-60">HP</span>
+                <span className="text-2xl md:text-4xl font-black italic text-white tracking-tighter drop-shadow-lg">
                   {Math.round(enemyBaseHp).toLocaleString()}
                 </span>
               </div>
             </div>
           </div>
-          <div className="h-3 md:h-4 bg-zinc-900/80 rounded-full overflow-hidden border border-white/5 p-0.5">
+          <div className="h-4 md:h-6 bg-zinc-950/80 rounded-full overflow-hidden border border-white/10 p-1 shadow-inner">
             <div
               className="h-full rounded-full transition-all duration-700 ease-out relative ml-auto overflow-hidden"
-              style={{ width: `${eWidth}%`, background: `linear-gradient(to left, ${towerConfig?.enemy.color}, #f43f5e)`, boxShadow: `0 0 15px ${towerConfig?.enemy.color}44` }}
+              style={{ width: `${eWidth}%`, background: `linear-gradient(to left, ${towerConfig?.enemy.color}, #f43f5e)`, boxShadow: `0 0 20px ${towerConfig?.enemy.color}66` }}
             >
-              <div className="absolute inset-0 bg-[linear-gradient(-45deg,rgba(255,255,255,0.1)_25%,transparent_25%,transparent_50%,rgba(255,255,255,0.1)_50%,rgba(255,255,255,0.1)_75%,transparent_75%,transparent)] bg-[length:20px_20px] animate-[shimmer_2s_linear_infinite]" />
+              <div className="absolute inset-0 bg-[linear-gradient(-45deg,rgba(255,255,255,0.15)_25%,transparent_25%,transparent_50%,rgba(255,255,255,0.15)_50%,rgba(255,255,255,0.15)_75%,transparent_75%,transparent)] bg-[length:30px_30px] animate-[shimmer_2s_linear_infinite]" />
               <div className="absolute top-0 inset-x-0 h-1/2 bg-white/20" />
             </div>
           </div>
@@ -718,7 +670,6 @@ const ChatOverlay = React.memo(({ messages, onClose }: { messages: any[], onClos
               </div>
             ))
           )}
-          {/* Intersection anchor for bottom anchoring */}
           <div className="h-0" />
         </div>
       </div>
@@ -726,22 +677,17 @@ const ChatOverlay = React.memo(({ messages, onClose }: { messages: any[], onClos
   </div>
 ));
 
-// ============================================
-// MAIN UI OVERLAY
-// ============================================
-
-export const UIOverlay = ({
+export const UIOverlay = React.memo(({
   towerConfig, setTowerConfig,
   onStart, onConnect,
   connected, loading, error,
   onRestart, isCinematic, onToggleCinematic,
   showChat, onToggleChat,
   mvpData, testingMode, onToggleTesting,
-  displayMessages, downloadPerfLogs, clearVFXCache,
+  displayMessages,
 }: UIOverlayProps) => {
 
   const gameState = useStore(s => s.gameState);
-  const killEvents = useStore(s => s.killEvents);
   const isSettingsOpen = useStore(s => s.isSettingsOpen);
   const setIsSettingsOpen = useStore(s => s.setIsSettingsOpen);
   const settings = useStore(s => s.settings);
@@ -1091,23 +1037,6 @@ export const UIOverlay = ({
             </button>
           </div>
 
-          {/* Settings Panel — Bottom Left */}
-          {isSettingsOpen && (
-            <div className="absolute bottom-16 left-3 z-30 pointer-events-auto w-56 md:w-72 animate-fade-in-scale">
-              <div className="hud-glass rounded-2xl p-3 space-y-2">
-                <button onClick={downloadPerfLogs}
-                  className="w-full py-2 bg-indigo-500/8 hover:bg-indigo-500/15 border border-indigo-500/20 rounded-xl flex items-center justify-center gap-2 text-indigo-400 transition-all">
-                  <Activity className="w-3 h-3" />
-                  <span className="text-[8px] font-black uppercase tracking-widest">Download Perf Report</span>
-                </button>
-                <button onClick={clearVFXCache}
-                  className="w-full py-2 bg-rose-500/8 hover:bg-rose-500/15 border border-rose-500/20 rounded-xl flex items-center justify-center gap-2 text-rose-400 transition-all">
-                  <RefreshCw className="w-3 h-3" />
-                  <span className="text-[8px] font-black uppercase tracking-widest">Clear VFX Cache</span>
-                </button>
-              </div>
-            </div>
-          )}
 
           {/* Fever Time Overlay */}
           <FeverTimeOverlay />
@@ -1150,7 +1079,7 @@ export const UIOverlay = ({
           <StatusIndicators connected={connected} />
 
           {/* Kill Feed — Top Left */}
-          <KillFeed killEvents={killEvents} towerConfig={towerConfig} />
+          <KillFeed towerConfig={towerConfig} />
 
           {/* Unit Info Panel — right side, above leaderboard */}
           {gameState === 'PLAYING' && <UnitInfoPanel towerConfig={towerConfig} />}
@@ -1180,4 +1109,4 @@ export const UIOverlay = ({
       )}
     </>
   );
-};
+});

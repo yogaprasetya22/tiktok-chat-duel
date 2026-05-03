@@ -8,7 +8,7 @@ import {
   AdaptiveDpr,
   Sphere,
 } from "@react-three/drei";
-import { useControls, Leva } from "leva";
+import { useControls } from "leva";
 
 import { Base, InstancedTowers } from "./environment/Base";
 import { VFXProvider, useVFX } from "./systems/VFXManager";
@@ -203,14 +203,6 @@ const CameraDirector = ({
       return;
     }
 
-    const angles = [
-      { pos: [-42, 30, 42], name: 'Side Left' },
-      { pos: [45, 32, -45], name: 'Diagonal Front' },
-      { pos: [55, 45, 55], name: 'High Diagonal' }, // Cinematic but closer than 75
-      { pos: [42, 30, 42], name: 'Side Right' },
-      { pos: [0, 35, 55], name: 'Dolly Track' },
-      { pos: [-45, 32, -45], name: 'Diagonal Back' },
-    ];
 
     // ── True Frontline Meeting Point (throttled, zero-alloc) ─────────────────
     // Compute every 15 frames (4x a second at 60fps) to minimize CPU cost during high unit density
@@ -265,7 +257,8 @@ const CameraDirector = ({
     const fx = focusX.current;
     const fz = focusZ.current;
 
-    // ── Cinematic Angles ──
+    // --- Cinematic Angles ---
+    const angles = cinematicState.angles;
     const angleIdx = angleIndex.current % angles.length;
     const currentAngle = angles[angleIdx];
     
@@ -279,33 +272,52 @@ const CameraDirector = ({
       const siegeAngle = angleIndex.current % 2;
 
       if (siegeAngle === 0) {
-        // Angle 1: "Defender's View" 
-        // Kamera diperjauh dan dinaikkan agar label terlihat jelas
-        _targetPos.set(siegeSide * 35, 35, towerZ - siegeSide * 35);
-        _focusPoint.set(fx, 2, fz); 
+        // Angle 1: "Defender's View" - Dynamic
+        const { defenderY, defenderDist } = cinematicState.siege;
+        _targetPos.set(siegeSide * defenderDist, defenderY, towerZ - siegeSide * defenderDist);
+        _focusPoint.set(fx, 1.5, fz); 
       } else {
-        // Angle 2: "Frontal Siege" 
-        _targetPos.set(-35, 30, fz - siegeSide * 40);
-        _focusPoint.set(0, 6, towerZ); 
+        // Angle 2: "Frontal Siege" - Dynamic
+        const { frontalY, frontalDist } = cinematicState.siege;
+        _targetPos.set(-25, frontalY, fz - siegeSide * frontalDist);
+        _focusPoint.set(0, 4, towerZ); 
       }
     } else {
       // --- NORMAL BATTLE ANGLES --- 
-      // Use the pre-defined cinematic angles array
+      // Use the dynamic cinematic angles from cinematicState
       if (angleIdx === 4) { // Dolly Track (Follows the focus point)
-        _targetPos.set(fx + currentAngle.pos[0], currentAngle.pos[1], fz + currentAngle.pos[2]);
+        _targetPos.set(fx + currentAngle.x, currentAngle.y, fz + currentAngle.z);
       } else {
         // Fixed position angles
-        _targetPos.set(currentAngle.pos[0], currentAngle.pos[1], currentAngle.pos[2]);
+        _targetPos.set(currentAngle.x, currentAngle.y, currentAngle.z);
       }
-      _focusPoint.set(fx, 1.5, fz);
+      _focusPoint.set(fx, 1.2, fz);
     }
     
     cinematicState.focusX = fx;
     cinematicState.focusY = 1.5;
     cinematicState.focusZ = fz;
 
-    const CAM_DECAY = 1.5; // was 3.0 — camera glides, doesn't snap
+    // --- Dynamic Zoom for Big Units (Bosses) ---
+    // If a boss is near the focus point, we need to pull the camera back to keep them in frame.
+    let bossZoomMult = 1.0;
+    const reg = unitRegistry?.current;
+    if (reg) {
+      for (let i = 0; i < Math.min(reg.length, 100); i++) {
+        const u = reg[i];
+        if (u && u.isActive && u.isBoss && Math.abs(u.position[2] - fz) < 15) {
+          bossZoomMult = 1.6; // Pull back 60% if a boss is at the frontline
+          break;
+        }
+      }
+    }
+
+    const CAM_DECAY = 1.5; 
     _camTarget.copy(camera.position);
+    
+    // Apply boss zoom by scaling the vector from focus point to target position
+    _targetPos.sub(_focusPoint).multiplyScalar(bossZoomMult).add(_focusPoint);
+
     camera.position.x = expDecay(_camTarget.x, _targetPos.x, CAM_DECAY, dt);
     camera.position.y = expDecay(_camTarget.y, _targetPos.y, CAM_DECAY, dt);
     camera.position.z = expDecay(_camTarget.z, _targetPos.z, CAM_DECAY, dt);
@@ -367,7 +379,6 @@ export const GameCanvas = React.memo(({
 
   const [dpr, setDpr] = useState(1.0);
   const gameState = useStore(s => s.gameState);
-  const isSettingsOpen = useStore(s => s.isSettingsOpen);
   const environment = useStore(s => s.environment);
   const setEnvironment = useStore(s => s.setEnvironment);
 
@@ -470,23 +481,24 @@ export const GameCanvas = React.memo(({
           position: [0, 0.5, 5],
           fov: 40,
           near: 0.1,
-          far: 500  // Dikurangi: depth buffer lebih presisi, less overdraw
+          far: 500
         }}
-        shadows={false}  // DIMATIKAN: PCFShadowMap sangat mahal, tidak visible dari atas
-        dpr={[1, 1.5]}    // OPTIMIZATION: Cap at 1.5x instead of 2-3x for mobile high-res stability
+        shadows={false}
+        dpr={dpr}    // FIX: Reactively update DPR based on performance monitor
         gl={{
-          antialias: false,  // DIMATIKAN: 2x GPU cost. Bloom sudah memberi glow anti-alias visual
+          antialias: false,
           powerPreference: "high-performance",
           logarithmicDepthBuffer: false,
           stencil: false,
           depth: true,
+          alpha: false, // PERFORMANCE: No transparency for main canvas background
         }}
         style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
         className="select-none touch-none"
       >
         <PerformanceMonitor
-          onIncline={() => setDpr(Math.min(dpr + 0.1, 1.0))}
-          onDecline={() => setDpr(Math.max(dpr - 0.15, 0.4))}
+          onIncline={() => setDpr(Math.min(dpr + 0.1, 1.5))}
+          onDecline={() => setDpr(Math.max(dpr - 0.2, 0.5))}
           threshold={0.85}
           flipflops={3}
         />
@@ -588,22 +600,6 @@ export const GameCanvas = React.memo(({
           null
         )}
       </Canvas>
-
-      {/* Leva Engine Console (Settings Panel, OUTSIDE canvas) */}
-      {isSettingsOpen && (
-        <Leva
-          hidden={!isSettingsOpen}
-          theme={{
-            colors: {
-              accent1: '#6366f1', accent2: '#4f46e5', accent3: '#4338ca',
-              elevation1: '#09090bee', elevation2: '#18181bee', elevation3: '#27272aee'
-            },
-            radii: { xs: '8px', sm: '12px', lg: '20px' }
-          }}
-          fill flat
-          titleBar={{ title: "Engine Tuning", drag: false }}
-        />
-      )}
     </>
   );
 });

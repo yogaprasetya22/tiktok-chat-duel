@@ -219,7 +219,120 @@ class TikTokLiveService {
     });
   }
 
+  private simulationTimer: NodeJS.Timeout | null = null;
+
+  startSimulation(config?: any, difficulty: string = "Normal") {
+    if (this.simulationTimer) clearInterval(this.simulationTimer);
+    
+    const keyA = config?.player?.commentKeyword || "A";
+    const keyB = config?.enemy?.commentKeyword || "B";
+
+    const fakeUsers = ["Yoga_Gamer", "Kroco_Hunter", "Sultan_Tiktok", "Bocil_Kematian", "Dewa_Mage", "Windah_Fans", "Sepuh_Kroco", "Player_Pro"];
+    const fakeGifts = [
+      { name: "Rose", count: 1 },
+      { name: "Coffee", count: 1 },
+      { name: "GG", count: 1 },
+      { name: "TikTok", count: 1 },
+      { name: "Ice Cream Cone", count: 1 },
+      { name: "Weights", count: 1 }
+    ];
+
+    console.log(`[TikTok] Starting Simulation (A: "${keyA}", B: "${keyB}", Difficulty: ${difficulty})`);
+    this.currentUsername = "SIMULATE";
+    this.broadcast({
+      type: "status",
+      connected: true,
+      message: `SIMULATION ACTIVE | A: ${keyA} | B: ${keyB}`,
+      timestamp: new Date().toISOString()
+    });
+
+    // Probability Configuration
+    let chatThreshold = 0.9;
+    let likeThreshold = 1.0;
+    let intervalMs = 500; // Brutal speed for Normal
+    
+    if (difficulty === "Hard") {
+      chatThreshold = 0.6; // 60% chat
+      likeThreshold = 0.8; // 20% like, 20% gift
+      intervalMs = 800;
+    } else if (difficulty === "Super Hard") {
+      chatThreshold = 0.3; // 30% chat
+      likeThreshold = 0.5; // 20% like, 50% gift
+      intervalMs = 400; // Super fast!
+    } else {
+      // Normal: Brutal Comments, 0% Gift
+      chatThreshold = 0.9;
+      likeThreshold = 1.0;
+      intervalMs = 500;
+    }
+
+    this.simulationTimer = setInterval(() => {
+      const rand = Math.random();
+      const user = fakeUsers[Math.floor(Math.random() * fakeUsers.length)];
+      
+      // 50/50 Team Balance
+      const isTeamA = Math.random() > 0.5;
+      const teamKey = isTeamA ? keyA : keyB;
+
+      if (rand < chatThreshold) {
+        // Simulasi Chat (Balanced by teamKey)
+        const teamComments = [
+          teamKey,
+          `${teamKey} fighter`,
+          `${teamKey} mage`,
+          `${teamKey} tank`,
+          `${teamKey} marksman`,
+          `${teamKey} assassin`
+        ];
+        
+        this.broadcast({
+          type: "chat",
+          username: user,
+          comment: teamComments[Math.floor(Math.random() * teamComments.length)],
+          profileImage: `https://api.dicebear.com/7.x/avataaars/svg?seed=${user}`,
+          timestamp: new Date().toISOString()
+        });
+      } else if (rand < likeThreshold) {
+        // Simulasi Like
+        this.broadcast({
+          type: "like",
+          username: user,
+          likeCount: Math.floor(Math.random() * 50) + 1,
+          timestamp: new Date().toISOString()
+        });
+      } else if (difficulty !== "Normal") {
+        // Simulasi Gift
+        const gift = fakeGifts[Math.floor(Math.random() * fakeGifts.length)];
+        this.broadcast({
+          type: "gift",
+          username: user,
+          giftName: gift.name,
+          giftCount: gift.count,
+          diamondCount: 1,
+          profileImage: `https://api.dicebear.com/7.x/avataaars/svg?seed=${user}`,
+          timestamp: new Date().toISOString()
+        });
+      }
+    }, intervalMs); // Dynamic interval based on difficulty
+  }
+
+  stopSimulation() {
+    if (this.simulationTimer) {
+      clearInterval(this.simulationTimer);
+      this.simulationTimer = null;
+      this.currentUsername = null;
+      console.log("[TikTok] Stopping Server-Side Simulation Mode");
+      this.broadcast({
+        type: "status",
+        connected: false,
+        message: "SIMULATION MODE STOPPED",
+        timestamp: new Date().toISOString()
+      });
+    }
+  }
+
   async disconnect(): Promise<void> {
+    this.stopSimulation();
     if (this.client) {
       try {
         await this.client.disconnect();
@@ -240,7 +353,12 @@ class TikTokLiveService {
 
 // Global Singleton Pattern for Next.js HMR stability
 const globalForTikTok = global as unknown as { tiktokServiceV2: TikTokLiveService };
-export const tiktokService = globalForTikTok.tiktokServiceV2 || new TikTokLiveService();
+
+// If the existing service is missing new methods, we force a new instance
+const existingService = globalForTikTok.tiktokServiceV2;
+export const tiktokService = (existingService && (existingService as any).startSimulation) 
+  ? existingService 
+  : new TikTokLiveService();
 
 if (process.env.NODE_ENV !== "production") {
   globalForTikTok.tiktokServiceV2 = tiktokService;
