@@ -148,12 +148,12 @@ export function ShieldEffect({ unitRegistry, activeIndicesRef, settingsRef, simT
             const rScale = u.isBoss ? 1.25 : (rarity === 'legendary' ? 1.12 : (rarity === 'epic' ? 1.07 : (rarity === 'elite' ? 1.03 : 1.0)));
             
             const unitVisualScale = bScale * globalScale * rScale;
-            // Shield should be slightly larger than the unit for a 'bubble' feel
-            const shieldScale = unitVisualScale * 1.6; 
+            // Shield should be tightly wrapped around the unit
+            const shieldScale = unitVisualScale * 0.85; 
             
             // POSITIONING: Center on the torso. 
             // We use a normalized height offset multiplied by the unit's actual visual scale.
-            const heightOffset = u.isBoss ? 1.8 : 1.0;
+            const heightOffset = u.isBoss ? 0.9 : 0.5;
             _obj.position.set(u.position[0], u.position[1] + heightOffset * unitVisualScale, u.position[2]);
             _obj.scale.setScalar(shieldScale);
             _obj.updateMatrix();
