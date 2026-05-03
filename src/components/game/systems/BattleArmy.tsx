@@ -381,8 +381,8 @@ const BattleArmyComponent = ({
     frameCountRef.current++;
 
     // PERFORMANCE: Use consistent constants at the top
-    const HUD_DETAIL_DIST_SQ = 22500; // 150 * 150 (Increased for cinematic wide shots)
-    const HUD_MAX_RANGE_SQ = 7350; // 4900 * 1.5
+    const HUD_DETAIL_DIST_SQ = 22500; // 150m range (Increased for cinematic wide shots)
+    const HUD_MAX_RANGE_SQ = 22500; // Match detail dist so all visible units are evaluated
 
     // PERFORMANCE: Throttle sorting and unit filtering to every 20 frames
     const shouldSort = frameCountRef.current % 20 === 0 || cachedActiveUnits.current.length === 0;

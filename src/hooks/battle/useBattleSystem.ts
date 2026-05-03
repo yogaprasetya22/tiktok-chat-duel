@@ -901,13 +901,13 @@ export const useBattleSystem = () => {
 
           const towerWeight = 0.01;
           bestScore = towerWeight / (distToBaseSq + 0.1);
-          const targetedBaseId =
-            u.type === "player" ? "enemy-base" : "player-base";
+          const targetedBaseId = u.type === "player" ? "enemy-base" : "player-base";
+          const myBaseId = u.type === "player" ? "player-base" : "enemy-base";
 
           const neighbors = battleGrid.queryRadius(
             uData.position[0],
             uData.position[2],
-            isFighter || isAssassin ? 14 : 10, // Slightly tighter radii for performance
+            isFighter || isAssassin ? 16 : 14, // Slightly wider to ensure defenders see base attackers
           );
           for (let j = 0; j < neighbors.length; j++) {
             const potential = neighbors[j];
@@ -933,6 +933,11 @@ export const useBattleSystem = () => {
               weight = 3.0;
             } else if (potential.isBoss) {
               weight = 2.0;
+            }
+
+            // PRIORITY DEFENSE: Heavily prioritize enemies attacking our base!
+            if (potential.targetId === myBaseId) {
+              weight *= 50.0;
             }
 
             const score = weight / (dSq + 0.1);

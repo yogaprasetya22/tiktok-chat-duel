@@ -8,7 +8,7 @@ import {
   AdaptiveDpr,
   Sphere,
 } from "@react-three/drei";
-import { useControls, Leva } from "leva";
+import { useControls } from "leva";
 
 import { Base, InstancedTowers } from "./environment/Base";
 import { VFXProvider, useVFX } from "./systems/VFXManager";
@@ -203,14 +203,6 @@ const CameraDirector = ({
       return;
     }
 
-    const angles = [
-      { pos: [-36, 28, 36], name: 'Side Left Close' },
-      { pos: [40, 30, -40], name: 'Diagonal Front Close' },
-      { pos: [45, 40, 45], name: 'High Diagonal Close' },
-      { pos: [36, 28, 36], name: 'Side Right Close' },
-      { pos: [0, 32, 45], name: 'Dolly Track Close' },
-      { pos: [-40, 30, -40], name: 'Diagonal Back Close' },
-    ];
 
     // ── True Frontline Meeting Point (throttled, zero-alloc) ─────────────────
     // Compute every 15 frames (4x a second at 60fps) to minimize CPU cost during high unit density
@@ -265,7 +257,8 @@ const CameraDirector = ({
     const fx = focusX.current;
     const fz = focusZ.current;
 
-    // ── Cinematic Angles ──
+    // --- Cinematic Angles ---
+    const angles = cinematicState.angles;
     const angleIdx = angleIndex.current % angles.length;
     const currentAngle = angles[angleIdx];
     
@@ -279,25 +272,26 @@ const CameraDirector = ({
       const siegeAngle = angleIndex.current % 2;
 
       if (siegeAngle === 0) {
-        // Angle 1: "Defender's View" 
-        // Kamera diperjauh dan dinaikkan agar label terlihat jelas
-        _targetPos.set(siegeSide * 35, 35, towerZ - siegeSide * 35);
-        _focusPoint.set(fx, 2, fz); 
+        // Angle 1: "Defender's View" - Dynamic
+        const { defenderY, defenderDist } = cinematicState.siege;
+        _targetPos.set(siegeSide * defenderDist, defenderY, towerZ - siegeSide * defenderDist);
+        _focusPoint.set(fx, 1.5, fz); 
       } else {
-        // Angle 2: "Frontal Siege" 
-        _targetPos.set(-35, 30, fz - siegeSide * 40);
-        _focusPoint.set(0, 6, towerZ); 
+        // Angle 2: "Frontal Siege" - Dynamic
+        const { frontalY, frontalDist } = cinematicState.siege;
+        _targetPos.set(-25, frontalY, fz - siegeSide * frontalDist);
+        _focusPoint.set(0, 4, towerZ); 
       }
     } else {
       // --- NORMAL BATTLE ANGLES --- 
-      // Use the pre-defined cinematic angles array
+      // Use the dynamic cinematic angles from cinematicState
       if (angleIdx === 4) { // Dolly Track (Follows the focus point)
-        _targetPos.set(fx + currentAngle.pos[0], currentAngle.pos[1], fz + currentAngle.pos[2]);
+        _targetPos.set(fx + currentAngle.x, currentAngle.y, fz + currentAngle.z);
       } else {
         // Fixed position angles
-        _targetPos.set(currentAngle.pos[0], currentAngle.pos[1], currentAngle.pos[2]);
+        _targetPos.set(currentAngle.x, currentAngle.y, currentAngle.z);
       }
-      _focusPoint.set(fx, 1.5, fz);
+      _focusPoint.set(fx, 1.2, fz);
     }
     
     cinematicState.focusX = fx;
@@ -367,7 +361,6 @@ export const GameCanvas = React.memo(({
 
   const [dpr, setDpr] = useState(1.0);
   const gameState = useStore(s => s.gameState);
-  const isSettingsOpen = useStore(s => s.isSettingsOpen);
   const environment = useStore(s => s.environment);
   const setEnvironment = useStore(s => s.setEnvironment);
 
@@ -588,22 +581,6 @@ export const GameCanvas = React.memo(({
           null
         )}
       </Canvas>
-
-      {/* Leva Engine Console (Settings Panel, OUTSIDE canvas) */}
-      {isSettingsOpen && (
-        <Leva
-          hidden={!isSettingsOpen}
-          theme={{
-            colors: {
-              accent1: '#6366f1', accent2: '#4f46e5', accent3: '#4338ca',
-              elevation1: '#09090bee', elevation2: '#18181bee', elevation3: '#27272aee'
-            },
-            radii: { xs: '8px', sm: '12px', lg: '20px' }
-          }}
-          fill flat
-          titleBar={{ title: "Engine Tuning", drag: false }}
-        />
-      )}
     </>
   );
 });

@@ -481,17 +481,22 @@ const ECSArmyRendererInner = ({
         const hIdx = hudBase + slotIdx;
 
         if (shadowRef.current && healthBarRef.current) {
+          const totalVisualScale = baseScale * settings.unitScale * rScale;
+
+          // Expand frustum sphere to properly cover the tall Epic/Legendary labels
+          // Centers the sphere higher up and scales radius dynamically so it doesn't vanish in cinematic mode
+          _frustumSphere.center.set(item.group.position.x, item.group.position.y + 4 * totalVisualScale, item.group.position.z);
+          _frustumSphere.radius = 8 * Math.max(1, totalVisualScale);
+
           // Increase HUD detail radius to 200m so labels don't disappear when camera moves back
           // HUD visible radius at 200m
           const HUD_DETAIL_DIST_SQ = 22500; // 150m range (Increased for cinematic wide shots)
-          _frustumSphere.center.set(item.group.position.x, item.group.position.y + 2, item.group.position.z);
+          
           const isVisible = frustum ? frustum.intersectsSphere(_frustumSphere) : true;
           const showDetail = isVisible && (uData.isBoss || (uData.dSq || 0) < HUD_DETAIL_DIST_SQ);
 
           if (showDetail) {
             const vPos = item.group.position;
-            const totalVisualScale = baseScale * settings.unitScale * rScale;
-
             const by = (uData.isBoss ? 3.6 : 4.0) * totalVisualScale;
             const bs = (uData.isBoss ? 0.7 : 0.8) * totalVisualScale;
             const ss = 1.1 * totalVisualScale;
@@ -564,7 +569,7 @@ const ECSArmyRendererInner = ({
               }
             }
           } else {
-            // Far: shadow only
+            // Far or out of camera: shadow only, hide labels
             _hudTemp.position.set(cp.x, -0.45, cp.z);
             _hudTemp.quaternion.identity(); // Pre-rotated geo
             _hudTemp.scale.set(uData.isBoss ? 4.5 : 1.6, uData.isBoss ? 4.5 : 1.6, 1);
@@ -575,6 +580,13 @@ const ECSArmyRendererInner = ({
             _hudTemp.updateMatrix();
             healthBarRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
             cooldownRef.current?.setMatrixAt(hIdx, _hudTemp.matrix);
+
+            // KEY FIX: Hide the label when unit is out of camera view!
+            const slot = namePoolMap?.current?.get(id);
+            if (slot !== undefined && nameGroupRefs?.current) {
+              const labelGroup = nameGroupRefs.current[slot];
+              if (labelGroup) labelGroup.visible = false;
+            }
           }
         }
 

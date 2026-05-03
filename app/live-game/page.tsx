@@ -8,6 +8,7 @@ import { GIFT_FORMATIONS } from "@/src/core/logic/gift/giftDictionary";
 import { GameCanvas } from "@/src/components/game/GameCanvas";
 import { UIOverlay } from "@/src/components/game/ui/UIOverlay";
 import { useControls, button, folder, Leva } from "leva";
+import { cinematicState } from "@/src/state/cinematicState";
 
 export default function GamePage() {
   const [mounted, setMounted] = useState(false);
@@ -15,7 +16,6 @@ export default function GamePage() {
   const [showChat, setShowChat] = useState(false);
   const [activeUsername, setActiveUsername] = useState("");
   const [testingMode, setTestingMode] = useState(false);
-  const lastProcessedId = useRef<string | null>(null);
   const likeCounterRef = useRef<number>(0);
   const cumulativeLikesRef = useRef<number>(0);
 
@@ -31,11 +31,12 @@ export default function GamePage() {
     damageQueue, settingsRef, simTimeRef,
     vehicles, unitIndex,
     spellsRef, mmSpellsRef, fighterSpellsRef, tankSpellsRef, assassinSpellsRef,
-    downloadPerfLogs, clearVFXCache, compBuffers,
+    compBuffers,
   } = useBattleSystem();
 
   const gameState = useStore(s => s.gameState);
   const gameMode = useStore(s => s.gameMode);
+  const isSettingsOpen = useStore(s => s.isSettingsOpen);
 
   // --- Leva Deployment Controls (Training Mode) ---
   useControls("deployment", {
@@ -51,6 +52,48 @@ export default function GamePage() {
       "Clear All Units": button(() => resetBattle()),
     }, { render: () => gameMode === 'TRAINING' }),
   }, [gameMode, spawnUnit, resetBattle]);
+
+  // --- Cinematic Camera Leva Controls ---
+  useControls("Cinematic Camera", {
+    "Normal Angles": folder({
+      "Angle 1": folder({
+        x1: { value: cinematicState.angles[0].x, min: -100, max: 100, onChange: (v) => cinematicState.angles[0].x = v },
+        y1: { value: cinematicState.angles[0].y, min: 2, max: 80, onChange: (v) => cinematicState.angles[0].y = v },
+        z1: { value: cinematicState.angles[0].z, min: -100, max: 100, onChange: (v) => cinematicState.angles[0].z = v },
+      }, { collapsed: true }),
+      "Angle 2": folder({
+        x2: { value: cinematicState.angles[1].x, min: -100, max: 100, onChange: (v) => cinematicState.angles[1].x = v },
+        y2: { value: cinematicState.angles[1].y, min: 2, max: 80, onChange: (v) => cinematicState.angles[1].y = v },
+        z2: { value: cinematicState.angles[1].z, min: -100, max: 100, onChange: (v) => cinematicState.angles[1].z = v },
+      }, { collapsed: true }),
+      "Angle 3": folder({
+        x3: { value: cinematicState.angles[2].x, min: -100, max: 100, onChange: (v) => cinematicState.angles[2].x = v },
+        y3: { value: cinematicState.angles[2].y, min: 2, max: 80, onChange: (v) => cinematicState.angles[2].y = v },
+        z3: { value: cinematicState.angles[2].z, min: -100, max: 100, onChange: (v) => cinematicState.angles[2].z = v },
+      }, { collapsed: true }),
+      "Angle 4": folder({
+        x4: { value: cinematicState.angles[3].x, min: -100, max: 100, onChange: (v) => cinematicState.angles[3].x = v },
+        y4: { value: cinematicState.angles[3].y, min: 2, max: 80, onChange: (v) => cinematicState.angles[3].y = v },
+        z4: { value: cinematicState.angles[3].z, min: -100, max: 100, onChange: (v) => cinematicState.angles[3].z = v },
+      }, { collapsed: true }),
+      "Angle 5": folder({
+        x5: { value: cinematicState.angles[4].x, min: -100, max: 100, onChange: (v) => cinematicState.angles[4].x = v },
+        y5: { value: cinematicState.angles[4].y, min: 2, max: 80, onChange: (v) => cinematicState.angles[4].y = v },
+        z5: { value: cinematicState.angles[4].z, min: -100, max: 100, onChange: (v) => cinematicState.angles[4].z = v },
+      }, { collapsed: true }),
+      "Angle 6": folder({
+        x6: { value: cinematicState.angles[5].x, min: -100, max: 100, onChange: (v) => cinematicState.angles[5].x = v },
+        y6: { value: cinematicState.angles[5].y, min: 2, max: 80, onChange: (v) => cinematicState.angles[5].y = v },
+        z6: { value: cinematicState.angles[5].z, min: -100, max: 100, onChange: (v) => cinematicState.angles[5].z = v },
+      }, { collapsed: true }),
+    }),
+    "Siege Angles": folder({
+      defenderY: { value: cinematicState.siege.defenderY, min: 5, max: 60, onChange: (v) => cinematicState.siege.defenderY = v },
+      defenderDist: { value: cinematicState.siege.defenderDist, min: 5, max: 80, onChange: (v) => cinematicState.siege.defenderDist = v },
+      frontalY: { value: cinematicState.siege.frontalY, min: 5, max: 60, onChange: (v) => cinematicState.siege.frontalY = v },
+      frontalDist: { value: cinematicState.siege.frontalDist, min: 5, max: 80, onChange: (v) => cinematicState.siege.frontalDist = v },
+    }, { collapsed: true })
+  });
 
   // --- Auto-Spawn Logic (Testing Mode) ---
   const countsRef = useRef({ player: 0, enemy: 0 });
@@ -85,88 +128,116 @@ export default function GamePage() {
     return () => clearInterval(intervalId);
   }, [testingMode, gameState, spawnUnit, towerConfig, gameMode]);
 
+  // --- 100% Accurate Event Processing & Queue System (Fast Track) ---
+  const processedIdsRef = useRef<Set<string>>(new Set());
+  const priorityQueueRef = useRef<Array<() => void>>([]); // HIGH PRIORITY: Gifts
+  const standardQueueRef = useRef<Array<() => void>>([]); // STANDARD: Chat/Likes
+
+  // Queue Consumer: Processes spawns gradually with Priority Fast-Track
+  useEffect(() => {
+    if (gameState !== "PLAYING" || gameMode === "TRAINING") return;
+    
+    const intervalId = setInterval(() => {
+      // FAST TRACK LOGIC: Always check priority queue (Gifts) first
+      if (priorityQueueRef.current.length > 0) {
+        // Process gifts faster (5 units per batch) to make them feel impactful
+        const batch = priorityQueueRef.current.splice(0, 5);
+        batch.forEach(spawnAction => spawnAction());
+      } 
+      // Only process standard chat queue if no gifts are waiting
+      else if (standardQueueRef.current.length > 0) {
+        const batch = standardQueueRef.current.splice(0, 3);
+        batch.forEach(spawnAction => spawnAction());
+      }
+    }, 50);
+
+    return () => clearInterval(intervalId);
+  }, [gameState, gameMode]);
+
   // --- TikTok Event Processing ---
   useEffect(() => {
     if (messages.length === 0 || gameMode === "TRAINING") return;
-    let startIndex = -1;
-    if (lastProcessedId.current) {
-      startIndex = messages.findIndex((m: any) => m.id === lastProcessedId.current);
-    }
-    const newMessages = messages.slice(startIndex + 1);
+    
+    // 100% Accurate Deduplication
+    const newMessages = messages.filter((msg: any) => !processedIdsRef.current.has(msg.id));
     if (newMessages.length === 0) return;
-    lastProcessedId.current = newMessages[newMessages.length - 1].id;
 
     newMessages.forEach((msg: any) => {
-      // 1. TACTICAL SUPPORT LOGIC (Likes → random effect every 500 likes)
+      processedIdsRef.current.add(msg.id);
+      
+      // Prevent memory leak in Set
+      if (processedIdsRef.current.size > 2000) {
+        const iterator = processedIdsRef.current.values();
+        for (let i = 0; i < 1000; i++) {
+          const val = iterator.next().value;
+          if (val) processedIdsRef.current.delete(val);
+        }
+      }
+
+      // Helper to enqueue a spawn (Priority Support)
+      const queueSpawn = (count: number, side: "player"|"enemy", isBoss: boolean, unitClass: any, rarity: any, isPriority: boolean = false) => {
+        const targetQueue = isPriority ? priorityQueueRef.current : standardQueueRef.current;
+        for (let i = 0; i < count; i++) {
+          targetQueue.push(() => {
+            spawnUnit(1, msg.username, side, isBoss, unitClass, msg.profileImage, rarity);
+          });
+        }
+      };
+
+      // 1. TACTICAL SUPPORT LOGIC (Likes)
       if (msg.type === "like") {
         cumulativeLikesRef.current += (msg.likeCount || 1);
         if (cumulativeLikesRef.current - likeCounterRef.current >= 500) {
           likeCounterRef.current += 500;
-          // Randomly pick 1 of 3 tactical effects
           const roll = Math.random();
-          if (roll < 0.33) {
-            useStore.getState().triggerFeverTime();
-          } else if (roll < 0.66) {
-            useStore.getState().triggerOrbitalLightning();
-          } else {
-            useStore.getState().triggerMedicalSupply();
-          }
+          if (roll < 0.33) useStore.getState().triggerFeverTime();
+          else if (roll < 0.66) useStore.getState().triggerOrbitalLightning();
+          else useStore.getState().triggerMedicalSupply();
         }
       }
 
-      // 2. SPAWN LOGIC VIA CHAT (Team specific)
+      // 2. SPAWN LOGIC VIA CHAT
       const processSpawn = (side: "player" | "enemy") => {
         const config = side === "player" ? towerConfig.player : towerConfig.enemy;
         if (!config.active) return;
         
         if (msg.type !== "chat") return;
-        // Anti-typo parser: remove all spaces, lowercase
         const cleanComment = msg.comment.toLowerCase().replace(/\s+/g, "");
         const baseKey = config.commentKeyword.toLowerCase().replace(/\s+/g, "");
         
         const ALL_CLASSES = ["fighter", "tank", "mage", "marksman", "assassin"] as const;
-        // 70% common, 30% elite for basic chat spawns
         const randomRarity = () => Math.random() < 0.7 ? "common" : "elite";
         
         let spawnedClass: any = undefined;
         let isMatch = false;
 
         if (cleanComment === baseKey) {
-          // Keyword only → random class
           spawnedClass = ALL_CLASSES[Math.floor(Math.random() * ALL_CLASSES.length)];
           isMatch = true;
-        } else if (cleanComment === `${baseKey}fighter`) {
-          spawnedClass = "fighter"; isMatch = true;
-        } else if (cleanComment === `${baseKey}tank`) {
-          spawnedClass = "tank"; isMatch = true;
-        } else if (cleanComment === `${baseKey}mage`) {
-          spawnedClass = "mage"; isMatch = true;
-        } else if (cleanComment === `${baseKey}marksman` || cleanComment === `${baseKey}mm`) {
-          spawnedClass = "marksman"; isMatch = true;
-        } else if (cleanComment === `${baseKey}assassin`) {
-          spawnedClass = "assassin"; isMatch = true;
-        }
+        } else if (cleanComment === `${baseKey}fighter`) { spawnedClass = "fighter"; isMatch = true; }
+          else if (cleanComment === `${baseKey}tank`) { spawnedClass = "tank"; isMatch = true; }
+          else if (cleanComment === `${baseKey}mage`) { spawnedClass = "mage"; isMatch = true; }
+          else if (cleanComment === `${baseKey}marksman` || cleanComment === `${baseKey}mm`) { spawnedClass = "marksman"; isMatch = true; }
+          else if (cleanComment === `${baseKey}assassin`) { spawnedClass = "assassin"; isMatch = true; }
 
         if (isMatch) {
-          spawnUnit(1, msg.username, side, false, spawnedClass, msg.profileImage, randomRarity());
+          queueSpawn(1, side, false, spawnedClass, randomRarity());
         }
       };
 
-      // 3. SPAWN LOGIC VIA GIFT (Exclusive team pools — 1 gift → 1 team)
+      // 3. SPAWN LOGIC VIA GIFT (100% Guarantee Queue)
       const processGiftSpawn = () => {
         if (msg.type !== "gift") return;
 
-        const giftNameRaw = msg.giftName || "";
-        const giftNameLower = giftNameRaw.toLowerCase();
+        const giftNameLower = (msg.giftName || "").toLowerCase();
 
-        // ROULETTE TRIGGER (Game Controller) — triggers randomly for one team
+        // ROULETTE TRIGGER
         if (giftNameLower.includes("game controller")) {
           const side = Math.random() > 0.5 ? "player" : "enemy";
           useStore.getState().triggerRoulette(msg.username, side);
           return;
         }
 
-        // Helper: find which pool a gift belongs to and which team it triggers
         const findMatch = (side: "player" | "enemy") => {
           const config = side === "player" ? towerConfig.player : towerConfig.enemy;
           if (!config.active || !config.giftBindings?.length) return null;
@@ -178,20 +249,19 @@ export default function GamePage() {
           return null;
         };
 
-        // Check player pool FIRST, then enemy — no overlap
         const match = findMatch("player") || findMatch("enemy");
         if (!match) return;
 
         const { side, binding } = match;
-
         const formation = GIFT_FORMATIONS[binding.formationId];
+        
         if (formation) {
           for (const rule of formation.rules) {
             const isBoss = rule.unitClass === "boss" || rule.rarity === "legendary";
-            for (let i = 0; i < rule.count; i++) {
-              spawnUnit(1, msg.username, side, isBoss, rule.unitClass === "boss" ? undefined : rule.unitClass, msg.profileImage, rule.rarity);
-            }
+            // Safely queue ALL units for this gift with Priority Fast-Track
+            queueSpawn(rule.count, side, isBoss, rule.unitClass === "boss" ? undefined : rule.unitClass, rule.rarity, true);
           }
+          // Immediate UI feedback for the donor
           useStore.getState().triggerGacha(msg.username, side, "GIFT REWARD", formation.name);
         }
       };
@@ -290,22 +360,24 @@ export default function GamePage() {
           testingMode={testingMode}
           onToggleTesting={() => setTestingMode(!testingMode)}
           displayMessages={displayMessages}
-          downloadPerfLogs={downloadPerfLogs}
-          clearVFXCache={clearVFXCache}
         />
       </div>
 
-      {/* ===== LAYER 2: Leva Debug (Training Mode Only) ===== */}
-      {gameMode === 'TRAINING' && (
-        <div className="fixed bottom-4 left-4 z-[60] pointer-events-auto w-72">
-          <Leva theme={{
+      {/* ===== LAYER 2: Unified Settings Panel (Leva) ===== */}
+      <div className="fixed top-20 right-4 z-[9999] pointer-events-auto">
+        <Leva 
+          hidden={!isSettingsOpen && gameMode !== 'TRAINING'}
+          theme={{
             colors: {
-              elevation1: '#18181b', elevation2: '#27272a', elevation3: '#3f3f46',
-              highlight1: '#6366f1', highlight2: '#818cf8', highlight3: '#4f46e5',
-            }
-          }} />
-        </div>
-      )}
+              accent1: '#6366f1', accent2: '#4f46e5', accent3: '#4338ca',
+              elevation1: '#09090bee', elevation2: '#18181bee', elevation3: '#27272aee'
+            },
+            radii: { xs: '8px', sm: '12px', lg: '20px' }
+          }}
+          collapsed={false}
+          titleBar={{ title: "Engine Console", drag: true }}
+        />
+      </div>
 
     </div>
   );

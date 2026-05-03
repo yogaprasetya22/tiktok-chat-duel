@@ -156,7 +156,7 @@ export let CLASS_CONFIG: ClassConfig = {
 export let INITIAL_SETTINGS: SimulationSettings = {
     // Military & Stats
     globalHpMultiplier: 1.0,
-    globalSpeedMultiplier: 1.0,
+    globalSpeedMultiplier: 1.6,
     globalDamageMultiplier: 2.4,
     globalAttackCooldown: 800,
     critChance: 0.55,

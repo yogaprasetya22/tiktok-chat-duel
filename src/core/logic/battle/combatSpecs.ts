@@ -8,10 +8,10 @@ export const RARITY_WEIGHTS = {
 };
 
 export const RARITY_BONUS_MATRIX = {
-    common:    { hp: 0,    atk: 0,    as: 0,    crit: 0,    ls: 0,    def: 0 },
-    elite:     { hp: 0.3,  atk: 0.2,  as: 0.1,  crit: 0.05, ls: 0.05, def: 10 },
-    epic:      { hp: 0.7,  atk: 0.5,  as: 0.25, crit: 0.15, ls: 0.1,  def: 25 },
-    legendary: { hp: 1.5,  atk: 1.2,  as: 0.5,  crit: 0.35, ls: 0.2,  def: 50 }
+    common:    { hp: 0,     atk: 0,    as: 0,    crit: 0,    ls: 0,    def: 0 },
+    elite:     { hp: 1.5,   atk: 0.8,  as: 0.1,  crit: 0.05, ls: 0.05, def: 15 },
+    epic:      { hp: 5.0,   atk: 2.5,  as: 0.25, crit: 0.15, ls: 0.1,  def: 50 },
+    legendary: { hp: 20.0,  atk: 8.0,  as: 0.5,  crit: 0.35, ls: 0.2,  def: 150 }
 };
 
 export const applyClassSpecialization = (u: any, unitClass: ClassKey, rarityBonus: any, classConfig: any, settings: any) => {
