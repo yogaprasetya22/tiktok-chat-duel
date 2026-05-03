@@ -298,8 +298,26 @@ const CameraDirector = ({
     cinematicState.focusY = 1.5;
     cinematicState.focusZ = fz;
 
-    const CAM_DECAY = 1.5; // was 3.0 — camera glides, doesn't snap
+    // --- Dynamic Zoom for Big Units (Bosses) ---
+    // If a boss is near the focus point, we need to pull the camera back to keep them in frame.
+    let bossZoomMult = 1.0;
+    const reg = unitRegistry?.current;
+    if (reg) {
+      for (let i = 0; i < Math.min(reg.length, 100); i++) {
+        const u = reg[i];
+        if (u && u.isActive && u.isBoss && Math.abs(u.position[2] - fz) < 15) {
+          bossZoomMult = 1.6; // Pull back 60% if a boss is at the frontline
+          break;
+        }
+      }
+    }
+
+    const CAM_DECAY = 1.5; 
     _camTarget.copy(camera.position);
+    
+    // Apply boss zoom by scaling the vector from focus point to target position
+    _targetPos.sub(_focusPoint).multiplyScalar(bossZoomMult).add(_focusPoint);
+
     camera.position.x = expDecay(_camTarget.x, _targetPos.x, CAM_DECAY, dt);
     camera.position.y = expDecay(_camTarget.y, _targetPos.y, CAM_DECAY, dt);
     camera.position.z = expDecay(_camTarget.z, _targetPos.z, CAM_DECAY, dt);
@@ -463,23 +481,24 @@ export const GameCanvas = React.memo(({
           position: [0, 0.5, 5],
           fov: 40,
           near: 0.1,
-          far: 500  // Dikurangi: depth buffer lebih presisi, less overdraw
+          far: 500
         }}
-        shadows={false}  // DIMATIKAN: PCFShadowMap sangat mahal, tidak visible dari atas
-        dpr={[1, 1.5]}    // OPTIMIZATION: Cap at 1.5x instead of 2-3x for mobile high-res stability
+        shadows={false}
+        dpr={dpr}    // FIX: Reactively update DPR based on performance monitor
         gl={{
-          antialias: false,  // DIMATIKAN: 2x GPU cost. Bloom sudah memberi glow anti-alias visual
+          antialias: false,
           powerPreference: "high-performance",
           logarithmicDepthBuffer: false,
           stencil: false,
           depth: true,
+          alpha: false, // PERFORMANCE: No transparency for main canvas background
         }}
         style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
         className="select-none touch-none"
       >
         <PerformanceMonitor
-          onIncline={() => setDpr(Math.min(dpr + 0.1, 1.0))}
-          onDecline={() => setDpr(Math.max(dpr - 0.15, 0.4))}
+          onIncline={() => setDpr(Math.min(dpr + 0.1, 1.5))}
+          onDecline={() => setDpr(Math.max(dpr - 0.2, 0.5))}
           threshold={0.85}
           flipflops={3}
         />

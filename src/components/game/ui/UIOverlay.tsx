@@ -677,7 +677,7 @@ const ChatOverlay = React.memo(({ messages, onClose }: { messages: any[], onClos
   </div>
 ));
 
-export const UIOverlay = ({
+export const UIOverlay = React.memo(({
   towerConfig, setTowerConfig,
   onStart, onConnect,
   connected, loading, error,
@@ -1109,4 +1109,4 @@ export const UIOverlay = ({
       )}
     </>
   );
-};
+});

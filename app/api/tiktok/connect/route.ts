@@ -3,7 +3,7 @@ import { tiktokService } from "@/src/lib/tiktok/tiktokService";
 
 export async function POST(request: NextRequest) {
   try {
-    const { username } = await request.json();
+    const { username, config, difficulty } = await request.json();
 
     // Validate username
     if (!username) {
@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate username format (alphanumeric, dots, underscores, hyphens)
-    if (!/^[a-zA-Z0-9._-]+$/.test(normalizedUsername)) {
+    if (!/^[a-zA-Z0-9._-]+$/.test(normalizedUsername) && normalizedUsername.toUpperCase() !== "SIMULATE") {
       return NextResponse.json(
         { 
           error: "Invalid username format. Use only alphanumeric characters, dots, underscores, and hyphens",
@@ -39,6 +39,15 @@ export async function POST(request: NextRequest) {
     }
 
     console.log("[TikTok Connect] Attempting to connect with username:", normalizedUsername);
+
+    if (normalizedUsername.toUpperCase() === "SIMULATE") {
+      tiktokService.startSimulation(config, difficulty);
+      return NextResponse.json({
+        success: true,
+        message: "Server Simulation Started",
+        username: "SIMULATE",
+      });
+    }
 
     await tiktokService.connect(normalizedUsername);
     return NextResponse.json({

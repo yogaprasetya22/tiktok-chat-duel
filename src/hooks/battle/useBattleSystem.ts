@@ -142,6 +142,8 @@ export const useBattleSystem = () => {
       rarity: "common",
     })),
   );
+  
+  const killEventQueueRef = useRef<KillEvent[]>([]);
   const mmSpellsRef = useRef<any[]>(
     Array.from({ length: 800 }, () => ({
       fromX: 0,
@@ -343,16 +345,15 @@ export const useBattleSystem = () => {
   }, []);
 
   const accumulateDamage = useCallback(
-    (targetId: string, value: number, position: number[], color: string) => {
+    (targetId: string, value: number, position: number[], color: string, now: number) => {
       const existing = damageBufferRef.current.get(targetId);
       if (existing) {
         existing.total += value;
         existing.position[0] = position[0];
         existing.position[1] = position[1];
         existing.position[2] = position[2];
-        existing.lastHit = performance.now(); // FIX: Use performance.now() to match flushDamageBuffer
+        existing.lastHit = now;
       } else {
-        const now = performance.now();
         damageBufferRef.current.set(targetId, {
           total: value,
           position: [position[0], position[1], position[2]],
@@ -420,7 +421,7 @@ export const useBattleSystem = () => {
       profileImage?: string,
       rarity?: UnitRarity,
     ) => {
-      useStore.getState().addKillEvent({
+      killEventQueueRef.current.push({
         id: Math.random().toString(36).substring(7),
         killer,
         victim,
@@ -533,6 +534,7 @@ export const useBattleSystem = () => {
     unitIndexRef.current.clear();
     damageBufferRef.current.clear();
     damageQueueRef.current.length = 0;
+    killEventQueueRef.current.length = 0;
     spellsRef.current.forEach((s) => (s.active = false));
     mmSpellsRef.current.forEach((s) => (s.active = false));
     fighterSpellsRef.current.forEach((s) => (s.active = false));
@@ -869,7 +871,7 @@ export const useBattleSystem = () => {
           _vh[i] = Math.max(0, _vh[i] - damage);
           
           // Add damage to queue for visual feedback
-          accumulateDamage(u.id, damage, uData.position, "#93c5fd");
+          accumulateDamage(u.id, damage, uData.position, "#93c5fd", simNow);
         } // PERFORMANCE: Spread 'Thinking' logic across 16 frames instead of 8.
         // This reduces the per-frame cost of spatial queries by 50% in high-density combat.
 
@@ -1055,10 +1057,10 @@ export const useBattleSystem = () => {
                   if (tnIdx >= 0) {
                     const tarUnit = unitIndexRef.current.get(tar.id);
                     if (tarUnit && tarUnit.isShield) {
-                      accumulateDamage(tar.id, 0, tar.position, "#FFFFFF");
+                      accumulateDamage(tar.id, 0, tar.position, "#FFFFFF", simNow);
                     } else {
                       _vh[tnIdx] -= dmg;
-                      accumulateDamage(tar.id, dmg, tar.position, "#fff");
+                      accumulateDamage(tar.id, dmg, tar.position, "#fff", simNow);
                     }
                   }
                 }
@@ -1125,7 +1127,7 @@ export const useBattleSystem = () => {
             const targets = battleGrid.queryRadius(
               _px[i],
               _pz[i],
-              cfg.skill_range,
+              30, // Optimized radius (reduced from potential cfg.skill_range which could be 60+)
             );
             let bestTarget = null;
             let minDSq = Infinity;
@@ -1175,7 +1177,7 @@ export const useBattleSystem = () => {
             const targets = battleGrid.queryRadius(
               _px[i],
               _pz[i],
-              cfg.skill_range,
+              40, // Capped radius for performance
             );
             let bestTarget = null;
             let minHp = Infinity;
@@ -1274,7 +1276,7 @@ export const useBattleSystem = () => {
               tPos = targetData.position as [number, number, number];
             } else {
               // Target mati, cari target baru terdekat
-              const newTargets = battleGrid.queryRadius(_px[i], _pz[i], 60);
+              const newTargets = battleGrid.queryRadius(_px[i], _pz[i], 35); // Optimized radius
               for (let t2 = 0; t2 < newTargets.length; t2++) {
                 const nt = newTargets[t2];
                 if (nt.type !== u.type && nt.isActive && !nt.isDying) {
@@ -1347,7 +1349,7 @@ export const useBattleSystem = () => {
                   _vh[tPoolIdx] = newHp;
                   targetUnit.hp = newHp;
                   targetData.hp = newHp;
-                  accumulateDamage(tId, dmg, tPos, color);
+                  accumulateDamage(tId, dmg, tPos, color, simNow);
                 }
               }
             }
@@ -1413,6 +1415,7 @@ export const useBattleSystem = () => {
                   u.type === "player"
                     ? towerConfigRef.current.player.color
                     : towerConfigRef.current.enemy.color,
+                  simNow
                 );
                 hits++;
 
@@ -1433,45 +1436,35 @@ export const useBattleSystem = () => {
                   )
                     continue;
 
-                  const dx = tData.position[0] - p.position[0];
-                  const dz = tData.position[2] - p.position[2];
-                  const dSq = dx * dx + dz * dz;
-
-                  if (dSq < searchRadius * searchRadius) {
-                    const pIdx = p.poolIdx;
-                    if (pIdx >= 0) {
-                      const pUnit = unitIndexRef.current.get(p.id);
-                      if (pUnit && pUnit.isShield) {
-                        // IMMUNE
-                        accumulateDamage(p.id, 0, p.position, "#FFFFFF");
-                      } else {
-                        _vh[pIdx] -= dmg;
-                        const pData = unitDataPoolRef.current[pIdx];
-                        if (pData && pUnit) {
-                          pData.hp = _vh[pIdx];
-                          pUnit.hp = _vh[pIdx];
-                          if (_vh[pIdx] <= 0) {
-                            addKillEvent(
-                              u.userName,
-                              p.userName,
-                              p.isBoss ? "boss" : "unit",
-                              u.profileImage,
-                              p.rarity,
-                            );
-                            updateStats(u.userName, u.type, 0, true);
-                          }
-                          updateStats(u.userName, u.type, dmg);
-                          accumulateDamage(
-                            p.id,
-                            dmg,
-                            pData.position,
-                            u.type === "player"
-                              ? towerConfigRef.current.player.color
-                              : towerConfigRef.current.enemy.color,
-                          );
-                          hits++;
-                        }
+                  const pIdx = p.poolIdx;
+                  if (pIdx >= 0) {
+                    const pUnit = unitDataPoolRef.current[pIdx]; // REPLACED: Map lookup with direct array access
+                    if (pUnit && pUnit.isShield) {
+                      accumulateDamage(p.id, 0, p.position, "#FFFFFF", simNow);
+                    } else if (pUnit) {
+                      _vh[pIdx] -= dmg;
+                      pUnit.hp = _vh[pIdx];
+                      if (_vh[pIdx] <= 0) {
+                        addKillEvent(
+                          u.userName,
+                          p.userName,
+                          p.isBoss ? "boss" : "unit",
+                          u.profileImage,
+                          p.rarity,
+                        );
+                        updateStats(u.userName, u.type, 0, true);
                       }
+                      updateStats(u.userName, u.type, dmg);
+                      accumulateDamage(
+                        p.id,
+                        dmg,
+                        p.position,
+                        u.type === "player"
+                          ? towerConfigRef.current.player.color
+                          : towerConfigRef.current.enemy.color,
+                        simNow
+                      );
+                      hits++;
                     }
                   }
                 }
@@ -1500,6 +1493,7 @@ export const useBattleSystem = () => {
                   u.type === "player"
                     ? towerConfigRef.current.player.color
                     : towerConfigRef.current.enemy.color,
+                  simNow
                 );
 
                 const cleaveNearby = battleGrid.queryRadius(
@@ -1522,36 +1516,32 @@ export const useBattleSystem = () => {
                     continue;
                   const cIdx = cp.poolIdx;
                   if (cIdx >= 0) {
-                    const cpUnit = unitIndexRef.current.get(cp.id);
+                    const cpUnit = unitDataPoolRef.current[cIdx]; // REPLACED: Map lookup with direct array access
                     if (cpUnit && cpUnit.isShield) {
-                      // IMMUNE
-                      accumulateDamage(cp.id, 0, cp.position, "#FFFFFF");
-                    } else {
+                      accumulateDamage(cp.id, 0, cp.position, "#FFFFFF", simNow);
+                    } else if (cpUnit) {
                       const cDmg = dmg * cleavePerc;
                       _vh[cIdx] -= cDmg;
-                      const cpData = unitDataPoolRef.current[cIdx];
-                      if (cpData && cpUnit) {
-                        cpData.hp = _vh[cIdx];
-                        cpUnit.hp = _vh[cIdx];
-                        if (_vh[cIdx] <= 0) {
-                          addKillEvent(
-                            u.userName,
-                            cp.userName,
-                            cpUnit.isBoss ? "boss" : "unit",
-                            u.profileImage,
-                            cpUnit.rarity,
-                          );
-                          updateStats(u.userName, u.type, cDmg);
-                          accumulateDamage(
-                            cp.id,
-                            cDmg,
-                            cpData.position,
-                            u.type === "player"
-                              ? towerConfigRef.current.player.color
-                              : towerConfigRef.current.enemy.color,
-                          );
-                          cleaveCount++;
-                        }
+                      cpUnit.hp = _vh[cIdx];
+                      if (_vh[cIdx] <= 0) {
+                        addKillEvent(
+                          u.userName,
+                          cp.userName,
+                          cpUnit.isBoss ? "boss" : "unit",
+                          u.profileImage,
+                          cpUnit.rarity,
+                        );
+                        updateStats(u.userName, u.type, cDmg);
+                        accumulateDamage(
+                          cp.id,
+                          cDmg,
+                          cp.position,
+                          u.type === "player"
+                            ? towerConfigRef.current.player.color
+                            : towerConfigRef.current.enemy.color,
+                          simNow
+                        );
+                        cleaveCount++;
                       }
                     }
                   }
@@ -1578,6 +1568,7 @@ export const useBattleSystem = () => {
                   u.type === "player"
                     ? towerConfigRef.current.player.color
                     : towerConfigRef.current.enemy.color,
+                  simNow
                 );
               }
               uData.lastAttackTime = simNow;
@@ -1842,6 +1833,7 @@ export const useBattleSystem = () => {
               u.type === "player"
                 ? towerConfigRef.current.player.color
                 : towerConfigRef.current.enemy.color,
+              simNow
             );
 
             uData.lastAttackTime = simNow; // COMBAT EFFECTS FOR TOWER ATTACK
@@ -2066,7 +2058,7 @@ export const useBattleSystem = () => {
           }
         }
 
-        v.velocity.multiplyScalar(Math.pow(0.1, simDelta));
+        v.velocity.multiplyScalar(1.0 - 0.9 * simDelta); // Faster linear damping approximation
 
         if (
           uData.status === "attacking" ||
@@ -2116,16 +2108,17 @@ export const useBattleSystem = () => {
           const aoeTargets = battleGrid.queryRadius(s.toX, s.toZ, aoeRadius);
           const attackPower = (s as any).attackPower || 100;
           const dmg = attackPower * ((s as any).iceDmgMult || 5.5); // Use ice mult or fallback
+          const ownerType = (s as any).ownerType;
 
           for (let ti = 0; ti < aoeTargets.length; ti++) {
             const target = aoeTargets[ti];
-            if (target.type === (s as any).ownerType) continue;
+            if (target.type === ownerType) continue;
 
             const tIdx = target.poolIdx;
             if (tIdx >= 0) {
               const tUnit = unitIndexRef.current.get(target.id);
               if (tUnit && tUnit.isShield) {
-                accumulateDamage(target.id, 0, target.position, "#FFFFFF");
+                accumulateDamage(target.id, 0, target.position, "#FFFFFF", simNow);
               } else {
                 _vh[tIdx] -= dmg;
                 const td = unitDataPoolRef.current[tIdx];
@@ -2136,7 +2129,10 @@ export const useBattleSystem = () => {
                     target.id,
                     dmg,
                     target.position,
-                    s.color || towerConfigRef.current.player.color,
+                    ownerType === "player"
+                      ? towerConfigRef.current.player.color
+                      : towerConfigRef.current.enemy.color,
+                    simNow
                   );
                 }
               }
@@ -2206,7 +2202,22 @@ export const useBattleSystem = () => {
         useStore
           .getState()
           .setBaseHp(playerBaseHpRef.current, enemyBaseHpRef.current);
-        useStore.getState().setLiveStats({ ...statsRef.current });
+        useStore.getState().setLiveStats({ 
+          ...statsRef.current,
+          playerKills: { ...statsRef.current.playerKills },
+          enemyKills: { ...statsRef.current.enemyKills },
+          playerDamage: { ...statsRef.current.playerDamage },
+          enemyDamage: { ...statsRef.current.enemyDamage },
+          profileImages: { ...statsRef.current.profileImages }
+        });
+        
+        if (killEventQueueRef.current.length > 0) {
+          useStore.setState(state => {
+            const newEvents = [...state.killEvents, ...killEventQueueRef.current];
+            return { killEvents: newEvents.slice(-5) };
+          });
+          killEventQueueRef.current = [];
+        }
       }
     },
     [entityManager, flushDamageBuffer, accumulateDamage, addKillEvent],
@@ -2306,7 +2317,7 @@ export const useBattleSystem = () => {
         if (u.isActive && u.type === side && !u.isDying) {
           u.hp -= u.maxHp * 0.4;
           uiPool[i].hp = u.hp;
-          accumulateDamage(u.id, u.maxHp * 0.4, uiPool[i].position, "#FFFFFF");
+          accumulateDamage(u.id, u.maxHp * 0.4, uiPool[i].position, "#FFFFFF", Date.now());
         }
       }
     },

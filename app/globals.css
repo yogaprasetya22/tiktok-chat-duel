@@ -20,9 +20,9 @@ body {
 
 /* Glassmorphism Effect for HUD */
 .hud-glass {
-  background: rgba(15, 15, 20, 0.7);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  background: rgba(10, 12, 18, 0.85); /* Slightly darker for better contrast with less blur */
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 /* Animations */

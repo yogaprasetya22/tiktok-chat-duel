@@ -410,13 +410,19 @@ const ECSArmyRendererInner = ({
         const rarity = uData.rarity || 'common';
         const rScale = uData.isBoss ? 1.0 : (rarity === 'legendary' ? 1.8 : (rarity === 'epic' ? 1.4 : (rarity === 'elite' ? 1.2 : 1.0)));
 
+        // NEW: Proximity Scaling — Make units larger when attacking/near the target tower
+        const baseDist = towerConfig.baseDistance || 40;
+        const targetTowerZ = team === 'player' ? -baseDist : baseDist;
+        const distToTower = Math.abs(uData.position[2] - targetTowerZ);
+        const proximityScale = distToTower < 5 ? 1.35 : 1.0;
+
         // UNIQUE VARIATION: Subtle height variation based on ID for an 'Organic Army' feel
         const idNum = uData.poolIdx;
         const hVar = 1.0 + ((idNum % 7) - 3) * 0.015; // +/- 4.5% height variation
         item.group.scale.set(
-          baseScale * settings.unitScale * rScale,
-          baseScale * settings.unitScale * rScale * hVar,
-          baseScale * settings.unitScale * rScale
+          baseScale * settings.unitScale * rScale * proximityScale,
+          baseScale * settings.unitScale * rScale * hVar * proximityScale,
+          baseScale * settings.unitScale * rScale * proximityScale
         );
 
         // ASSIGN SHARED MATERIAL FROM CACHED MASTER
@@ -602,7 +608,8 @@ const ECSArmyRendererInner = ({
         const distFromCenterSq = uData.position[0] * uData.position[0] + uData.position[2] * uData.position[2];
         const isNearCenter = distFromCenterSq < 60 * 60; // 60u from origin
         // Skip frame: near center always full rate; far from camera slow down
-        const sf = uData.isBoss ? 1
+        const isLegendary = uData.rarity === 'legendary';
+        const sf = (uData.isBoss || isLegendary) ? 1  // Bosses & Legendary: FULL 60 FPS animations
           : isNearCenter ? 2                        // frontline: 30 FPS animations (smooth enough for tiny units)
           : (uData.dSq || 0) > 10000 ? 4           // far: 15 FPS animations
           : 2;                                       // close: 30 FPS animations

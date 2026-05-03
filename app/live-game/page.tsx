@@ -104,29 +104,63 @@ export default function GamePage() {
     return unsub;
   }, []);
 
+  // --- Server-Side Simulation Toggle ---
+  const { simulationDifficulty } = useControls("Simulation Settings", {
+    simulationDifficulty: {
+      options: ["Normal", "Hard", "Super Hard"],
+      value: "Normal",
+      label: "Difficulty",
+    }
+  }, { collapsed: false });
+
+  // Update simulation if keywords change while active
   useEffect(() => {
-    if (!testingMode || gameState !== "PLAYING" || gameMode === "TRAINING") return;
-    const intervalId = setInterval(() => {
-      const { player, enemy } = countsRef.current;
-      const isPlayerUnderdog = player < enemy - 10;
-      const isEnemyUnderdog = enemy < player - 10;
+    if (testingMode) {
+      const timer = setTimeout(() => {
+        fetch("/api/tiktok/connect", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            username: "SIMULATE",
+            config: towerConfig,
+            difficulty: simulationDifficulty
+          }),
+        }).catch(e => console.error("Auto-update simulation failed:", e));
+      }, 500); // Debounce to avoid spamming requests
+      return () => clearTimeout(timer);
+    }
+  }, [towerConfig.player.commentKeyword, towerConfig.enemy.commentKeyword, simulationDifficulty, testingMode]);
 
-      const spawnForTeam = (side: "player" | "enemy") => {
-        const config = side === "player" ? towerConfig.player : towerConfig.enemy;
-        if (!config.active) return;
-        if (side === "player" && isEnemyUnderdog && player > 25) return;
-        if (side === "enemy" && isPlayerUnderdog && enemy > 25) return;
-        const isUnderdog = (side === "player" && isPlayerUnderdog) || (side === "enemy" && isEnemyUnderdog);
-        const count = isUnderdog ? 2 : 1;
-        for (let i = 0; i < count; i++) spawnUnit(1, config.name, side);
-      };
-
-      const now = Date.now();
-      if (Math.floor(now / 200) % 2 === 0) spawnForTeam("player");
-      else spawnForTeam("enemy");
-    }, 200);
-    return () => clearInterval(intervalId);
-  }, [testingMode, gameState, spawnUnit, towerConfig, gameMode]);
+  const handleToggleTesting = async () => {
+    const nextMode = !testingMode;
+    setTestingMode(nextMode);
+    
+    if (nextMode) {
+      setActiveUsername("SIMULATE");
+      // Start server-side simulation
+      try {
+        await fetch("/api/tiktok/connect", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            username: "SIMULATE",
+            config: towerConfig,
+            difficulty: simulationDifficulty
+          }),
+        });
+      } catch (e) {
+        console.error("Failed to start simulation:", e);
+      }
+    } else {
+      setActiveUsername("");
+      // Stop simulation / Disconnect
+      try {
+        await fetch("/api/tiktok/disconnect", { method: "POST" });
+      } catch (e) {
+        console.error("Failed to stop simulation:", e);
+      }
+    }
+  };
 
   // --- 100% Accurate Event Processing & Queue System (Fast Track) ---
   const processedIdsRef = useRef<Set<string>>(new Set());
@@ -358,7 +392,7 @@ export default function GamePage() {
           onToggleChat={() => setShowChat(!showChat)}
           mvpData={mvpData}
           testingMode={testingMode}
-          onToggleTesting={() => setTestingMode(!testingMode)}
+          onToggleTesting={handleToggleTesting}
           displayMessages={displayMessages}
         />
       </div>
