@@ -65,6 +65,8 @@ export const useBattleSystem = () => {
   const playerBaseHpRef = useRef(1000);
   const enemyBaseHpRef = useRef(1000);
   const gameStateRef = useRef<"SETUP" | "PLAYING" | "WON" | "LOST">("SETUP");
+  const lastPlayerBaseDamageTime = useRef(0);
+  const lastEnemyBaseDamageTime = useRef(0);
 
   const liveSettings = useStore((s) => s.settings);
   const settingsRef = useRef<SimulationSettings>(INITIAL_SETTINGS);
@@ -199,7 +201,7 @@ export const useBattleSystem = () => {
   );
 
   const simulationTimeRef = useRef<number>(0);
-  const physicsAccumulatorRef = useRef(0);
+  // const physicsAccumulatorRef = useRef(0);
   const lastStateUpdate = useRef<number>(0); // --- BITECS ECS ARCHITECTURE ---
 
   const world = useMemo(() => createWorld(), []);
@@ -532,6 +534,8 @@ export const useBattleSystem = () => {
       }
     }
     unitIndexRef.current.clear();
+    lastPlayerBaseDamageTime.current = 0;
+    lastEnemyBaseDamageTime.current = 0;
     damageBufferRef.current.clear();
     damageQueueRef.current.length = 0;
     killEventQueueRef.current.length = 0;
@@ -647,12 +651,18 @@ export const useBattleSystem = () => {
 
       const dist = towerConfigRef.current.baseDistance ?? 24;
       const spawnZ = type === "player" ? dist - 2 : -dist + 2;
-      const laneOffset = isBoss ? 0 : pickRandom(LANE_OFFSETS);
+
+      const isUnderAttack = type === "player" 
+        ? (simulationTimeRef.current - lastPlayerBaseDamageTime.current < 3000)
+        : (simulationTimeRef.current - lastEnemyBaseDamageTime.current < 3000);
+
+      const laneOffset = (isBoss || isUnderAttack) ? 0 : pickRandom(LANE_OFFSETS);
+      const spread = isUnderAttack ? 1.5 : 4.0;
 
       v.position.set(
-        laneOffset + (Math.random() - 0.5) * 4,
+        laneOffset + (Math.random() - 0.5) * spread,
         -0.4,
-        spawnZ + (Math.random() - 0.5) * 4,
+        spawnZ + (Math.random() - 0.5) * spread,
       );
       v.maxSpeed = u.speed;
       v.maxForce = unitClass === "assassin" ? 50 : 30; // Increased to improve responsiveness
@@ -746,7 +756,7 @@ export const useBattleSystem = () => {
       }
 
       let simDelta = delta * (settingsRef.current.timeScale || 1.0);
-      if (simDelta > 0.064) simDelta = 0.064; // FIX: Cap maximum delta to prevent teleporting and fast-forward catch up
+      if (simDelta > 0.045) simDelta = 0.045; // Tighter cap to prevent physics jitter during heavy frame drops
       simulationTimeRef.current += simDelta * 1000;
       const simNow = simulationTimeRef.current;
       const settings = settingsRef.current;
@@ -772,30 +782,14 @@ export const useBattleSystem = () => {
       }
       if (activeCount === 0 && gameStateRef.current !== "PLAYING") return; 
       
-      // OPTIMIZATION: Reduce grid update frequency to once every 6 frames.
-      if (frameCountRef.current % 6 === 0) {
+      // OPTIMIZATION: Update grid every 2 frames for better accuracy with low unit counts.
+      if (frameCountRef.current % 2 === 0) {
         battleGrid.update(unitDataPoolRef.current, activeIndicesRef.current);
       }
 
-      const PHYSICS_STEP = 0.016;
-      physicsAccumulatorRef.current += simDelta;
-
-      let steps = 0;
-      const MAX_STEPS_PER_FRAME = 3; // Catch-up enabled: prevent slow-motion at start
-      while (
-        physicsAccumulatorRef.current >= PHYSICS_STEP &&
-        steps < MAX_STEPS_PER_FRAME
-      ) {
-        entityManager.update(PHYSICS_STEP);
-        physicsAccumulatorRef.current -= PHYSICS_STEP;
-        steps++;
-      }
-
-      // FIX: Discard remaining accumulator if we hit the limit, prevents "fast forward" visual catch-up
-      if (physicsAccumulatorRef.current >= PHYSICS_STEP) {
-        physicsAccumulatorRef.current =
-          physicsAccumulatorRef.current % PHYSICS_STEP;
-      }
+      // PERFECT SYNC: Use variable delta directly for physics so visual movement perfectly matches frame time.
+      // This eliminates the 'tersendat-sendat' jitter caused by accumulator step mismatches.
+      entityManager.update(simDelta);
       flushDamageBuffer(now);
 
       const eids = eidMap.current;
@@ -824,6 +818,13 @@ export const useBattleSystem = () => {
         const u = uPool[i];
         const uData = uiPool[i];
         const v = vPool[i];
+
+        // NaN SAFETY: Reset to origin if physics collapses (prevents HalfFloat errors)
+        if (isNaN(v.position.x) || isNaN(v.position.z)) {
+          v.position.set(0, -0.4, 0);
+          v.velocity.set(0, 0, 0);
+        }
+        
         // PRIMARY DEATH CHECK
         if (_vh[i] <= 0) {
           if (!u.isDying) {
@@ -1378,7 +1379,12 @@ export const useBattleSystem = () => {
           const dzT = _pz[i] - tData.position[2];
           const dSq = dxT * dxT + dzT * dzT;
 
-          if (dSq < rangeSq) {
+          // HYSTERESIS LOGIC: Prevent micro-stutters (stop-and-go jitter)
+          // If already attacking, increase the effective range by 30% to account for target drift.
+          const isAttacking = uData.status === "attacking";
+          const effectiveRangeSq = isAttacking ? rangeSq * 1.69 : rangeSq; // 1.3^2 = 1.69
+
+          if (dSq < effectiveRangeSq) {
             uData.status = "attacking";
             v.maxSpeed = (uData.isRolling ? u.speed * 4.0 : 0) * feverSpeedMult;
             const currentCooldown = u.attackCooldown * feverCooldownMult;
@@ -1813,6 +1819,7 @@ export const useBattleSystem = () => {
             updateStats(u.userName, u.type, dmg);
             if (u.type === "player") {
               enemyBaseHpRef.current -= dmg;
+              lastEnemyBaseDamageTime.current = simNow;
               if (enemyBaseHpRef.current <= 0) {
                 addKillEvent(u.userName, "ENEMY BASE", "base", u.profileImage, "legendary");
                 updateStats(u.userName, u.type, 0, true);
@@ -1820,6 +1827,7 @@ export const useBattleSystem = () => {
               }
             } else {
               playerBaseHpRef.current -= dmg;
+              lastPlayerBaseDamageTime.current = simNow;
               if (playerBaseHpRef.current <= 0) {
                 addKillEvent(u.userName, "PLAYER BASE", "base", u.profileImage, "legendary");
                 updateStats(u.userName, u.type, 0, true);

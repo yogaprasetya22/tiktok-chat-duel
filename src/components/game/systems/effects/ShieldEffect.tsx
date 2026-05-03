@@ -10,9 +10,9 @@ import { UnitRuntimeData, ClassKey, SimulationSettings } from '@/src/core/domain
 
 function getBaseScale(classKey: ClassKey, level: number, isBoss: boolean): number {
   if (isBoss) {
-    return classKey === 'tank' ? 6.5 : (classKey === 'fighter' ? 4.5 : 4.0);
+    return classKey === 'tank' ? 3.5 : (classKey === 'fighter' ? 2.5 : 2.2);
   }
-  return classKey === 'tank' ? (2.5 + level * 0.15) : (1.4 + level * 0.1);
+  return classKey === 'tank' ? (1.1 + level * 0.05) : (0.8 + level * 0.04);
 }
 
 const ShieldMaterial = () => new THREE.ShaderMaterial({
@@ -144,12 +144,17 @@ export function ShieldEffect({ unitRegistry, activeIndicesRef, settingsRef, simT
 
             const bScale = getBaseScale(u.unitClass, u.level || 1, u.isBoss);
             const rarity = u.rarity || 'common';
-            const rScale = u.isBoss ? 1.0 : (rarity === 'legendary' ? 1.8 : (rarity === 'epic' ? 1.4 : (rarity === 'elite' ? 1.2 : 1.0)));
+            // SYNCED SCALING: Match ECSArmyRenderer.tsx precisely (1.0 - 1.12x range)
+            const rScale = u.isBoss ? 1.25 : (rarity === 'legendary' ? 1.12 : (rarity === 'epic' ? 1.07 : (rarity === 'elite' ? 1.03 : 1.0)));
             
-            const totalVisualScale = bScale * globalScale * rScale;
-            const shieldScale = totalVisualScale * 0.95; 
+            const unitVisualScale = bScale * globalScale * rScale;
+            // Shield should be slightly larger than the unit for a 'bubble' feel
+            const shieldScale = unitVisualScale * 1.6; 
             
-            _obj.position.set(u.position[0], u.position[1] + (u.isBoss ? 2.5 : 1.2) * totalVisualScale * 0.8, u.position[2]);
+            // POSITIONING: Center on the torso. 
+            // We use a normalized height offset multiplied by the unit's actual visual scale.
+            const heightOffset = u.isBoss ? 1.8 : 1.0;
+            _obj.position.set(u.position[0], u.position[1] + heightOffset * unitVisualScale, u.position[2]);
             _obj.scale.setScalar(shieldScale);
             _obj.updateMatrix();
             mesh.setMatrixAt(count, _obj.matrix);

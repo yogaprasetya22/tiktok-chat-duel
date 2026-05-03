@@ -38,7 +38,7 @@ interface BattleArmyProps {
 
 
 import { WORLD_UNIT_POOL_SIZE as MAX_UNITS } from '@/src/core/domain/unit.types';
-const NAME_POOL_SIZE = 150;
+const NAME_POOL_SIZE = 80;
 const TEST_IMAGE_URL = 'https://t3.ftcdn.net/jpg/13/11/22/86/360_F_1311228699_YoiLc5aJ3RWz3uRfdEtlV0UYSQjqf7RW.jpg';
 
 const textureLoader = new THREE.TextureLoader();
@@ -281,7 +281,7 @@ const BattleArmyComponent = ({
     tempObject.scale.set(0.001, 0.001, 0.001);
     tempObject.updateMatrix();
     if (shadowRef.current) {
-      for (let i = 0; i < 1500; i++) {
+      for (let i = 0; i < 600; i++) {
         shadowRef.current.setMatrixAt(i, tempObject.matrix);
         healthBarRef.current?.setMatrixAt(i, tempObject.matrix);
         cooldownRef.current?.setMatrixAt(i, tempObject.matrix);
@@ -293,7 +293,7 @@ const BattleArmyComponent = ({
   }, []);
 
   const healthGeo = useMemo(() => {
-    const geo = new THREE.PlaneGeometry(1.2, 0.18);
+    const geo = new THREE.PlaneGeometry(0.8, 0.12);
     const healthInfoArray = new Float32Array(MAX_UNITS * 2);
     for (let i = 0; i < MAX_UNITS; i++) {
       healthInfoArray[i * 2] = 250;
@@ -305,7 +305,7 @@ const BattleArmyComponent = ({
     return geo;
   }, []);
   const shadowGeo = useMemo(() => {
-    const geo = new THREE.CircleGeometry(0.6, 6); // Hexagon provides 50% vertex reduction and looks completely fine for soft shadows
+    const geo = new THREE.CircleGeometry(0.45, 6); // Hexagon provides 50% vertex reduction and looks completely fine for soft shadows
     geo.rotateX(-Math.PI / 2); // Pre-rotate on CPU once to save 1,500 rotation matrix calculations per frame
     return geo;
   }, []);
@@ -543,7 +543,7 @@ const BattleArmyComponent = ({
               needsSync = true;
             }
 
-            const targetFontSize = u.isBoss ? 1.0 : 0.45;
+            const targetFontSize = u.isBoss ? 0.8 : 0.35;
             if (mesh.fontSize !== targetFontSize) {
               mesh.fontSize = targetFontSize;
               if (badgeMesh) badgeMesh.fontSize = targetFontSize * 0.85; // Badge slightly smaller than name
@@ -728,9 +728,9 @@ const BattleArmyComponent = ({
       <AssassinSpellEffect assassinSpellsRef={assassinSpellsRef} simTimeRef={simTimeRef} />
 
       {/* Centralized HUD Layer (Extended pool to support class offsets) */}
-      <instancedMesh ref={shadowRef} args={[null as any, null as any, 1500]} geometry={shadowGeo} material={shadowMat} frustumCulled={false} />
-      <instancedMesh ref={cooldownRef} args={[null as any, null as any, 1500]} geometry={cooldownGeo} material={cooldownMat} frustumCulled={false} />
-      <instancedMesh ref={healthBarRef} args={[null as any, null as any, 1500]} geometry={healthGeo} material={healthBarMat} renderOrder={7} frustumCulled={false} />
+      <instancedMesh ref={shadowRef} args={[null as any, null as any, 600]} geometry={shadowGeo} material={shadowMat} frustumCulled={false} />
+      <instancedMesh ref={cooldownRef} args={[null as any, null as any, 600]} geometry={cooldownGeo} material={cooldownMat} frustumCulled={false} />
+      <instancedMesh ref={healthBarRef} args={[null as any, null as any, 600]} geometry={healthGeo} material={healthBarMat} renderOrder={7} frustumCulled={false} />
 
       <group>
         {useMemo(() => Array.from({ length: NAME_POOL_SIZE }, (_, i) => (

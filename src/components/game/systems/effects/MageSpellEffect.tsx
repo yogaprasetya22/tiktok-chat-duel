@@ -168,8 +168,8 @@ export function MageSpellEffect({ spellsRef, unitRegistry, simTimeRef }: { spell
 
     let oi = 0; let gi = 0; let ci = 0; let ii = 0;
 
-    const RARITY_SCALE = { common: 0.8, elite: 1.1, epic: 1.3, legendary: 1.6 };
-    const RARITY_GLOW = { common: 2.0, elite: 4.5, epic: 8.0, legendary: 18.0 };
+    const RARITY_SCALE = { common: 0.6, elite: 0.8, epic: 1.0, legendary: 1.2 };
+    const RARITY_GLOW = { common: 1.5, elite: 2.5, epic: 4.0, legendary: 8.0 };
 
     for (let i = 0; i < spells.length; i++) {
       const s = spells[i];
