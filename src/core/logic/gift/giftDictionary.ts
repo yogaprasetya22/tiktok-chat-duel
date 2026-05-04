@@ -65,6 +65,12 @@ export const DEFAULT_GIFT_PICTURE = "https://p16-webcast.tiktokcdn.com/img/maliv
 
 export const GIFT_FORMATIONS: Record<string, GiftFormation> = {
     // 🔥 TIER 5: 1-COIN GOD MODE (Kiamat Instan dari 1 Koin)
+    tier5_test: {
+        id: "tier5_test",
+        name: "Test",
+        description: "Test",
+        rules: [{ unitClass: "marksman", count: 4, rarity: "legendary" }],
+    },
     tier5_vanguard: {
         id: "tier5_vanguard",
         name: "Aegis Titan",

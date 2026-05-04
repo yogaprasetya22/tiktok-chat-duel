@@ -116,9 +116,9 @@ function resolveDeathAnim(actions: Record<string, THREE.AnimationAction>): strin
 
 function getBaseScale(classKey: ClassKey, level: number, isBoss: boolean): number {
   if (isBoss) {
-    return classKey === 'tank' ? 1.6 : (classKey === 'fighter' ? 1.4 : 1.2);
+    return classKey === 'tank' ? 6.5 : (classKey === 'fighter' ? 4.5 : 4.0);
   }
-  return classKey === 'tank' ? (1.1 + level * 0.05) : (0.8 + level * 0.04);
+  return classKey === 'tank' ? (2.5 + level * 0.15) : (1.4 + level * 0.1);
 }
 
 // ─── Scratch objects (zero-alloc) ────────────────────────────────────────────
@@ -408,11 +408,13 @@ const ECSArmyRendererInner = ({
 
         const baseScale = getBaseScale(classKey, uData.level || 1, uData.isBoss);
         const rarity = uData.rarity || 'common';
-        // ULTRA-TIGHT SCALING: Max 12% difference between Common and Legendary to keep perpertumuran looks balanced.
-        const rScale = uData.isBoss ? 1.25 : (rarity === 'legendary' ? 1.12 : (rarity === 'epic' ? 1.07 : (rarity === 'elite' ? 1.03 : 1.0)));
+        const rScale = uData.isBoss ? 1.0 : (rarity === 'legendary' ? 1.8 : (rarity === 'epic' ? 1.4 : (rarity === 'elite' ? 1.2 : 1.0)));
 
         // NEW: Proximity Scaling — Make units larger when attacking/near the target tower
-        const proximityScale = 1.0;
+        const baseDist = towerConfig.baseDistance || 40;
+        const targetTowerZ = team === 'player' ? -baseDist : baseDist;
+        const distToTower = Math.abs(uData.position[2] - targetTowerZ);
+        const proximityScale = distToTower < 5 ? 1.35 : 1.0;
 
         // UNIQUE VARIATION: Subtle height variation based on ID for an 'Organic Army' feel
         const idNum = uData.poolIdx;
