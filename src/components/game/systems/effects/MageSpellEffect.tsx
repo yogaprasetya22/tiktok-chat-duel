@@ -135,6 +135,8 @@ export function MageSpellEffect({ spellsRef, unitRegistry, simTimeRef }: { spell
   const impacts = useRef<ImpactEntry[]>(Array.from({ length: 250 }, () => ({ x: 0, y: 0, z: 0, startTime: 0, color: '#fff', active: false, type: 'sigil', rot: 0 })));
   const activeImpacts = useRef<number[]>([]);
   const _c = useMemo(() => new THREE.Color(), []);
+  // FIX #2: Single frame counter — moved inside main useFrame (no extra useFrame)
+  const frameCountRef = useRef(0);
 
   // INNOVATION: 3D Diamond Shard Geometry
   const shardGeo = useMemo(() => {
@@ -150,6 +152,8 @@ export function MageSpellEffect({ spellsRef, unitRegistry, simTimeRef }: { spell
   const impMat = useMemo(() => GroundMagicMat(VFX_TEXTURES.magic[4]), []);
 
   useFrame((state) => {
+    // FIX #2: Increment here, not in a separate useFrame
+    frameCountRef.current++;
     const mesh = meshRef.current;
     const grd = groundRef.current;
     const crg = chargeRef.current;
@@ -168,8 +172,9 @@ export function MageSpellEffect({ spellsRef, unitRegistry, simTimeRef }: { spell
 
     let oi = 0; let gi = 0; let ci = 0; let ii = 0;
 
-    const RARITY_SCALE = { common: 0.8, elite: 1.1, epic: 1.3, legendary: 1.6 };
-    const RARITY_GLOW = { common: 2.0, elite: 4.5, epic: 8.0, legendary: 18.0 };
+    // NERFED for 4GB RAM laptops: Reduced scale and glow
+    const RARITY_SCALE = { common: 0.8, elite: 1.0, epic: 1.1, legendary: 1.3 };
+    const RARITY_GLOW = { common: 2.0, elite: 3.5, epic: 5.0, legendary: 8.0 };
 
     for (let i = 0; i < spells.length; i++) {
       const s = spells[i];
@@ -266,7 +271,8 @@ export function MageSpellEffect({ spellsRef, unitRegistry, simTimeRef }: { spell
       }
 
       if (t >= 0.99) {
-        const shatterCount = s.isMeteor ? 6 : 3;
+        // NERFED: shatter count reduced
+        const shatterCount = s.isMeteor ? 3 : 1;
         for (let k = 0; k < shatterCount; k++) {
             const eIdx = impactIdx.current;
             const e = impacts.current[eIdx];
@@ -311,10 +317,12 @@ export function MageSpellEffect({ spellsRef, unitRegistry, simTimeRef }: { spell
     (imp.material as any).uniforms.uTime.value = time;
 
     const currentImpacts = activeImpacts.current;
-    for (let j = currentImpacts.length - 1; j >= 0; j--) {
+    // FIX #3: Swap-remove O(1) instead of splice O(n²)
+    let writeIdx = 0;
+    for (let j = 0; j < currentImpacts.length; j++) {
       const idx = currentImpacts[j];
       const e = impacts.current[idx];
-      if (!e.active) { currentImpacts.splice(j, 1); continue; }
+      if (!e.active) continue; // skip dead, don't copy to output
       
       const age = simNow - e.startTime;
       const erScale = (e as any).rScale || 1.0;
@@ -322,7 +330,7 @@ export function MageSpellEffect({ spellsRef, unitRegistry, simTimeRef }: { spell
 
       if (e.type === 'charge') {
         const t = age / 400;
-        if (t >= 1) { e.active = false; currentImpacts.splice(j, 1); continue; }
+        if (t >= 1) { e.active = false; continue; }
         if (ci < 80) {
           _obj.position.set(e.x, 0.1, e.z);
           _obj.rotation.set(-Math.PI / 2, 0, time * 5.0);
@@ -335,7 +343,7 @@ export function MageSpellEffect({ spellsRef, unitRegistry, simTimeRef }: { spell
         }
       } else if (e.type === 'splinter') {
         const t = age / 500;
-        if (t >= 1) { e.active = false; currentImpacts.splice(j, 1); continue; }
+        if (t >= 1) { e.active = false; continue; }
         if (oi < MAX_ORB_INSTANCES) {
             const tSim = age * 0.01;
             const px = e.x + (e.vx || 0) * age;
@@ -353,7 +361,7 @@ export function MageSpellEffect({ spellsRef, unitRegistry, simTimeRef }: { spell
         }
       } else if (e.type === 'embers') {
         const t = age / 600;
-        if (t >= 1) { e.active = false; currentImpacts.splice(j, 1); continue; }
+        if (t >= 1) { e.active = false; continue; }
         if (ii < 250) {
           const fade = 1.0 - t;
           _obj.position.set(e.x, e.y, e.z);
@@ -367,7 +375,7 @@ export function MageSpellEffect({ spellsRef, unitRegistry, simTimeRef }: { spell
         }
       } else {
         const t = age / 500;
-        if (t >= 1) { e.active = false; currentImpacts.splice(j, 1); continue; }
+        if (t >= 1) { e.active = false; continue; }
         if (ii < 250) {
           const easeOut = Math.sqrt(t);
           const fade = 1.0 - t;
@@ -381,7 +389,9 @@ export function MageSpellEffect({ spellsRef, unitRegistry, simTimeRef }: { spell
           ii++;
         }
       }
+      currentImpacts[writeIdx++] = currentImpacts[j]; // swap-remove: keep alive entries
     }
+    currentImpacts.length = writeIdx; // trim in-place, zero allocation
     
     mesh.count = oi;
     mesh.instanceMatrix.needsUpdate = true;
@@ -395,8 +405,7 @@ export function MageSpellEffect({ spellsRef, unitRegistry, simTimeRef }: { spell
     if (crg.instanceColor) crg.instanceColor.needsUpdate = true;
   });
 
-  const frameCountRef = useRef(0);
-  useFrame(() => { frameCountRef.current++; });
+  // FIX #2: REMOVED separate useFrame for frameCountRef — merged into main useFrame above
 
   return (
     <group>

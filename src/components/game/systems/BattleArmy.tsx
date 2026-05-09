@@ -660,19 +660,23 @@ const BattleArmyComponent = ({
     // ─── 5. Signal Updates — Only upload GPU buffers when data actually changed
     if (activeUnits.length > 0) {
       if (shadowRef.current) {
-        shadowRef.current.instanceMatrix.needsUpdate = true;
-        if (shadowRef.current.instanceColor) shadowRef.current.instanceColor.needsUpdate = true;
+        // Shadow and cooldown don't need 60fps — throttle to every 2 frames
+        if (frameCountRef.current % 2 === 0) {
+          shadowRef.current.instanceMatrix.needsUpdate = true;
+          if (shadowRef.current.instanceColor) shadowRef.current.instanceColor.needsUpdate = true;
+          if (cooldownRef.current) {
+            cooldownRef.current.instanceMatrix.needsUpdate = true;
+            if (cooldownRef.current.instanceColor) cooldownRef.current.instanceColor.needsUpdate = true;
+            const cAttr = cooldownRef.current.geometry.getAttribute('aProgress');
+            if (cAttr) cAttr.needsUpdate = true;
+          }
+        }
       }
+      // Health bar DOES need per-frame update (damage flash)
       if (healthBarRef.current) {
         healthBarRef.current.instanceMatrix.needsUpdate = true;
         if (healthBarRef.current.instanceColor) healthBarRef.current.instanceColor.needsUpdate = true;
         const attr = healthBarRef.current.geometry.getAttribute('aHealthInfo');
-        if (attr) attr.needsUpdate = true;
-      }
-      if (cooldownRef.current) {
-        cooldownRef.current.instanceMatrix.needsUpdate = true;
-        if (cooldownRef.current.instanceColor) cooldownRef.current.instanceColor.needsUpdate = true;
-        const attr = cooldownRef.current.geometry.getAttribute('aProgress');
         if (attr) attr.needsUpdate = true;
       }
     }

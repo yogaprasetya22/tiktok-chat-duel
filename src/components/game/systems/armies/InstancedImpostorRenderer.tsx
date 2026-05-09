@@ -168,8 +168,13 @@ export function InstancedImpostorRenderer({
     _playerColor.set(playerColor);
     _enemyColor.set(enemyColor);
 
+    // FIX #1: Hoist Date.now() OUTSIDE per-unit loop (saves 600+ syscalls/frame)
+    const now = Date.now();
+
     let idx = 0;
     const indices = activeIndices || [];
+    const frustum = (state as any).battleFrustum;
+    const unitScale = settingsRef.current?.unitScale || 1.0;
 
     for (let k = 0; k < indices.length; k++) {
       if (idx >= LOD_IMPOSTOR_MAX) break;
@@ -178,7 +183,6 @@ export function InstancedImpostorRenderer({
       // Robust Check: skip if inactive, sunk, or already rendered by 3D pool
       if (!u || !u.isActive || u.position[1] < -10 || renderedIds.has(i)) continue;
       
-      const frustum = (state as any).battleFrustum;
       const isVisible = frustum ? frustum.containsPoint(_dummy.position.set(u.position[0], 0, u.position[2])) : true;
       
       if (!isVisible) {
@@ -189,7 +193,6 @@ export function InstancedImpostorRenderer({
 
       // Compose the impostor transform via dummy Object3D
       const scale = u.isBoss ? LOD_IMPOSTOR_BOSS_SCALE : LOD_IMPOSTOR_SCALE;
-      const unitScale = settingsRef.current?.unitScale || 1.0;
 
       _dummy.position.set(u.position[0], u.position[1] + scale * 0.5 * unitScale, u.position[2]);
       _dummy.quaternion.copy(state.camera.quaternion);
@@ -206,7 +209,6 @@ export function InstancedImpostorRenderer({
         baseColor.b * tint[2]
       );
 
-      const now = Date.now();
       const flashAge = now - (u.lastDamageTime || 0);
       if (flashAge < 120) {
         const t = 1.0 - flashAge / 120;

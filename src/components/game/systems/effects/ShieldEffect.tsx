@@ -144,7 +144,8 @@ export function ShieldEffect({ unitRegistry, activeIndicesRef, settingsRef, simT
 
             const bScale = getBaseScale(u.unitClass, u.level || 1, u.isBoss);
             const rarity = u.rarity || 'common';
-            const rScale = u.isBoss ? 1.0 : (rarity === 'legendary' ? 1.8 : (rarity === 'epic' ? 1.4 : (rarity === 'elite' ? 1.2 : 1.0)));
+            // NERFED for low-end hardware
+            const rScale = u.isBoss ? 1.0 : (rarity === 'legendary' ? 1.3 : (rarity === 'epic' ? 1.2 : (rarity === 'elite' ? 1.1 : 1.0)));
             
             const totalVisualScale = bScale * globalScale * rScale;
             const shieldScale = totalVisualScale * 0.95; 

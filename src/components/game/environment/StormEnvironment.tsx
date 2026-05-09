@@ -128,7 +128,7 @@ const Rock = () => {
   }, []);
 
   return (
-    <instancedMesh ref={meshRef} args={[null as any, null as any, ROCK_COUNT]} castShadow receiveShadow frustumCulled={false}>
+    <instancedMesh ref={meshRef} args={[null as any, null as any, ROCK_COUNT]} frustumCulled={false}>
       <icosahedronGeometry args={[1, 0]} />
       <meshStandardMaterial 
         color="#666666" 
@@ -136,7 +136,6 @@ const Rock = () => {
         onBeforeCompile={applyPainterlyStyle} 
       />
     </instancedMesh>
-
   );
 };
 
@@ -278,7 +277,7 @@ const Forest = ({ potatoMode }: { potatoMode?: boolean }) => {
 
     return (
         <group>
-            <instancedMesh ref={trunkRef} args={[null as any, null as any, TREE_COUNT]} castShadow frustumCulled={false}>
+            <instancedMesh ref={trunkRef} args={[null as any, null as any, TREE_COUNT]} frustumCulled={false}>
                 <cylinderGeometry args={[0.2, 0.4, 4, 6]} />
                 <meshStandardMaterial
                     ref={trunkMatRef}
@@ -287,7 +286,7 @@ const Forest = ({ potatoMode }: { potatoMode?: boolean }) => {
                     transparent opacity={1} depthWrite={true}
                 />
             </instancedMesh>
-            <instancedMesh ref={topRef} args={[null as any, null as any, TREE_COUNT]} castShadow frustumCulled={false}>
+            <instancedMesh ref={topRef} args={[null as any, null as any, TREE_COUNT]} frustumCulled={false}>
                 <coneGeometry args={[1, 2, 6]} />
                 <meshStandardMaterial
                     ref={topMatRef}
@@ -434,8 +433,6 @@ const Grass = ({ baseDistance }: { baseDistance: number }) => {
 // --- Main Export ---
 export const StormEnvironment = ({ baseDistance = 36, potatoMode = false }: { baseDistance?: number, potatoMode?: boolean, isCinematic?: boolean }) => {
   const setWeather = useStore(s => s.setWeather);
-  const gameState = useStore(s => s.gameState);
-  
   // Refs for smooth lighting transitions (ECS-style direct update)
   const hemiRef = useRef<THREE.HemisphereLight>(null!);
   const ambientRef = useRef<THREE.AmbientLight>(null!);
@@ -453,8 +450,6 @@ export const StormEnvironment = ({ baseDistance = 36, potatoMode = false }: { ba
     });
     return unsub;
   }, []);
-
-  const isSetup = gameState === 'SETUP';
 
   // 3. Performance Optimized Weather Transition System (Running like a Bitecs System)
   useFrame((_state, _delta) => {
@@ -525,18 +520,13 @@ export const StormEnvironment = ({ baseDistance = 36, potatoMode = false }: { ba
       
       <ambientLight ref={ambientRef} intensity={0.8} />
       
+      {/* PERFORMANCE: castShadow DISABLED — units use cheap instanced blob shadows instead.
+          Directional shadow requires extra GPU render pass every frame which is too expensive. */}
       <directionalLight
         ref={dirRef}
         position={[100, 40, -100]}
         intensity={4.5}
-        castShadow={!isSetup}
-        shadow-mapSize={isSetup ? [512, 512] : [1024, 1024]}
-        shadow-camera-far={120}
-        shadow-camera-near={1}
-        shadow-camera-left={-45}
-        shadow-camera-right={45}
-        shadow-camera-top={45}
-        shadow-camera-bottom={-45}
+        castShadow={false}
       />
       
       <Terrain baseDistance={baseDistance} />

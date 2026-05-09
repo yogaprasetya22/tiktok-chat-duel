@@ -144,8 +144,7 @@ const KillFeed = React.memo(({ towerConfig }: { towerConfig: any }) => {
 
 const Leaderboard = React.memo(({ team, color, name }: { team: 'player' | 'enemy', color: string, name: string }) => {
   const isPlayer = team === 'player';
-  const kills = useStore(s => isPlayer ? s.liveStats.playerKills : s.liveStats.enemyKills);
-  const profileImages = useStore(s => s.liveStats.profileImages);
+  const topKills = useStore(s => isPlayer ? s.topPlayerKills : s.topEnemyKills);
 
   return (
     <div className={`absolute top-48 md:top-56 ${isPlayer ? 'left-4' : 'right-4'} w-32 md:w-48 select-none scale-80 md:scale-90 origin-top-${isPlayer ? 'left' : 'right'}`}>
@@ -155,14 +154,11 @@ const Leaderboard = React.memo(({ team, color, name }: { team: 'player' | 'enemy
           <span className="text-[9px] md:text-[12px] font-black text-white uppercase tracking-[0.2em] truncate">{name} LEADERBOARD</span>
         </div>
         <div className="space-y-2">
-          {Object.entries(kills || {})
-            .sort(([, a]: any, [, b]: any) => b - a)
-            .slice(0, 5)
-            .map(([username, value], i) => {
+          {topKills.map((entry, i) => {
               const isTop3 = i < 3;
               const rankColor = i === 0 ? '#fbbf24' : i === 1 ? '#cbd5e1' : i === 2 ? '#cd7f32' : color;
               return (
-                <div key={username} className="flex items-center justify-between group transition-all duration-300 hover:translate-x-1">
+                <div key={entry.username} className="flex items-center justify-between group transition-all duration-300 hover:translate-x-1">
                   <div className="flex items-center gap-2 min-w-0 flex-1">
                     <div className={`w-5 h-5 md:w-7 md:h-7 rounded-lg flex items-center justify-center font-black text-[10px] md:text-[12px] transition-all shadow-xl ${i === 0 ? 'animate-pulse scale-110 shadow-yellow-500/20' : ''
                       }`}
@@ -174,21 +170,21 @@ const Leaderboard = React.memo(({ team, color, name }: { team: 'player' | 'enemy
                       }}>
                       {i + 1}
                     </div>
-                    {profileImages[username] && (
+                    {entry.image && (
                       <div className={`w-5 h-5 md:w-7 md:h-7 rounded-full overflow-hidden border-2 flex-shrink-0 ${i === 0 ? 'border-yellow-400 shadow-lg shadow-yellow-400/20' : 'border-white/10'}`}>
-                        <img src={profileImages[username]} alt="" className="w-full h-full object-cover" />
+                        <img src={entry.image} alt="" className="w-full h-full object-cover" />
                       </div>
                     )}
-                    <span className={`text-[10px] md:text-[13px] font-black truncate uppercase tracking-tight ${i === 0 ? 'text-white' : 'text-white/60'}`}>{username}</span>
+                    <span className={`text-[10px] md:text-[13px] font-black truncate uppercase tracking-tight ${i === 0 ? 'text-white' : 'text-white/60'}`}>{entry.username}</span>
                   </div>
                   <span className="text-[11px] md:text-[14px] font-black italic pl-2 flex items-center gap-1" style={{ color: isTop3 ? rankColor : '#ffffff88' }}>
-                    {value as number}
+                    {entry.value}
                     <Sword className="w-2.5 h-2.5 md:w-3 md:h-3 opacity-50" />
                   </span>
                 </div>
               );
             })}
-          {Object.keys(kills || {}).length === 0 && (
+          {topKills.length === 0 && (
             <p className="text-[8px] uppercase tracking-[0.2em] text-white/20 font-black text-center py-2 italic">Waiting for kills...</p>
           )}
         </div>

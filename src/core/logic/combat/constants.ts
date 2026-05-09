@@ -192,7 +192,7 @@ export let INITIAL_SETTINGS: SimulationSettings = {
 
     // World & Meta
     timeScale: 1.0,
-    unitScale: 1.0,
+    unitScale: 0.5,
     vfxIntensity: 1.0,
     maxUnits: 20,
 

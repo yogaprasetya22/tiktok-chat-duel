@@ -203,6 +203,7 @@ export const useBattleSystem = () => {
   const simulationTimeRef = useRef<number>(0);
   const physicsAccumulatorRef = useRef(0);
   const lastStateUpdate = useRef<number>(0); // --- BITECS ECS ARCHITECTURE ---
+  const lastLeaderboardUpdate = useRef(0);
 
   const world = useMemo(() => createWorld(), []);
   const frameCountRef = useRef(0);
@@ -236,6 +237,8 @@ export const useBattleSystem = () => {
   const _vActive = Status.active;
   const _vType = Status.type;
   const _vState = Status.state; // --- ZERO-ALLOCATION OBJECT POOL ---
+
+  const spawnQueueRef = useRef<{level: number, userName: string, type: "player" | "enemy", isBoss: boolean, forcedClass?: any, profileImage?: string, forcedRarity?: UnitRarity}[]>([]);
 
   const unitPoolRef = useRef<ActiveUnit[]>([]);
   const unitDataPoolRef = useRef<UnitRuntimeData[]>([]);
@@ -550,7 +553,7 @@ export const useBattleSystem = () => {
     settingsRef.current.potatoMode = false;
   }, [entityManager]);
 
-  const spawnUnit = useCallback(
+  const _executeSpawn = useCallback(
     (
       level: number = 1,
       userName: string = "Guest",
@@ -767,6 +770,16 @@ export const useBattleSystem = () => {
       const feverCooldownMult = isFeverTime ? 0.5 : 1.0;
       const weatherCfg = (WEATHER_CONFIG as any)[weather] || {};
       const weatherMults = weatherCfg.multipliers || {};
+
+      // --- QUEUED SPAWN PROCESSING ---
+      // Process up to 1 spawn per frame to prevent GC lag spikes and blocking the main thread 
+      // when multiple units (like 5 legendaries from a Gift) are instantiated synchronously.
+      if (spawnQueueRef.current.length > 0) {
+        const req = spawnQueueRef.current.shift();
+        if (req) {
+          _executeSpawn(req.level, req.userName, req.type, req.isBoss, req.forcedClass, req.profileImage, req.forcedRarity);
+        }
+      }
 
       // --- TACTICAL SUPPORT EFFECTS ---
       const isMedicalSupply = state.medicalSupplyActive;
@@ -2214,14 +2227,37 @@ export const useBattleSystem = () => {
         useStore
           .getState()
           .setBaseHp(playerBaseHpRef.current, enemyBaseHpRef.current);
-        useStore.getState().setLiveStats({ 
-          ...statsRef.current,
-          playerKills: { ...statsRef.current.playerKills },
-          enemyKills: { ...statsRef.current.enemyKills },
-          playerDamage: { ...statsRef.current.playerDamage },
-          enemyDamage: { ...statsRef.current.enemyDamage },
-          profileImages: { ...statsRef.current.profileImages }
-        });
+          
+        // Only update leaderboard arrays once per second to avoid O(N log N) sorting every 250ms
+        if (simNow - (lastLeaderboardUpdate.current || 0) > 1000) {
+          lastLeaderboardUpdate.current = simNow;
+          const s = statsRef.current;
+          
+          let pKillsArray = [];
+          for (const username in s.playerKills) {
+            pKillsArray.push({ username, value: s.playerKills[username], image: s.profileImages[username] });
+          }
+          pKillsArray.sort((a, b) => b.value - a.value);
+          if (pKillsArray.length > 5) pKillsArray.length = 5;
+
+          let eKillsArray = [];
+          for (const username in s.enemyKills) {
+            eKillsArray.push({ username, value: s.enemyKills[username], image: s.profileImages[username] });
+          }
+          eKillsArray.sort((a, b) => b.value - a.value);
+          if (eKillsArray.length > 5) eKillsArray.length = 5;
+
+          useStore.getState().setTopKills(pKillsArray, eKillsArray);
+
+          // Update damage stats for analytics (once per second to avoid GC pressure)
+          useStore.setState(state => ({
+            liveStats: {
+              ...state.liveStats,
+              playerDamage: { ...s.playerDamage },
+              enemyDamage: { ...s.enemyDamage }
+            }
+          }));
+        }
         
         if (killEventQueueRef.current.length > 0) {
           useStore.setState(state => {
@@ -2234,6 +2270,10 @@ export const useBattleSystem = () => {
     },
     [entityManager, flushDamageBuffer, accumulateDamage, addKillEvent],
   );
+
+  const spawnUnit = useCallback((level: number = 1, userName: string = "Guest", type: "player" | "enemy" = "player", isBoss: boolean = false, forcedClass?: any, profileImage?: string, forcedRarity?: UnitRarity) => {
+    spawnQueueRef.current.push({ level, userName, type, isBoss, forcedClass, profileImage, forcedRarity });
+  }, []);
 
   return {
     towerConfig,

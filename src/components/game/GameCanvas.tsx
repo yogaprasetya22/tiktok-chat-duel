@@ -5,7 +5,6 @@ import {
   MapControls,
   PerformanceMonitor,
   AdaptiveEvents,
-  AdaptiveDpr,
   Sphere,
 } from "@react-three/drei";
 import { useControls } from "leva";
@@ -503,7 +502,8 @@ export const GameCanvas = React.memo(({
           flipflops={3}
         />
         <AdaptiveEvents />
-        <AdaptiveDpr pixelated={true} />
+        {/* FIX #5: Removed AdaptiveDpr — it conflicts with manual PerformanceMonitor DPR control,
+            causing DPR to oscillate which triggers re-renders. Manual control is more stable. */}
 
         <MapControls
           enabled={!_isCinematic}

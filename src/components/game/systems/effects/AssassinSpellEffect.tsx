@@ -104,8 +104,9 @@ export function AssassinSpellEffect({ assassinSpellsRef, simTimeRef }: { assassi
 
         let n = 0; let sn = 0; let bn = 0;
 
-        const RARITY_SCALE = { common: 0.8, elite: 1.1, epic: 1.3, legendary: 1.5 };
-        const RARITY_GLOW = { common: 4.0, elite: 6.0, epic: 8.0, legendary: 10.0 };
+        // NERFED for low-end hardware
+        const RARITY_SCALE = { common: 0.8, elite: 1.0, epic: 1.1, legendary: 1.2 };
+        const RARITY_GLOW = { common: 4.0, elite: 5.0, epic: 6.0, legendary: 7.0 };
 
         for (let i = 0; i < spells.length; i++) {
             const s = spells[i];
@@ -137,8 +138,8 @@ export function AssassinSpellEffect({ assassinSpellsRef, simTimeRef }: { assassi
                     bn++;
                 }
             } else {
-                // Layer 1: The Scratches (Regular Attack)
-                for (let k = 0; k < 3; k++) {
+                // NERFED Layer 1: The Scratches (Regular Attack) - Reduced to 1 scratch for non-teleport
+                for (let k = 0; k < 1; k++) {
                     if (n >= MAX_FLASHES) break;
                     _obj.position.set(s.x, s.y + k*0.1, s.z);
                     _obj.quaternion.copy(state.camera.quaternion);

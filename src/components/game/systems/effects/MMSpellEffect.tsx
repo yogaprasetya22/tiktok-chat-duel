@@ -246,8 +246,9 @@ export function MMSpellEffect({ spellsRef, unitRegistry, simTimeRef }: Props) {
     const time   = state.clock.elapsedTime;
     const units  = unitRegistry.current;
 
-    const RARITY_SCALE = { common: 0.8, elite: 1.0, epic: 1.2, legendary: 1.4 };
-    const RARITY_GLOW  = { common: 4.0, elite: 6.0, epic: 8.0, legendary: 12.0 };
+    // NERFED for low-end hardware
+    const RARITY_SCALE = { common: 0.8, elite: 0.9, epic: 1.0, legendary: 1.1 };
+    const RARITY_GLOW  = { common: 4.0, elite: 5.0, epic: 6.0, legendary: 7.0 };
 
     // ── Aura bintang emas di atas MM saat ulti ────────────────────────────
     // FIX: Only scan active units via sorted buckets instead of all 1500

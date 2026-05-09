@@ -73,7 +73,8 @@ export function TankSpellEffect({ tankSpellsRef, simTimeRef }: { tankSpellsRef: 
         const simTime = simTimeRef.current || 0;
         const time = state.clock.elapsedTime;
 
-        const RARITY_SCALE = { common: 0.8, elite: 1.1, epic: 1.3, legendary: 1.5 };
+        // NERFED for low-end hardware
+        const RARITY_SCALE = { common: 0.8, elite: 1.0, epic: 1.1, legendary: 1.2 };
 
         for (let i = 0; i < spells.length; i++) {
             const s = spells[i];
@@ -102,15 +103,16 @@ export function TankSpellEffect({ tankSpellsRef, simTimeRef }: { tankSpellsRef: 
         const currentActive = activeIndices.current;
         let cn = 0;
         let dn = 0;
+        let writeIdx = 0;
 
-        for (let j = currentActive.length - 1; j >= 0; j--) {
+        for (let j = 0; j < currentActive.length; j++) {
             const idx = currentActive[j];
             const v = pool.current[idx];
-            if (!v.active) { currentActive.splice(j, 1); continue; }
+            if (!v.active) continue;
             const age = simTime - v.startTime;
             
             if (v.type === 'crack') {
-                const rt = age / 1500; if (rt >= 1) { v.active = false; currentActive.splice(j, 1); continue; }
+                const rt = age / 1500; if (rt >= 1) { v.active = false; continue; }
                 if (cn < MAX_RINGS) {
                     const ease = 1.0 - Math.pow(rt, 3.0);
                     _obj.position.set(v.x, v.y, v.z);
@@ -123,7 +125,7 @@ export function TankSpellEffect({ tankSpellsRef, simTimeRef }: { tankSpellsRef: 
                     cn++;
                 }
             } else if (v.type === 'dust') {
-                const rt = age / 800; if (rt >= 1) { v.active = false; currentActive.splice(j, 1); continue; }
+                const rt = age / 800; if (rt >= 1) { v.active = false; continue; }
                 if (dn < MAX_RINGS) {
                     const ease = 1.0 - rt;
                     _obj.position.set(v.x, v.y, v.z);
@@ -136,7 +138,9 @@ export function TankSpellEffect({ tankSpellsRef, simTimeRef }: { tankSpellsRef: 
                     dn++;
                 }
             }
+            currentActive[writeIdx++] = idx;
         }
+        currentActive.length = writeIdx;
 
         crackRef.current.count = cn;
         crackRef.current.instanceMatrix.needsUpdate = true;

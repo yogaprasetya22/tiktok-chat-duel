@@ -117,8 +117,9 @@ export function FighterSpellEffect({ fighterSpellsRef, simTimeRef }: { fighterSp
         const simTime = simTimeRef.current || 0;
         const time = state.clock.elapsedTime;
 
-        const RARITY_SCALE = { common: 0.9, elite: 1.2, epic: 1.5, legendary: 2.0 };
-        const RARITY_GLOW = { common: 4.0, elite: 8.0, epic: 14.0, legendary: 25.0 };
+        // NERFED for 4GB RAM laptops: Reduced scale and glow multiplier to save GPU fill-rate
+        const RARITY_SCALE = { common: 0.9, elite: 1.1, epic: 1.2, legendary: 1.4 };
+        const RARITY_GLOW = { common: 4.0, elite: 6.0, epic: 8.0, legendary: 12.0 };
 
         for (let i = 0; i < spells.length; i++) {
             const s = spells[i];
@@ -162,8 +163,8 @@ export function FighterSpellEffect({ fighterSpellsRef, simTimeRef }: { fighterSp
                     const targetX = s.targetX ?? s.x;
                     const targetZ = s.targetZ ?? s.z;
                     
-                    // EXTRA: Spark spray for Legendary strikes
-                    const sparkCount = r === 'legendary' ? 3 : 1;
+                    // NERFED: Spark spray for Legendary strikes reduced from 3 to 1
+                    const sparkCount = 1;
                     for(let k=0; k<sparkCount; k++) {
                        const p3 = pool.current[vfxOrder.current];
                        if (!p3.active) activeIndices.current.push(vfxOrder.current);
@@ -176,28 +177,26 @@ export function FighterSpellEffect({ fighterSpellsRef, simTimeRef }: { fighterSp
                        (p3 as any).rGlow = rGlow;
                     }
 
-                    if (r === 'legendary') {
-                        // Secondary Impact Ring for Legendary
-                        const p4 = pool.current[vfxOrder.current]; 
-                        if (!p4.active) activeIndices.current.push(vfxOrder.current);
-                        vfxOrder.current = (vfxOrder.current + 1) % pool.current.length;
-                        p4.x = s.x; p4.y = 0.05; p4.z = s.z; p4.startTime = simTime + 100; p4.color = '#FFD700'; p4.active = true; p4.type = 'impact'; p4.scale = 1.5 * rScale;
-                    }
+                    // NERFED: Removed Secondary Impact Ring for Legendary to save particles
                 }
             }
         }
 
         let in_count = 0; let sl_count = 0; let bu_count = 0;
         const currentActive = activeIndices.current;
-        for (let j = currentActive.length - 1; j >= 0; j--) {
+        let writeIdx = 0;
+        for (let j = 0; j < currentActive.length; j++) {
             const idx = currentActive[j];
             const v = pool.current[idx];
-            if (!v.active) { currentActive.splice(j, 1); continue; }
+            if (!v.active) continue; 
             const age = simTime - v.startTime;
-            if (age < 0) continue; 
+            if (age < 0) {
+                 currentActive[writeIdx++] = idx;
+                 continue; 
+            }
             
             if (v.type === 'impact') {
-                const rt = age / 500; if (rt >= 1) { v.active = false; currentActive.splice(j, 1); continue; }
+                const rt = age / 500; if (rt >= 1) { v.active = false; continue; }
                 if (in_count < MAX_RINGS) {
                     const ease = 1.0 - Math.pow(rt, 3.0);
                     _obj.position.set(v.x, v.y, v.z);
@@ -211,7 +210,7 @@ export function FighterSpellEffect({ fighterSpellsRef, simTimeRef }: { fighterSp
                     in_count++;
                 }
             } else if (v.type === 'burst') {
-                const bt = age / 250; if (bt >= 1) { v.active = false; currentActive.splice(j, 1); continue; }
+                const bt = age / 250; if (bt >= 1) { v.active = false; continue; }
                 if (bu_count < MAX_BURSTS) {
                     _obj.position.set(v.x, v.y, v.z);
                     _obj.rotation.set(0, 0, age * 0.05);
@@ -224,7 +223,7 @@ export function FighterSpellEffect({ fighterSpellsRef, simTimeRef }: { fighterSp
                     bu_count++;
                 }
             } else if (v.type === 'cyclone') {
-                const ct = age / 600; if (ct >= 1) { v.active = false; currentActive.splice(j, 1); continue; }
+                const ct = age / 600; if (ct >= 1) { v.active = false; continue; }
                 if (sl_count < MAX_SLASHES) {
                     const ease = 1.0 - ct;
                     const rGlow = (v as any).rGlow || 15.0;
@@ -239,7 +238,7 @@ export function FighterSpellEffect({ fighterSpellsRef, simTimeRef }: { fighterSp
                     sl_count++;
                 }
             } else {
-                const dt = age / 300; if (dt >= 1) { v.active = false; currentActive.splice(j, 1); continue; }
+                const dt = age / 300; if (dt >= 1) { v.active = false; continue; }
                 if (sl_count < MAX_SLASHES) {
                     const ease = 1.0 - dt;
                     const rGlow = (v as any).rGlow || 15.0;
@@ -254,7 +253,9 @@ export function FighterSpellEffect({ fighterSpellsRef, simTimeRef }: { fighterSp
                     sl_count++;
                 }
             }
+            currentActive[writeIdx++] = idx;
         }
+        currentActive.length = writeIdx;
 
         impactRef.current.count = in_count;
         impactRef.current.instanceMatrix.needsUpdate = true;

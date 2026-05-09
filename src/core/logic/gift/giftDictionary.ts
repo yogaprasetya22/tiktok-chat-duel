@@ -64,65 +64,70 @@ export interface GiftFormation {
 export const DEFAULT_GIFT_PICTURE = "https://p16-webcast.tiktokcdn.com/img/maliva/webcast-va/resource/cdb55940740d5c83879b2934f9a7d08e.png~tplv-obj.webp";
 
 export const GIFT_FORMATIONS: Record<string, GiftFormation> = {
-    // 🔥 TIER 5: 1-COIN GOD MODE (Kiamat Instan dari 1 Koin)
+    // 🔥 TIER 5: NERFED (Balancing for 4GB RAM & Gameplay Fairness)
+    // 2 Epic + 1 Legendary = 3 units total (70% Epic / 30% Legendary split)
     tier5_test: {
         id: "tier5_test",
-        name: "Test",
-        description: "Test",
-        rules: [{ unitClass: "marksman", count: 4, rarity: "legendary" }],
+        name: "Test Squad",
+        description: "2 Epic Marksman + 1 Legendary Marksman",
+        rules: [
+            { unitClass: "marksman", count: 2, rarity: "epic" },
+            { unitClass: "marksman", count: 1, rarity: "legendary" }
+        ],
     },
     tier5_vanguard: {
         id: "tier5_vanguard",
-        name: "Aegis Titan",
-        description: "1 Legendary Boss + 3 Legendary Tanks",
+        name: "Aegis Squad",
+        description: "1 Legendary Boss + 2 Epic Tanks",
         rules: [
             { unitClass: "boss", count: 1, rarity: "legendary" },
-            { unitClass: "tank", count: 3, rarity: "legendary" },
+            { unitClass: "tank", count: 2, rarity: "epic" },
         ],
     },
     tier5_artillery: {
         id: "tier5_artillery",
-        name: "Meteor Shower",
-        description: "4 Legendary Marksman + 1 Legendary Tank",
+        name: "Precision Strike",
+        description: "1 Legendary Tank + 2 Epic Marksman",
         rules: [
-            { unitClass: "marksman", count: 4, rarity: "legendary" },
             { unitClass: "tank", count: 1, rarity: "legendary" },
+            { unitClass: "marksman", count: 2, rarity: "epic" },
         ],
     },
     tier5_sorcery: {
         id: "tier5_sorcery",
-        name: "Cataclysmic Mages",
-        description: "3 Legendary Mages + 2 Legendary Fighters",
+        name: "Arcane Trio",
+        description: "1 Legendary Fighter + 2 Epic Mages",
         rules: [
-            { unitClass: "mage", count: 3, rarity: "legendary" },
-            { unitClass: "fighter", count: 2, rarity: "legendary" },
+            { unitClass: "fighter", count: 1, rarity: "legendary" },
+            { unitClass: "mage", count: 2, rarity: "epic" },
         ],
     },
     tier5_assassins: {
         id: "tier5_assassins",
-        name: "Void Walkers",
-        description: "5 Legendary Assassins",
-        rules: [{ unitClass: "assassin", count: 5, rarity: "legendary" }],
+        name: "Phantom Cell",
+        description: "1 Legendary Assassin + 2 Epic Assassins",
+        rules: [
+            { unitClass: "assassin", count: 1, rarity: "legendary" },
+            { unitClass: "assassin", count: 2, rarity: "epic" },
+        ],
     },
     tier5_berserkers: {
         id: "tier5_berserkers",
-        name: "Warlord's March",
-        description: "1 Legendary Boss + 4 Legendary Fighters",
+        name: "Elite Raid",
+        description: "1 Legendary Boss + 2 Epic Fighters",
         rules: [
             { unitClass: "boss", count: 1, rarity: "legendary" },
-            { unitClass: "fighter", count: 4, rarity: "legendary" },
+            { unitClass: "fighter", count: 2, rarity: "epic" },
         ],
     },
     tier5_apocalypse: {
         id: "tier5_apocalypse",
-        name: "The Exodia",
-        description: "1 Boss + 1 Tank + 1 Mage + 1 Marksman + 1 Assassin",
+        name: "The Trinity",
+        description: "1 Legendary Boss + 1 Epic Mage + 1 Epic Marksman",
         rules: [
             { unitClass: "boss", count: 1, rarity: "legendary" },
-            { unitClass: "tank", count: 1, rarity: "legendary" },
-            { unitClass: "mage", count: 1, rarity: "legendary" },
-            { unitClass: "marksman", count: 1, rarity: "legendary" },
-            { unitClass: "assassin", count: 1, rarity: "legendary" },
+            { unitClass: "mage", count: 1, rarity: "epic" },
+            { unitClass: "marksman", count: 1, rarity: "epic" },
         ],
     },
     // 🔥 TIER 4: 100-COIN (ELITE SQUAD)

@@ -15,23 +15,18 @@ interface BattleState {
   enemyBaseHp: number;
   setBaseHp: (player: number, enemy: number) => void;
   
+  // Leaderboard Stats
+  topPlayerKills: { username: string, value: number, image: string }[];
+  topEnemyKills: { username: string, value: number, image: string }[];
+  setTopKills: (player: { username: string, value: number, image: string }[], enemy: { username: string, value: number, image: string }[]) => void;
+  
+  // Legacy liveStats (used by Base.tsx getState read, no longer cloned)
   liveStats: { 
-    damageDealt: Record<string, number>;
+    profileImages: Record<string, string>;
     playerDamage: Record<string, number>;
     enemyDamage: Record<string, number>;
-    playerKills: Record<string, number>;
-    enemyKills: Record<string, number>;
-    profileImages: Record<string, string>;
   };
   killEvents: KillEvent[];
-  setLiveStats: (stats: { 
-    damageDealt: Record<string, number>;
-    playerDamage: Record<string, number>;
-    enemyDamage: Record<string, number>;
-    playerKills: Record<string, number>;
-    enemyKills: Record<string, number>;
-    profileImages: Record<string, string>;
-  }) => void;
   addKillEvent: (event: KillEvent) => void;
   
   // Army Counts
@@ -94,16 +89,16 @@ export const useStore = create<BattleState>((set) => ({
   enemyBaseHp: 1000,
   setBaseHp: (player, enemy) => set({ playerBaseHp: player, enemyBaseHp: enemy }),
   
+  topPlayerKills: [],
+  topEnemyKills: [],
+  setTopKills: (player, enemy) => set({ topPlayerKills: player, topEnemyKills: enemy }),
+  
   liveStats: { 
-    damageDealt: {},
+    profileImages: {},
     playerDamage: {},
     enemyDamage: {},
-    playerKills: {},
-    enemyKills: {},
-    profileImages: {}
   },
   killEvents: [],
-  setLiveStats: (liveStats) => set({ liveStats }),
   addKillEvent: (event) => set((state) => {
     // FIX: Avoid spread copy — push and trim in-place
     const events = state.killEvents.length >= 5 
@@ -139,13 +134,12 @@ export const useStore = create<BattleState>((set) => ({
     playerBaseHp: config.baseHp,
     enemyBaseHp: config.baseHp,
     liveStats: { 
-      damageDealt: {},
+      profileImages: state.liveStats.profileImages,
       playerDamage: {},
       enemyDamage: {},
-      playerKills: {},
-      enemyKills: {},
-      profileImages: state.liveStats.profileImages // Keep profile images to avoid reloading textures
     },
+    topPlayerKills: [],
+    topEnemyKills: [],
     killEvents: [],
     armyCounts: { player: 0, enemy: 0 }
   })),
