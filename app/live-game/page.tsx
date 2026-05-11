@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef, useMemo } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useTikTokLive } from "@/src/lib/hooks";
 import { useBattleSystem } from "@/src/hooks/battle/useBattleSystem";
 import { useStore } from "@/src/state/useStore";
@@ -9,6 +9,8 @@ import { GameCanvas } from "@/src/components/game/GameCanvas";
 import { UIOverlay } from "@/src/components/game/ui/UIOverlay";
 import { useControls, button, folder, Leva } from "leva";
 import { cinematicState } from "@/src/state/cinematicState";
+import { usePerformanceProfiler } from "@/src/hooks/battle/usePerformanceProfiler";
+import { ProfilerHUD } from "@/src/components/ui/ProfilerHUD";
 
 export default function GamePage() {
   const [mounted, setMounted] = useState(false);
@@ -32,7 +34,15 @@ export default function GamePage() {
     vehicles, unitIndex,
     spellsRef, mmSpellsRef, fighterSpellsRef, tankSpellsRef, assassinSpellsRef,
     compBuffers,
+    spawnQueueRef, unitDataPoolRef,
   } = useBattleSystem();
+
+  // ── Performance Profiler (zero-impact passive recording) ──────────────────
+  const { isRecording, getSnapshot } = usePerformanceProfiler({
+    unitDataPoolRef,
+    spawnQueueRef,
+    damageQueueRef: damageQueue,
+  });
 
   const gameState = useStore(s => s.gameState);
   const gameMode = useStore(s => s.gameMode);
@@ -167,6 +177,19 @@ export default function GamePage() {
   const priorityQueueRef = useRef<Array<() => void>>([]); // HIGH PRIORITY: Gifts
   const standardQueueRef = useRef<Array<() => void>>([]); // STANDARD: Chat/Likes
 
+  // ── PERF OPT: Pre-built O(1) gift lookup maps (eliminates 460+ string.includes scan per gift) ──
+  const playerGiftMapRef = useRef<Map<string, any>>(new Map());
+  const enemyGiftMapRef  = useRef<Map<string, any>>(new Map());
+  useEffect(() => {
+    const pMap = new Map<string, any>();
+    towerConfig.player.giftBindings?.forEach(b => pMap.set(b.keyword.toLowerCase(), b));
+    playerGiftMapRef.current = pMap;
+
+    const eMap = new Map<string, any>();
+    towerConfig.enemy.giftBindings?.forEach(b => eMap.set(b.keyword.toLowerCase(), b));
+    enemyGiftMapRef.current = eMap;
+  }, [towerConfig.player.giftBindings, towerConfig.enemy.giftBindings]);
+
   // Queue Consumer: Processes spawns gradually with Priority Fast-Track
   useEffect(() => {
     if (gameState !== "PLAYING" || gameMode === "TRAINING") return;
@@ -272,29 +295,44 @@ export default function GamePage() {
           return;
         }
 
-        const findMatch = (side: "player" | "enemy") => {
+        // ── PERF OPT: O(1) map lookup instead of O(n) linear scan ──────────
+        const findMatchFast = (side: "player" | "enemy") => {
           const config = side === "player" ? towerConfig.player : towerConfig.enemy;
-          if (!config.active || !config.giftBindings?.length) return null;
-          for (const binding of config.giftBindings) {
-            if (binding.keyword && giftNameLower.includes(binding.keyword.toLowerCase())) {
-              return { side, binding };
-            }
+          if (!config.active) return null;
+          const giftMap = side === "player" ? playerGiftMapRef.current : enemyGiftMapRef.current;
+
+          // Exact keyword match first (O(1))
+          if (giftMap.has(giftNameLower)) {
+            return { side, binding: giftMap.get(giftNameLower) };
+          }
+          // Partial match fallback (only if exact fails — much rarer path)
+          for (const [kw, binding] of giftMap) {
+            if (giftNameLower.includes(kw)) return { side, binding };
           }
           return null;
         };
 
-        const match = findMatch("player") || findMatch("enemy");
+        const match = findMatchFast("player") || findMatchFast("enemy");
         if (!match) return;
 
         const { side, binding } = match;
         const formation = GIFT_FORMATIONS[binding.formationId];
         
         if (formation) {
-          for (const rule of formation.rules) {
+          formation.rules.forEach((rule: any, ruleIdx: number) => {
             const isBoss = rule.unitClass === "boss" || rule.rarity === "legendary";
-            // Safely queue ALL units for this gift with Priority Fast-Track
-            queueSpawn(rule.count, side, isBoss, rule.unitClass === "boss" ? undefined : rule.unitClass, rule.rarity, true);
-          }
+            // ── PERF OPT: Stagger legendary spawns across frames (1 frame per unit)
+            // Prevents simultaneous boss mesh uploads causing a GPU spike
+            const isLegendary = isBoss || rule.rarity === "legendary";
+            const staggerMs   = isLegendary ? ruleIdx * 33 : 0; // ~2 frames between legendaries
+            if (staggerMs === 0) {
+              queueSpawn(rule.count, side, isBoss, rule.unitClass === "boss" ? undefined : rule.unitClass, rule.rarity, true);
+            } else {
+              setTimeout(() => {
+                queueSpawn(rule.count, side, isBoss, rule.unitClass === "boss" ? undefined : rule.unitClass, rule.rarity, true);
+              }, staggerMs);
+            }
+          });
           // Immediate UI feedback for the donor
           useStore.getState().triggerGacha(msg.username, side, "GIFT REWARD", formation.name);
         }
@@ -333,7 +371,15 @@ export default function GamePage() {
     return () => clearTimeout(timer);
   }, [rouletteEvent, spawnUnit, triggerAirstrike]);
 
-  const displayMessages = useMemo(() => messages.slice(-50).reverse(), [messages]);
+  // ── PERF OPT: Stable ref for displayMessages to avoid intermediate array allocations ──
+  // (.slice + .reverse = 2 new array objects per render → GC pressure)
+  const displayMessagesRef = useRef<any[]>([]);
+  const lastMessagesLenRef = useRef(0);
+  if (messages.length !== lastMessagesLenRef.current) {
+    lastMessagesLenRef.current = messages.length;
+    displayMessagesRef.current = messages.slice(-50).reverse();
+  }
+  const displayMessages = displayMessagesRef.current;
 
   if (!mounted) {
     return (
@@ -412,6 +458,9 @@ export default function GamePage() {
           titleBar={{ title: "Engine Console", drag: true }}
         />
       </div>
+
+      {/* ===== LAYER 3: Performance Profiler HUD (Dev/Debug Tool) ===== */}
+      <ProfilerHUD isRecordingRef={isRecording} getSnapshot={getSnapshot} />
 
     </div>
   );

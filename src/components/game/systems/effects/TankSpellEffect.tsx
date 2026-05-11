@@ -33,9 +33,10 @@ const GroundCrackMat = (tex: THREE.Texture) => new THREE.ShaderMaterial({
             float dist = length(vUv - 0.5);
             // Golden pulsing intensity
             float pulse = 0.8 + 0.5 * sin(uTime * 8.0 - dist * 10.0);
-            vec3 goldenGlow = vColor * pulse * 8.0;
+            vec3 goldenGlow = vColor * pulse * 5.0;
             gl_FragColor = vec4(goldenGlow * tex.rgb, tex.a * smoothstep(0.5, 0.2, dist));
-            if (gl_FragColor.a < 0.05) discard;
+            // OPTIMIZATION: Discard aggressively to save fill-rate on low-end GPUs
+            if (gl_FragColor.a < 0.15) discard;
         }
     `,
     transparent: true,
@@ -73,8 +74,8 @@ export function TankSpellEffect({ tankSpellsRef, simTimeRef }: { tankSpellsRef: 
         const simTime = simTimeRef.current || 0;
         const time = state.clock.elapsedTime;
 
-        // NERFED for low-end hardware
-        const RARITY_SCALE = { common: 0.8, elite: 1.0, epic: 1.1, legendary: 1.2 };
+        // NERFED for low-end hardware (Reduce overdraw from huge rings)
+        const RARITY_SCALE = { common: 0.6, elite: 0.7, epic: 0.8, legendary: 0.9 };
 
         for (let i = 0; i < spells.length; i++) {
             const s = spells[i];

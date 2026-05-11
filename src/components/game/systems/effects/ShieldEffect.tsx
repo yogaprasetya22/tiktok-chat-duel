@@ -74,14 +74,14 @@ const ShieldMaterial = () => new THREE.ShaderMaterial({
             
             gl_FragColor = vec4(finalColor, alpha * 0.8);
             
-            // Discard very transparent pixels for performance
-            if (gl_FragColor.a < 0.02) discard;
+            // Discard very transparent pixels for performance (Fill Rate Optimization)
+            if (gl_FragColor.a < 0.08) discard;
         }
     `,
     transparent: true,
     depthWrite: false,
     blending: THREE.AdditiveBlending,
-    side: THREE.DoubleSide,
+    side: THREE.FrontSide, // PERFORMANCE: Changed from DoubleSide to FrontSide to halve the GPU fill-rate cost!
     defines: { USE_INSTANCING: '', USE_INSTANCING_COLOR: '' }
 });
 
