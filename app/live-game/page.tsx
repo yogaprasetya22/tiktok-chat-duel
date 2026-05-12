@@ -174,6 +174,8 @@ export default function GamePage() {
 
   // --- 100% Accurate Event Processing & Queue System (Fast Track) ---
   const processedIdsRef = useRef<Set<string>>(new Set());
+  const ringBufferRef = useRef<string[]>(new Array(2000));
+  const ringIndexRef = useRef(0);
   const priorityQueueRef = useRef<Array<() => void>>([]); // HIGH PRIORITY: Gifts
   const standardQueueRef = useRef<Array<() => void>>([]); // STANDARD: Chat/Likes
 
@@ -220,16 +222,18 @@ export default function GamePage() {
     if (newMessages.length === 0) return;
 
     newMessages.forEach((msg: any) => {
-      processedIdsRef.current.add(msg.id);
+      // PERF OPT: Zero-allocation Ring Buffer Deduplication
+      // Prevents massive V8 GC pauses caused by Iterator object creation
+      const msgId = msg.id;
+      processedIdsRef.current.add(msgId);
       
-      // Prevent memory leak in Set
-      if (processedIdsRef.current.size > 2000) {
-        const iterator = processedIdsRef.current.values();
-        for (let i = 0; i < 1000; i++) {
-          const val = iterator.next().value;
-          if (val) processedIdsRef.current.delete(val);
-        }
+      const rIdx = ringIndexRef.current;
+      const oldId = ringBufferRef.current[rIdx];
+      if (oldId) {
+        processedIdsRef.current.delete(oldId);
       }
+      ringBufferRef.current[rIdx] = msgId;
+      ringIndexRef.current = (rIdx + 1) % 2000;
 
       // Helper to enqueue a spawn (Priority Support)
       const queueSpawn = (count: number, side: "player"|"enemy", isBoss: boolean, unitClass: any, rarity: any, isPriority: boolean = false) => {

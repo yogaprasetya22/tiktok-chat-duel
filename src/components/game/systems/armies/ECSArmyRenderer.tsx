@@ -116,9 +116,9 @@ function resolveDeathAnim(actions: Record<string, THREE.AnimationAction>): strin
 
 function getBaseScale(classKey: ClassKey, level: number, isBoss: boolean): number {
   if (isBoss) {
-    return classKey === 'tank' ? 6.5 : (classKey === 'fighter' ? 4.5 : 4.0);
+    return classKey === 'tank' ? 5.0 : (classKey === 'fighter' ? 4.5 : 4.0);
   }
-  return classKey === 'tank' ? (2.5 + level * 0.15) : (1.4 + level * 0.1);
+  return classKey === 'tank' ? (1.9 + level * 0.12) : (1.4 + level * 0.1);
 }
 
 // ─── Scratch objects (zero-alloc) ────────────────────────────────────────────
@@ -165,7 +165,7 @@ const getCachedMaterial = (
     common: '#333333', elite: '#2244ff', epic: '#aa22ff', legendary: '#ffaa00'
   };
   mat.emissive.set(rarityColors[rarity] || '#333333');
-  mat.emissiveIntensity = rarity === 'legendary' ? 4.0 : (rarity === 'common' ? 0.3 : 1.5);
+  mat.emissiveIntensity = rarity === 'legendary' ? 2.0 : (rarity === 'common' ? 0.3 : 1.5);
 
   _materialCache.set(key, mat);
   return mat;
@@ -408,7 +408,7 @@ const ECSArmyRendererInner = ({
 
         const baseScale = getBaseScale(classKey, uData.level || 1, uData.isBoss);
         const rarity = uData.rarity || 'common';
-        const rScale = uData.isBoss ? 1.0 : (rarity === 'legendary' ? 1.8 : (rarity === 'epic' ? 1.4 : (rarity === 'elite' ? 1.2 : 1.0)));
+        const rScale = uData.isBoss ? 1.0 : (rarity === 'legendary' ? 1.4 : (rarity === 'epic' ? 1.3 : (rarity === 'elite' ? 1.15 : 1.0)));
 
         // NEW: Proximity Scaling — Make units larger when attacking/near the target tower
         const baseDist = towerConfig.baseDistance || 40;
@@ -608,11 +608,11 @@ const ECSArmyRendererInner = ({
         const distFromCenterSq = uData.position[0] * uData.position[0] + uData.position[2] * uData.position[2];
         const isNearCenter = distFromCenterSq < 60 * 60; // 60u from origin
         // Skip frame: near center always full rate; far from camera slow down
-        const isLegendary = uData.rarity === 'legendary';
-        const sf = (uData.isBoss || isLegendary) ? 1  // Bosses & Legendary: FULL 60 FPS animations
-          : isNearCenter ? 2                        // frontline: 30 FPS animations (smooth enough for tiny units)
-          : (uData.dSq || 0) > 10000 ? 4           // far: 15 FPS animations
-          : 2;                                       // close: 30 FPS animations
+        // FIX: Bosses now use 30 FPS animations (sf=2) instead of 60 FPS (sf=1).
+        // This eliminates the final GPU hotspot during Boss encounters.
+        const sf = isNearCenter ? 2                             // frontline: 30 FPS (smooth enough)
+          : (uData.dSq || 0) > 10000 ? 4                      // far: 15 FPS
+          : 2;                                                  // close: 30 FPS
 
         if (!tooFar && time - item.lastUpdate >= 0.016 * sf) {
           item.mixer.update(delta * sf);

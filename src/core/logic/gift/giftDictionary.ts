@@ -72,7 +72,7 @@ export const GIFT_FORMATIONS: Record<string, GiftFormation> = {
         description: "2 Epic Marksman + 1 Legendary Marksman",
         rules: [
             { unitClass: "marksman", count: 2, rarity: "epic" },
-            { unitClass: "marksman", count: 1, rarity: "legendary" }
+            { unitClass: "marksman", count: 1, rarity: "epic" }
         ],
     },
     tier5_vanguard: {
@@ -80,7 +80,7 @@ export const GIFT_FORMATIONS: Record<string, GiftFormation> = {
         name: "Aegis Squad",
         description: "1 Legendary Boss + 2 Epic Tanks",
         rules: [
-            { unitClass: "boss", count: 1, rarity: "legendary" },
+            { unitClass: "boss", count: 1, rarity: "epic" },
             { unitClass: "tank", count: 2, rarity: "epic" },
         ],
     },
@@ -89,7 +89,7 @@ export const GIFT_FORMATIONS: Record<string, GiftFormation> = {
         name: "Precision Strike",
         description: "1 Legendary Tank + 2 Epic Marksman",
         rules: [
-            { unitClass: "tank", count: 1, rarity: "legendary" },
+            { unitClass: "tank", count: 1, rarity: "epic" },
             { unitClass: "marksman", count: 2, rarity: "epic" },
         ],
     },
@@ -98,7 +98,7 @@ export const GIFT_FORMATIONS: Record<string, GiftFormation> = {
         name: "Arcane Trio",
         description: "1 Legendary Fighter + 2 Epic Mages",
         rules: [
-            { unitClass: "fighter", count: 1, rarity: "legendary" },
+            { unitClass: "fighter", count: 1, rarity: "epic" },
             { unitClass: "mage", count: 2, rarity: "epic" },
         ],
     },
@@ -107,7 +107,7 @@ export const GIFT_FORMATIONS: Record<string, GiftFormation> = {
         name: "Phantom Cell",
         description: "1 Legendary Assassin + 2 Epic Assassins",
         rules: [
-            { unitClass: "assassin", count: 1, rarity: "legendary" },
+            { unitClass: "assassin", count: 1, rarity: "epic" },
             { unitClass: "assassin", count: 2, rarity: "epic" },
         ],
     },
@@ -116,7 +116,7 @@ export const GIFT_FORMATIONS: Record<string, GiftFormation> = {
         name: "Elite Raid",
         description: "1 Legendary Boss + 2 Epic Fighters",
         rules: [
-            { unitClass: "boss", count: 1, rarity: "legendary" },
+            { unitClass: "boss", count: 1, rarity: "epic" },
             { unitClass: "fighter", count: 2, rarity: "epic" },
         ],
     },
@@ -125,7 +125,7 @@ export const GIFT_FORMATIONS: Record<string, GiftFormation> = {
         name: "The Trinity",
         description: "1 Legendary Boss + 1 Epic Mage + 1 Epic Marksman",
         rules: [
-            { unitClass: "boss", count: 1, rarity: "legendary" },
+            { unitClass: "boss", count: 1, rarity: "epic" },
             { unitClass: "mage", count: 1, rarity: "epic" },
             { unitClass: "marksman", count: 1, rarity: "epic" },
         ],

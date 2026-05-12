@@ -672,8 +672,10 @@ const BattleArmyComponent = ({
           }
         }
       }
-      // Health bar DOES need per-frame update (damage flash)
-      if (healthBarRef.current) {
+      // FIX: Throttle health bar GPU upload to every 2 frames.
+      // Damage flash lasts 100ms, so 33ms polling (every 2 frames) is still visually accurate.
+      // This halves the GPU buffer upload bandwidth at peak 30 units.
+      if (healthBarRef.current && frameCountRef.current % 2 === 0) {
         healthBarRef.current.instanceMatrix.needsUpdate = true;
         if (healthBarRef.current.instanceColor) healthBarRef.current.instanceColor.needsUpdate = true;
         const attr = healthBarRef.current.geometry.getAttribute('aHealthInfo');

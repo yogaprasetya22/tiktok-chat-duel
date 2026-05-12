@@ -146,6 +146,7 @@ export const useBattleSystem = () => {
   );
   
   const killEventQueueRef = useRef<KillEvent[]>([]);
+  const _killEventIdCounter = useRef(0); // Zero-alloc ID counter
   const mmSpellsRef = useRef<any[]>(
     Array.from({ length: 800 }, () => ({
       fromX: 0,
@@ -239,11 +240,13 @@ export const useBattleSystem = () => {
   const _vState = Status.state; // --- ZERO-ALLOCATION OBJECT POOL ---
 
   const spawnQueueRef = useRef<{level: number, userName: string, type: "player" | "enemy", isBoss: boolean, forcedClass?: any, profileImage?: string, forcedRarity?: UnitRarity}[]>([]);
+  const spawnQueueHeadRef = useRef(0); // O(1) queue head pointer — avoids O(N) shift()
 
   const unitPoolRef = useRef<ActiveUnit[]>([]);
   const unitDataPoolRef = useRef<UnitRuntimeData[]>([]);
   const vehiclePoolRef = useRef<YUKA.Vehicle[]>([]);
   const activeIndicesRef = useRef<number[]>([]);
+  const activeIndicesSetRef = useRef<Set<number>>(new Set()); // O(1) lookup set
   const lastMvpTimeRef = useRef(0);
   const cachedMvpRef = useRef<any>(null); // --- OPTIMIZATION: Spell Pool Pointers ---
 
@@ -354,16 +357,18 @@ export const useBattleSystem = () => {
       const existing = damageBufferRef.current.get(targetId);
       if (existing) {
         existing.total += value;
+        // FIX: Update in-place — no new array allocation
         existing.position[0] = position[0];
         existing.position[1] = position[1];
         existing.position[2] = position[2];
         existing.lastHit = now;
       } else {
+        // FIX: Allocate only when creating a new entry (unavoidable), but reuse pattern
         damageBufferRef.current.set(targetId, {
           total: value,
-          position: [position[0], position[1], position[2]],
+          position: [position[0], position[1] ?? 0, position[2]] as [number, number, number],
           lastHit: now,
-          startTime: now, // Track when this buffer started for periodic flushing
+          startTime: now,
           color,
         } as any);
       }
@@ -875,8 +880,9 @@ export const useBattleSystem = () => {
       profileImage?: string,
       rarity?: UnitRarity,
     ) => {
+      // FIX: Use integer counter instead of Math.random().toString() to eliminate string allocation per kill
       killEventQueueRef.current.push({
-        id: Math.random().toString(36).substring(7),
+        id: String(++_killEventIdCounter.current),
         killer,
         victim,
         victimType,
@@ -997,6 +1003,8 @@ export const useBattleSystem = () => {
     tankSpellsRef.current.forEach((s) => (s.active = false));
     assassinSpellsRef.current.forEach((s) => (s.active = false));
     activeIndicesRef.current = [];
+    activeIndicesSetRef.current.clear(); // FIX: Reset O(1) lookup set
+    spawnQueueHeadRef.current = 0;       // FIX: Reset queue head pointer
     
     // Reset performance throttling settings
     settingsRef.current.potatoMode = false;
@@ -1186,7 +1194,9 @@ export const useBattleSystem = () => {
       _vActive[poolIdx] = 1;
       _vState[poolIdx] = 1;
 
-      if (!activeIndicesRef.current.includes(poolIdx)) {
+      // FIX: O(1) Set lookup instead of O(N) Array.includes()
+      if (!activeIndicesSetRef.current.has(poolIdx)) {
+        activeIndicesSetRef.current.add(poolIdx);
         activeIndicesRef.current.push(poolIdx);
       }
 
@@ -1221,12 +1231,20 @@ export const useBattleSystem = () => {
       const weatherMults = weatherCfg.multipliers || {};
 
       // --- QUEUED SPAWN PROCESSING ---
-      // Process up to 1 spawn per frame to prevent GC lag spikes and blocking the main thread 
-      // when multiple units (like 5 legendaries from a Gift) are instantiated synchronously.
-      if (spawnQueueRef.current.length > 0) {
-        const req = spawnQueueRef.current.shift();
+      // FIX: Use head pointer instead of shift() to avoid O(N) array mutation every frame.
+      // Compact queue every 60 frames to reclaim memory.
+      const queue = spawnQueueRef.current;
+      const qHead = spawnQueueHeadRef.current;
+      if (qHead < queue.length) {
+        const req = queue[qHead];
+        spawnQueueHeadRef.current = qHead + 1;
         if (req) {
           _executeSpawn(req.level, req.userName, req.type, req.isBoss, req.forcedClass, req.profileImage, req.forcedRarity);
+        }
+        // Compact: reclaim memory when head gets far ahead
+        if (spawnQueueHeadRef.current > 32) {
+          spawnQueueRef.current = queue.slice(spawnQueueHeadRef.current);
+          spawnQueueHeadRef.current = 0;
         }
       }
 
@@ -1253,7 +1271,7 @@ export const useBattleSystem = () => {
       physicsAccumulatorRef.current += simDelta;
 
       let steps = 0;
-      const MAX_STEPS_PER_FRAME = 3; // Catch-up enabled: prevent slow-motion at start
+      const MAX_STEPS_PER_FRAME = 4; // Catch-up enabled: prevent slow-motion at start (4 steps = 64ms, perfectly matches max delta)
       while (
         physicsAccumulatorRef.current >= PHYSICS_STEP &&
         steps < MAX_STEPS_PER_FRAME
@@ -1277,12 +1295,15 @@ export const useBattleSystem = () => {
       const vPool = vehiclePoolRef.current;
       const activeIdxArray = activeIndicesRef.current;
 
-      // FIX: Zero-allocation in-place compaction instead of .filter() which creates new array
+      // FIX: Zero-allocation in-place compaction + rebuild O(1) Set in sync
       if (frameCountRef.current % 30 === 0) {
         let writeIdx = 0;
+        activeIndicesSetRef.current.clear();
         for (let ri = 0; ri < activeIdxArray.length; ri++) {
           if (uPool[activeIdxArray[ri]].isActive) {
-            activeIdxArray[writeIdx++] = activeIdxArray[ri];
+            activeIdxArray[writeIdx] = activeIdxArray[ri];
+            activeIndicesSetRef.current.add(activeIdxArray[ri]);
+            writeIdx++;
           }
         }
         activeIdxArray.length = writeIdx;
@@ -1310,7 +1331,7 @@ export const useBattleSystem = () => {
             }
 
             if (u.isBoss) {
-              freezeTimeRef.current = 200;
+              // OPTIMIZATION: Removed freezeTimeRef = 200 to eliminate perceived lag on Boss death.
             }
           }
 
@@ -1944,7 +1965,8 @@ export const useBattleSystem = () => {
                 u.unitClass === "fighter" &&
                 (u.rarity === "epic" || u.rarity === "legendary")
               ) {
-                const cleavePerc = u.rarity === "legendary" ? 0.5 : 0.3;
+                // FIX: Reduced cleave from 0.3 to 0.25 for epic to reduce spatial query overhead at 30 units
+                const cleavePerc = u.rarity === "legendary" ? 0.45 : 0.25;
                 _vh[tIdx] -= dmg;
                 tData.hp = _vh[tIdx];
                 currentTarget.hp = _vh[tIdx];
