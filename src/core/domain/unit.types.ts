@@ -5,6 +5,11 @@
 // This module has NO side effects and NO React dependencies.
 // ============================================================
 
+export type UnitRarity = "common" | "elite" | "epic" | "legendary";
+export type ClassKey = "fighter" | "tank" | "mage" | "marksman" | "assassin";
+
+export const WORLD_UNIT_POOL_SIZE = 300;
+
 export interface UnitStats {
     hp: number;
     maxHp: number;
@@ -42,6 +47,9 @@ export interface ClassStatusStats {
     range: number;
     tenacity: number;
     cooldown_reduction: number;
+    skill_cooldown?: number;
+    skill_range?: number;
+    skill_duration?: number;
     ai_behavior: {
         separation: number;
         encirclement: number;
@@ -51,7 +59,12 @@ export interface ClassStatusStats {
     };
 }
 
-export type ClassConfig = Record<"fighter" | "tank" | "mage" | "marksman" | "assassin", ClassStatusStats>;
+export type ClassConfig = Record<ClassKey, ClassStatusStats>;
+
+export interface GiftBinding {
+    keyword: string;
+    formationId: string;
+}
 
 export interface TeamConfig {
     name: string;
@@ -59,8 +72,10 @@ export interface TeamConfig {
     active: boolean;
     commentKeyword: string;
     commentType: "contains" | "exact";
-    giftKeyword: string;
-    giftMultiplier?: number; // Multiplier for gifts (e.g., 2 = 2x units per gift)
+    giftKeyword?: string;
+    giftMultiplier?: number;
+    giftBindings?: GiftBinding[];
+    score?: number;
 }
 
 export interface TowerConfig {
@@ -74,16 +89,14 @@ export interface TowerConfig {
         speedMultiplier: number;
         attackMultiplier: number;
     };
-    criticalHitChance?: number; // 0.0 - 1.0
-    criticalMultiplier?: number; // e.g., 2.0 for 100% extra dmg
+    criticalHitChance?: number;
+    criticalMultiplier?: number;
 }
-
-
 
 export interface ActiveUnit extends UnitStats {
     id: string;
     type: "player" | "enemy";
-    unitClass: "fighter" | "tank" | "mage" | "marksman" | "assassin";
+    unitClass: ClassKey;
     userName: string;
     position?: [number, number, number];
     status: "idling" | "marching" | "attacking";
@@ -92,6 +105,7 @@ export interface ActiveUnit extends UnitStats {
     isDying?: boolean;
     deathTime?: number;
     isBoss: boolean;
+    isShield?: boolean;
     animationOffset: number;
     attackCooldown: number;
     critChance: number;
@@ -101,6 +115,11 @@ export interface ActiveUnit extends UnitStats {
     pendingCrit?: boolean;
     isCriticalReady?: boolean;
     untargetableUntil?: number;
+    isArmorBroken?: boolean;
+    poolIdx: number;
+    isBuffed: boolean;
+    rarity?: UnitRarity;
+    spawnTime?: number;
 }
 
 export interface MapObstacle {
@@ -115,6 +134,8 @@ export interface KillEvent {
     victim: string;
     victimType: "unit" | "boss" | "base";
     timestamp: number;
+    profileImage?: string;
+    rarity?: UnitRarity;
 }
 
 export interface BattleStats {
@@ -126,6 +147,7 @@ export interface BattleStats {
     unitsSpawned: Record<string, number>;
     playerHits: Record<string, number>;
     enemyHits: Record<string, number>;
+    profileImages: Record<string, string>;
     
     // Detailed Analytics
     classStats: Record<string, {
@@ -141,7 +163,6 @@ export interface BattleStats {
     };
 }
 
-/** Internal runtime data for each unit, stored in unitDataRef */
 export interface UnitRuntimeData {
     id: string;
     isActive: boolean;
@@ -170,9 +191,8 @@ export interface UnitRuntimeData {
     jitterOffset: number;
     isDying?: boolean;
     isKiting?: boolean;
-    unitClass: "fighter" | "tank" | "mage" | "marksman" | "assassin";
+    unitClass: ClassKey;
     
-    // Class Behavior Overrides
     separationRadius: number;
     encirclementRadius: number;
     laneSwaggerAmp: number;
@@ -181,64 +201,51 @@ export interface UnitRuntimeData {
     dSq?: number;
     pendingCrit?: boolean;
     lastEffectTime?: number;
+    profileImage?: string;
+    isShield?: boolean;
+    poolIdx: number;
+    isBuffed: boolean;
+    isRolling?: boolean;
+    spawnTime?: number;
+    rarity?: UnitRarity;
+    lastSkillTime?: number;
 }
 
-
-
 export interface SimulationSettings {
-    // Military & Stats
     globalHpMultiplier: number;
     globalSpeedMultiplier: number;
     globalDamageMultiplier: number;
-    globalAttackCooldown: number; // in ms
-    critChance: number; // 0.0 - 1.0
-
-    // Perception
+    globalAttackCooldown: number;
+    critChance: number;
     perceptionRadiusSq: number;
-
-    // Social Dynamics
     separationRadius: number;
     separationStrength: number;
-    
-    // Combat Positioning
     encirclementRadius: number;
     encirclementJitter: number;
-    
-    // Animation & Feel
     rotationSmoothing: number;
     laneSwaggerAmp: number;
     victoryPauseMs: number;
-    
-    // Tactical Scoring
     lanePenalty: number;
     baseProximityBonus: number;
     baseDefenseThreshold: number;
     baseAttackResponseBonus: number;
     bossPriorityBonus: number;
     lowHpBonus: number;
-    
-    // Steering & Recovery
     laneSpringFar: number;
     laneSpringNear: number;
     laneDriftThreshold: number;
-
-    // World & Meta
-    timeScale: number; // 1.0 = normal, 0.5 = slowmo, 2.0 = fast
-    unitScale: number; // Visual scale multiplier
+    timeScale: number;
+    unitScale: number;
     vfxIntensity: number;
     maxUnits: number;
-
-    // Environment tweaks (optional — driven by Leva in seal-m)
-    treeCount?: number;   // default 300
-    treeScale?: number;   // default 1.0
-    fogNear?: number;     // default 60
-    fogFar?: number;      // default 450
-    fov?: number;         // camera FOV, default 50
-    mouseSensitivity?: number; // default 0.002
+    treeCount?: number;
+    treeScale?: number;
+    fogNear?: number;
+    fogFar?: number;
+    fov?: number;
+    mouseSensitivity?: number;
     vfxQuality?: 'LOW' | 'MEDIUM' | 'HIGH';
     treeDensity?: number;
-
-    // Performance & Diagnostics
     potatoMode: boolean;
     telemetry: {
         engineMs: number;
@@ -248,4 +255,3 @@ export interface SimulationSettings {
         bottleneck: string;
     };
 }
-
