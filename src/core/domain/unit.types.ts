@@ -120,6 +120,7 @@ export interface ActiveUnit extends UnitStats {
     isBuffed: boolean;
     rarity?: UnitRarity;
     spawnTime?: number;
+    profileImage?: string;
 }
 
 export interface MapObstacle {

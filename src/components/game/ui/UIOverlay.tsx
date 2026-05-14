@@ -28,11 +28,12 @@ interface UIOverlayProps {
   };
   testingMode: boolean;
   onToggleTesting: () => void;
-  onDownloadReplay: () => void;
-  isFullscreen: boolean;
-  onToggleFullscreen: () => void;
+  onDownloadReplay?: () => void;
+  isFullscreen?: boolean;
+  onToggleFullscreen?: () => void;
   updateSettingsRef?: (settings: any) => void;
   standalone?: boolean;
+  displayMessages?: any[];
 }
 
 // Optimization: Memoize KillFeed to prevent full UI re-renders
@@ -247,7 +248,7 @@ export const UIOverlay = ({
     if (!container) return;
 
     // Use Virtual Fullscreen AND Native for maximum compatibility
-    onToggleFullscreen();
+    onToggleFullscreen?.();
 
     const doc = document as any;
     const element = container as any;
@@ -347,7 +348,7 @@ export const UIOverlay = ({
               <div className="space-y-8 animate-in slide-in-from-bottom-8 duration-500">
                 <div className="space-y-4">
                   <label className="text-sm font-black text-zinc-400 uppercase tracking-widest flex items-center justify-center gap-2">
-                    <Users className="w-4 h-4" /> Live Interface Sync
+                    <Users className="w-4 h-4" /> Commander Identity
                   </label>
                   <div className="flex flex-col md:flex-row gap-3">
                     <div className="relative flex-1 group">
@@ -358,12 +359,12 @@ export const UIOverlay = ({
                         type="text" 
                         value={username}
                         onChange={(e) => setUsername(e.target.value)}
-                        className={`w-full bg-zinc-950 border-2 rounded-2xl px-12 py-5 text-lg font-bold focus:outline-none transition-all placeholder:text-zinc-800 ${!username ? 'border-amber-500/20' : 'border-white/5 focus:border-indigo-500/50'}`}
-                        placeholder="your_tiktok_username"
+                        className={`w-full bg-zinc-950 border-2 rounded-2xl px-12 py-5 text-lg font-bold focus:outline-none transition-all placeholder:text-zinc-800 ${!username ? 'border-cyan-500/20' : 'border-white/5 focus:border-cyan-500/50'}`}
+                        placeholder="Enter Commander Name"
                       />
                       {!username && (
-                        <div className="absolute -bottom-6 left-2 flex items-center gap-1 text-[9px] font-black text-amber-500/60 uppercase tracking-widest animate-pulse">
-                          <AlertTriangle className="w-3 h-3" /> Please enter username
+                        <div className="absolute -bottom-6 left-2 flex items-center gap-1 text-[9px] font-black text-cyan-500/60 uppercase tracking-widest animate-pulse">
+                          <AlertTriangle className="w-3 h-3" /> Optional: For Global Leaderboard
                         </div>
                       )}
                     </div>
@@ -375,10 +376,10 @@ export const UIOverlay = ({
                       {loading ? (
                         <div className="flex items-center gap-2">
                           <Loader2 className="w-5 h-5 animate-spin" />
-                          <span>SYNCING...</span>
+                          <span>INITIALIZING...</span>
                         </div>
                       ) : (
-                        connected ? <CheckCircle2 className="w-6 h-6 mx-auto" /> : "Connect Sync"
+                        connected ? <CheckCircle2 className="w-6 h-6 mx-auto" /> : "Verify Pilot"
                       )}
                     </button>
                   </div>
@@ -386,7 +387,7 @@ export const UIOverlay = ({
                     <div className="flex items-center gap-3">
                       <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500 animate-pulse shadow-[0_0_10px_rgba(34,197,94,0.8)]' : error ? 'bg-rose-500' : 'bg-zinc-800'}`} />
                       <span className={`text-[10px] uppercase font-black tracking-[0.2em] ${connected ? 'text-green-400' : error ? 'text-rose-400' : 'text-zinc-500'}`}>
-                        {loading ? "Establishing connection to TikTok..." : connected ? "Status: Live Sync Active" : "Status: Offline - Connection Optional"}
+                        {loading ? "Authenticating with Seal M Core..." : connected ? "Status: Pilot Verified" : "Status: Local Simulation Mode"}
                       </span>
                     </div>
                     {error && (
@@ -433,8 +434,7 @@ export const UIOverlay = ({
 
                 <button 
                   onClick={nextStep}
-                  disabled={!username}
-                  className={`w-full py-6 font-black uppercase tracking-widest rounded-2xl transition-all shadow-2xl flex items-center justify-center gap-3 active:scale-[0.98] ${!username ? 'bg-zinc-800 text-zinc-600 cursor-not-allowed grayscale' : 'bg-white text-zinc-950 hover:bg-zinc-200'}`}
+                  className="w-full py-6 bg-white text-zinc-950 font-black uppercase tracking-widest rounded-2xl hover:bg-zinc-200 transition-all shadow-2xl flex items-center justify-center gap-3 active:scale-[0.98]"
                 >
                   Configure Team A <Sword className="w-5 h-5" />
                 </button>

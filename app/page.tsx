@@ -1,138 +1,133 @@
 import Link from 'next/link';
 import LandingUnitShowcase from '@/src/components/landing/LandingUnitShowcase';
-import { Sword, Users, MessageSquare, Gift, Shield, Play, RefreshCw, ChevronRight } from 'lucide-react';
+import { Sword, Shield, Play, Sparkles, ChevronRight, Zap, Target } from 'lucide-react';
 
 export const metadata = {
-  title: "Royale Clash - TikTok Live Battle",
-  description: "The ultimate grit-themed interactive battle arena for TikTok Live.",
+  title: "Seal M: Battle Simulator",
+  description: "The ultimate 3D battle simulation for Seal M: Clover Knight enthusiasts.",
 };
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-[#3E3024] text-[#B5A642] selection:bg-[#8A0303] selection:text-white font-sans overflow-x-hidden">
-      {/* Texture Overlay */}
-      <div className="fixed inset-0 pointer-events-none opacity-[0.03] z-50 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]" />
+    <main className="min-h-screen bg-[#0a0a0c] text-white selection:bg-cyan-500/30 selection:text-cyan-200 font-sans overflow-x-hidden">
+      {/* Dynamic Background */}
+      <div className="fixed inset-0 pointer-events-none z-0">
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-cyan-500/10 blur-[120px] rounded-full animate-pulse" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-600/10 blur-[120px] rounded-full" />
+        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-[0.05]" />
+      </div>
 
       {/* Navbar */}
-      <nav className="fixed top-0 inset-x-0 h-20 bg-black/80 backdrop-blur-md border-b border-[#B5A642]/10 flex items-center justify-between px-6 md:px-12 z-40">
-        <div className="flex items-center gap-2">
-          <div className="w-10 h-10 bg-[#8A0303] rounded-lg rotate-12 flex items-center justify-center border-2 border-[#D4AF37] shadow-[0_0_15px_rgba(138,3,3,0.5)]">
-            <Sword className="w-6 h-6 text-white -rotate-12" />
+      <nav className="fixed top-0 inset-x-0 h-20 bg-black/60 backdrop-blur-xl border-b border-white/5 flex items-center justify-between px-6 md:px-12 z-50">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-xl flex items-center justify-center border border-white/20 shadow-lg shadow-cyan-500/20">
+            <Sword className="w-6 h-6 text-white" />
           </div>
-          <span className="text-2xl font-black italic tracking-tighter text-[#D4AF37] uppercase">Royale Clash</span>
+          <div>
+            <span className="text-xl font-black italic tracking-tighter text-white uppercase leading-none block">SEAL M</span>
+            <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-widest leading-none">Battle Simulator</span>
+          </div>
         </div>
 
         <div className="hidden md:flex items-center gap-8">
-          <a href="#how-to-play" className="text-sm font-black uppercase tracking-widest hover:text-[#D4AF37] transition-colors">Tactics</a>
-          <a href="#units" className="text-sm font-black uppercase tracking-widest hover:text-[#D4AF37] transition-colors">Dossier</a>
-          <Link href="/live-game" className="px-6 py-2 bg-[#8A0303] text-white text-sm font-black uppercase tracking-widest rounded-full border-2 border-[#D4AF37]/50 hover:scale-105 active:scale-95 transition-all animate-pulse shadow-[0_0_20px_rgba(138,3,3,0.4)]">
-            Entering Battle
+          <Link href="/seal-m" className="text-xs font-black uppercase tracking-widest hover:text-cyan-400 transition-colors">Enter Arena</Link>
+          <Link href="/training" className="text-xs font-black uppercase tracking-widest hover:text-cyan-400 transition-colors">Training</Link>
+          <Link href="/seal-m" className="px-6 py-2 bg-white text-black text-xs font-black uppercase tracking-widest rounded-full hover:bg-cyan-400 hover:text-white transition-all shadow-xl">
+            Start Simulation
           </Link>
         </div>
       </nav>
 
       {/* Hero Section */}
-      <section className="relative pt-40 pb-20 px-6 md:px-12 flex flex-col items-center text-center">
-        <div className="absolute top-20 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-[#8A0303]/10 blur-[120px] rounded-full pointer-events-none" />
-        
-        <div className="relative z-10 space-y-6 max-w-4xl">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#2E4A22]/20 border border-[#2E4A22]/50 text-[#2E4A22] text-xs font-black uppercase tracking-[0.2em]">
-            <Shield className="w-3 h-3" /> Battlefield Simulation v2.0
+      <section className="relative pt-40 pb-24 px-6 md:px-12 flex flex-col items-center text-center">
+        <div className="relative z-10 space-y-8 max-w-4xl">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-[10px] font-black uppercase tracking-[0.3em] animate-in fade-in slide-in-from-top-4 duration-1000">
+            <Sparkles className="w-3 h-3" /> Clover Knight Edition v3.0
           </div>
-          <h1 className="text-6xl md:text-8xl font-black italic text-[#D4AF37] uppercase tracking-tighter leading-[0.85] drop-shadow-2xl">
-            Where Chat Becomes <br /> <span className="text-[#8A0303]">The Frontline</span>
+          <h1 className="text-6xl md:text-8xl font-black italic text-white uppercase tracking-tighter leading-[0.85] drop-shadow-2xl animate-in fade-in slide-in-from-bottom-8 duration-700">
+            Unleash Your <br /> <span className="bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">Inner Knight</span>
           </h1>
-          <p className="text-lg md:text-xl text-[#B5A642]/70 max-w-2xl mx-auto italic leading-relaxed">
-            Lead your legion in a high-density tactical arena. Every comment is a soldier. Every gift is a reinforcement. Command the chaos on TikTok Live.
+          <p className="text-lg md:text-xl text-zinc-400 max-w-2xl mx-auto italic leading-relaxed animate-in fade-in duration-1000 delay-300">
+            The most advanced high-density battle simulator for Seal M. Experience cinematic 3D combat, strategic legion management, and legendary class showdowns.
           </p>
-          <div className="pt-8 flex flex-wrap justify-center gap-4">
-            <Link href="/live-game" className="px-10 py-5 bg-[#8A0303] text-white text-xl font-black uppercase tracking-widest rounded-xl border-b-8 border-[#5e0202] hover:translate-y-1 hover:border-b-4 active:translate-y-2 active:border-b-0 transition-all flex items-center gap-3">
-              <Play className="w-6 h-6 fill-white" /> Launch Game
+          <div className="pt-8 flex flex-wrap justify-center gap-4 animate-in fade-in slide-in-from-bottom-4 duration-1000 delay-500">
+            <Link href="/seal-m" className="px-10 py-5 bg-cyan-500 text-white text-xl font-black uppercase tracking-widest rounded-2xl border-b-8 border-cyan-700 hover:translate-y-1 hover:border-b-4 active:translate-y-2 active:border-b-0 transition-all flex items-center gap-3 shadow-2xl shadow-cyan-500/20">
+              <Play className="w-6 h-6 fill-white" /> Enter Simulator
             </Link>
-            <button className="px-10 py-5 bg-transparent text-[#B5A642] text-xl font-black uppercase tracking-widest rounded-xl border-2 border-[#B5A642]/20 hover:bg-white/5 transition-all">
-              Watch Trailer
-            </button>
+            <Link href="/training" className="px-10 py-5 bg-white/5 text-white text-xl font-black uppercase tracking-widest rounded-2xl border-2 border-white/10 hover:bg-white/10 transition-all backdrop-blur-sm">
+              Training Grounds
+            </Link>
           </div>
         </div>
       </section>
 
-      {/* Unit Showcase Section */}
-      <section id="units" className="py-20 bg-black/20 border-y border-[#B5A642]/5">
-        <div className="px-6 md:px-12 mb-12 text-center">
-          <h3 className="text-3xl font-black text-[#D4AF37] uppercase tracking-tighter italic">Combat Intelligence</h3>
-          <p className="text-sm text-[#B5A642]/40 uppercase tracking-widest">Analyze your tactical options</p>
+      {/* Class Showcase Section */}
+      <section id="units" className="py-24 bg-white/[0.02] border-y border-white/5 relative">
+        <div className="px-6 md:px-12 mb-16 text-center">
+          <h3 className="text-4xl font-black text-white uppercase tracking-tighter italic">LEGION CLASSES</h3>
+          <p className="text-xs text-cyan-400 uppercase tracking-[0.4em] mt-2 font-bold">Standard Combat Protocol</p>
         </div>
         <LandingUnitShowcase />
       </section>
 
-      {/* How To Play Section */}
-      <section id="how-to-play" className="py-24 px-6 md:px-12 max-w-6xl mx-auto">
-        <div className="text-center mb-16">
-          <h3 className="text-4xl font-black text-[#D4AF37] uppercase tracking-tighter italic">Battle Operations</h3>
-          <p className="text-sm text-[#B5A642]/40 uppercase tracking-widest">Master the art of interactive warfare</p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-12 relative">
+      {/* Features Grid */}
+      <section className="py-32 px-6 md:px-12 max-w-7xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {[
-            { 
-              step: '01', 
-              icon: Users, 
-              title: 'Recruitment', 
-              desc: 'Host connects to TikTok Live. Viewers join by commenting team keywords.',
-              color: 'text-emerald-500'
+            {
+              icon: Zap,
+              title: 'ECS ENGINE',
+              desc: 'High-performance Entity Component System driving 600+ active units at 60 FPS.',
+              color: 'text-cyan-400',
+              bg: 'bg-cyan-500/10'
             },
-            { 
-              step: '02', 
-              icon: MessageSquare, 
-              title: 'Deployment', 
-              desc: 'Spawn units by typing their class name. Coordinate attacks in real-time.',
-              color: 'text-blue-500'
+            {
+              icon: Shield,
+              title: '3D COLLISION',
+              desc: 'Physics-based environment interaction with BVH spatial acceleration.',
+              color: 'text-blue-400',
+              bg: 'bg-blue-500/10'
             },
-            { 
-              step: '03', 
-              icon: Gift, 
-              title: 'Reinforcement', 
-              desc: 'Unleash elite formations and ultimate spells by sending TikTok gifts.',
-              color: 'text-amber-500'
-            },
+            {
+              icon: Target,
+              title: 'CLASS MATRIX',
+              desc: 'Rock-paper-scissors balancing between Knight, Mage, Archer, and Assassin.',
+              color: 'text-purple-400',
+              bg: 'bg-purple-500/10'
+            }
           ].map((item, i) => (
-            <div key={i} className="relative z-10 flex flex-col items-center text-center group">
-              <div className="w-20 h-20 rounded-3xl bg-[#2a1f18] border border-[#B5A642]/20 flex items-center justify-center mb-6 group-hover:scale-110 group-hover:border-[#D4AF37] transition-all duration-500 shadow-xl">
-                <item.icon className={`w-10 h-10 ${item.color}`} />
-                <div className="absolute -top-4 -right-4 w-10 h-10 bg-[#8A0303] rounded-full flex items-center justify-center text-white font-black italic border-2 border-[#D4AF37]">
-                  {item.step}
-                </div>
+            <div key={i} className="p-8 rounded-[32px] bg-white/[0.03] border border-white/5 hover:border-white/20 transition-all group">
+              <div className={`w-14 h-14 ${item.bg} rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform`}>
+                <item.icon className={`w-8 h-8 ${item.color}`} />
               </div>
-              <h4 className="text-2xl font-black text-[#D4AF37] uppercase tracking-tighter mb-4">{item.title}</h4>
-              <p className="text-[#B5A642]/60 italic leading-relaxed text-sm">
-                {item.desc}
-              </p>
+              <h4 className="text-xl font-black text-white uppercase tracking-tighter mb-4 italic">{item.title}</h4>
+              <p className="text-zinc-500 text-sm leading-relaxed italic">{item.desc}</p>
             </div>
           ))}
         </div>
       </section>
 
-      {/* Battle Configuration (Settings) Section */}
-      <section className="py-24 bg-black/40 border-y border-[#B5A642]/10">
+      {/* Gameplay Section */}
+      <section className="py-32 bg-black/40 border-y border-white/5">
         <div className="px-6 md:px-12 max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
           <div className="space-y-8">
             <div>
-              <h3 className="text-3xl font-black text-[#D4AF37] uppercase tracking-tighter italic mb-2">Host Command Center</h3>
-              <p className="text-[#B5A642]/60 italic">Total control over the battlefield simulation.</p>
+              <h3 className="text-5xl font-black text-white uppercase tracking-tighter italic mb-4 leading-none">COMMANDER <br /> CONSOLE</h3>
+              <p className="text-zinc-400 italic">Complete tactical control over the battlefield simulation.</p>
             </div>
             
             <div className="space-y-4">
               {[
-                { label: 'Tower Fortification', desc: 'Adjust base HP from 500 to 50,000 for quick skirmishes or long sieges.' },
-                { label: 'Tactical Pacing', desc: 'Control time scale and unit spawn rates to balance the combat intensity.' },
-                { label: 'Environment Control', desc: 'Switch between Whimsical Diorama or Stormy Battlefield with dynamic weather.' },
-                { label: 'Army Scaling', desc: 'Scale unit sizes and power levels to create legendary boss encounters.' },
+                { label: 'ENVIRONMENT SHIFTER', desc: 'Switch between Whimsical Diorama or Stormy Battlefield with dynamic weather.' },
+                { label: 'LEGION SCALING', desc: 'Adjust unit density and power levels to create legendary boss encounters.' },
+                { label: 'PHYSICS CONTROL', desc: 'Modify time-scale and movement speeds for cinematic slow-motion analysis.' },
+                { label: 'VFX OVERLOAD', desc: 'Experience high-fidelity particles and spell effects optimized for performance.' },
               ].map((s, i) => (
-                <div key={i} className="flex gap-4 p-4 rounded-xl bg-[#3E3024]/40 border border-[#B5A642]/10 border-l-4 border-l-[#D4AF37]">
-                  <RefreshCw className="w-5 h-5 text-[#D4AF37] flex-shrink-0 mt-1" />
+                <div key={i} className="flex gap-4 p-5 rounded-2xl bg-white/[0.03] border border-white/5 hover:bg-white/[0.05] transition-colors">
+                  <ChevronRight className="w-5 h-5 text-cyan-500 flex-shrink-0 mt-1" />
                   <div>
-                    <p className="text-sm font-black text-white uppercase tracking-wider mb-1">{s.label}</p>
-                    <p className="text-xs text-[#B5A642]/70 leading-relaxed">{s.desc}</p>
+                    <p className="text-xs font-black text-white uppercase tracking-widest mb-1">{s.label}</p>
+                    <p className="text-[11px] text-zinc-500 leading-relaxed font-bold">{s.desc}</p>
                   </div>
                 </div>
               ))}
@@ -140,164 +135,24 @@ export default function Home() {
           </div>
 
           <div className="relative group">
-            <div className="absolute -inset-4 bg-[#8A0303]/20 blur-2xl rounded-[40px] opacity-0 group-hover:opacity-100 transition-opacity" />
-            <div className="relative aspect-video bg-[#1a1410] rounded-[32px] border-4 border-[#B5A642]/20 overflow-hidden shadow-2xl flex items-center justify-center p-8">
-              <div className="w-full space-y-4 opacity-40 select-none">
-                <div className="h-4 w-3/4 bg-[#D4AF37]/20 rounded" />
-                <div className="h-8 w-full bg-[#D4AF37]/10 rounded border border-[#D4AF37]/20" />
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="h-20 bg-[#D4AF37]/5 rounded" />
-                  <div className="h-20 bg-[#D4AF37]/5 rounded" />
+            <div className="absolute -inset-4 bg-cyan-500/20 blur-2xl rounded-[40px] opacity-0 group-hover:opacity-100 transition-opacity" />
+            <div className="relative aspect-square bg-[#0c0c0e] rounded-[48px] border-4 border-white/10 overflow-hidden shadow-2xl flex items-center justify-center p-8">
+              <div className="w-full space-y-6 opacity-30 select-none">
+                <div className="h-4 w-3/4 bg-cyan-500/20 rounded" />
+                <div className="h-12 w-full bg-white/5 rounded-2xl border border-white/10" />
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="h-32 bg-white/5 rounded-3xl" />
+                  <div className="h-32 bg-white/5 rounded-3xl" />
                 </div>
-                <div className="h-10 w-1/2 bg-[#8A0303]/40 rounded mx-auto" />
+                <div className="h-12 w-1/2 bg-cyan-500/40 rounded-2xl mx-auto" />
               </div>
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="px-6 py-3 bg-[#B5A642] text-[#3E3024] font-black uppercase tracking-[0.2em] -rotate-12 shadow-2xl border-4 border-[#3E3024]">
-                  Host Only Console
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-4">
+                <div className="w-20 h-20 bg-cyan-500 rounded-3xl flex items-center justify-center shadow-2xl shadow-cyan-500/40 animate-bounce">
+                  <Play className="w-10 h-10 text-white fill-white" />
                 </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Command Reference Section */}
-      <section className="py-24 px-6 md:px-12 max-w-6xl mx-auto">
-        <div className="bg-[#2a1f18] rounded-[40px] border-2 border-[#B5A642]/10 overflow-hidden shadow-2xl">
-          <div className="p-8 md:p-12 border-b border-[#B5A642]/10 flex flex-col md:flex-row justify-between items-center gap-6 bg-gradient-to-r from-[#8A0303]/10 to-transparent">
-            <div>
-              <h3 className="text-3xl font-black text-[#D4AF37] uppercase tracking-tighter italic">Battlefield Dossier</h3>
-              <p className="text-[#B5A642]/60 text-sm uppercase tracking-widest">Official command reference for all combatants</p>
-            </div>
-            <div className="flex gap-2">
-              <div className="px-4 py-2 bg-[#2E4A22]/30 border border-[#2E4A22] text-[#2E4A22] text-[10px] font-black uppercase rounded-lg">Verified Protocol</div>
-              <div className="px-4 py-2 bg-[#8A0303]/20 border border-[#8A0303] text-[#8A0303] text-[10px] font-black uppercase rounded-lg">High Priority</div>
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-[#B5A642]/10">
-            <div className="p-8 space-y-6">
-              <div className="flex items-center gap-3 text-[#D4AF37]">
-                <Users className="w-5 h-5" />
-                <h4 className="font-black uppercase tracking-widest text-sm">Join Commands</h4>
-              </div>
-              <div className="space-y-4">
-                <div className="flex justify-between items-center group">
-                  <code className="px-2 py-1 bg-black/40 text-emerald-400 font-bold rounded">p</code>
-                  <span className="text-xs text-[#B5A642]/50 italic">Join Player Team</span>
-                </div>
-                <div className="flex justify-between items-center group">
-                  <code className="px-2 py-1 bg-black/40 text-rose-400 font-bold rounded">e</code>
-                  <span className="text-xs text-[#B5A642]/50 italic">Join Enemy Team</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="p-8 space-y-6">
-              <div className="flex items-center gap-3 text-[#D4AF37]">
-                <Sword className="w-5 h-5" />
-                <h4 className="font-black uppercase tracking-widest text-sm">Combat Units</h4>
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-[11px] font-bold uppercase italic text-white/80">
-                <span>. Tank</span>
-                <span>. Mage</span>
-                <span>. Fighter</span>
-                <span>. Marksman</span>
-                <span>. Assassin</span>
-              </div>
-              <p className="text-[10px] text-[#B5A642]/40 italic">*Type the name after joining to spawn.</p>
-            </div>
-
-            <div className="p-8 space-y-6">
-              <div className="flex items-center gap-3 text-[#D4AF37]">
-                <Gift className="w-5 h-5" />
-                <h4 className="font-black uppercase tracking-widest text-sm">Tactical Gifts</h4>
-              </div>
-              <div className="space-y-3">
-                <div className="p-3 bg-black/20 rounded-xl border border-white/5 group hover:border-[#D4AF37]/50 transition-colors">
-                  <p className="text-[10px] font-black text-[#D4AF37] mb-1">Mawar / Rose</p>
-                  <p className="text-[9px] text-[#B5A642]/60 italic">Spawn massive wave of Kroco units.</p>
-                </div>
-                <div className="p-3 bg-black/20 rounded-xl border border-white/5 group hover:border-[#8A0303]/50 transition-colors">
-                  <p className="text-[10px] font-black text-[#8A0303] mb-1">Panda / Treasure</p>
-                  <p className="text-[9px] text-[#B5A642]/60 italic">Summon a Legendary Boss Unit.</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Live Command Demo (Transmission) Section */}
-      <section className="py-24 bg-gradient-to-b from-transparent to-black/60">
-        <div className="px-6 md:px-12 max-w-6xl mx-auto">
-          <div className="text-center mb-16">
-            <h3 className="text-3xl font-black text-[#D4AF37] uppercase tracking-tighter italic">Tactical Transmission</h3>
-            <p className="text-[#B5A642]/60 text-sm uppercase tracking-widest">Real-time chat command simulation</p>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-            {/* Chat Simulation Window */}
-            <div className="bg-[#1a1410] rounded-[32px] border-4 border-[#B5A642]/20 shadow-2xl overflow-hidden flex flex-col h-[400px]">
-              <div className="p-4 bg-[#B5A642]/10 border-b border-[#B5A642]/10 flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                <span className="text-[10px] font-black text-[#D4AF37] uppercase tracking-widest">Live Feed Simulation</span>
-              </div>
-              
-              <div className="flex-1 p-6 space-y-4 overflow-y-auto font-mono">
-                {[
-                  { user: 'Budi_Gamer', text: 'p', result: 'Joined Team PLAYER 🛡️', color: 'text-emerald-400' },
-                  { user: 'Budi_Gamer', text: 'tank', result: 'Deploying VIKING JARL... ⚔️', color: 'text-[#D4AF37]' },
-                  { user: 'Sultan_XT', text: 'e', result: 'Joined Team ENEMY 👺', color: 'text-rose-400' },
-                  { user: 'Sultan_XT', text: 'mage', result: 'Deploying HIGH WIZARD... 🪄', color: 'text-[#D4AF37]' },
-                  { user: 'Gift_King', text: '🌹 (Rose)', result: 'KROCO SWARM UNLEASHED! 🔥', color: 'text-[#8A0303] font-black' },
-                ].map((item, i) => (
-                  <div key={i} className="animate-slide-up" style={{ animationDelay: `${i * 800}ms` }}>
-                    <div className="flex gap-2 items-start mb-1">
-                      <span className="text-[10px] text-[#B5A642]/40">@ {item.user}:</span>
-                      <span className="text-sm text-white font-bold">{item.text}</span>
-                    </div>
-                    <div className={`ml-4 text-xs italic ${item.color} flex items-center gap-2`}>
-                      <ChevronRight className="w-3 h-3" /> {item.result}
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="p-4 bg-black/40 flex gap-2">
-                <div className="flex-1 bg-white/5 rounded-lg px-4 py-2 text-xs text-[#B5A642]/30 italic">Type a command...</div>
-                <div className="px-4 py-2 bg-[#8A0303] text-white text-[10px] font-black uppercase rounded-lg">Send</div>
-              </div>
-            </div>
-
-            {/* Explanation Content */}
-            <div className="space-y-8">
-              <div className="space-y-4">
-                <h4 className="text-2xl font-black text-[#D4AF37] uppercase italic">See it in action</h4>
-                <p className="text-[#B5A642]/70 leading-relaxed italic">
-                  Commanding your units is as simple as typing in the chat. <span className="text-[#D4AF37] font-bold">First, pick your side</span> (p or e), then unleash your army by typing their class name. Every message is parsed by our <span className="text-white font-bold underline decoration-[#8A0303]">Battle Engine</span>.
+                <p className="px-6 py-2 bg-white text-black font-black uppercase tracking-[0.2em] text-xs rounded-full shadow-2xl">
+                  Simulate Now
                 </p>
-              </div>
-
-              <div className="space-y-4">
-                <div className="flex items-start gap-4">
-                  <div className="w-10 h-10 rounded-full bg-[#2E4A22]/20 flex items-center justify-center flex-shrink-0 text-[#2E4A22]">
-                    <Play className="w-5 h-5 fill-current" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-black text-white uppercase tracking-wider">Fast Execution</p>
-                    <p className="text-xs text-[#B5A642]/60">Units spawn within milliseconds of your chat appearing on screen.</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-4">
-                  <div className="w-10 h-10 rounded-full bg-[#8A0303]/20 flex items-center justify-center flex-shrink-0 text-[#8A0303]">
-                    <Gift className="w-5 h-5 fill-current" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-black text-white uppercase tracking-wider">Gift Multiplier</p>
-                    <p className="text-xs text-[#B5A642]/60">Gifts don't just spawn units; they can buff your entire army or trigger global events.</p>
-                  </div>
-                </div>
               </div>
             </div>
           </div>
@@ -305,17 +160,20 @@ export default function Home() {
       </section>
 
       {/* Footer */}
-      <footer className="py-20 border-t border-[#B5A642]/10 text-center">
-        <div className="flex flex-col items-center gap-6">
-          <div className="flex items-center gap-2 grayscale opacity-50">
-            <div className="w-6 h-6 bg-[#8A0303] rounded flex items-center justify-center">
-              <Sword className="w-4 h-4 text-white" />
+      <footer className="py-24 border-t border-white/5 text-center relative z-10">
+        <div className="flex flex-col items-center gap-8">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-white/5 rounded-lg flex items-center justify-center border border-white/10">
+              <Sword className="w-4 h-4 text-cyan-400" />
             </div>
-            <span className="text-lg font-black italic tracking-tighter text-[#D4AF37] uppercase">Royale Clash</span>
+            <span className="text-xl font-black italic tracking-tighter text-white uppercase">SEAL M SIM</span>
           </div>
-          <p className="text-[10px] uppercase tracking-[0.4em] text-[#B5A642]/30 font-black">
-            Built for the most intense live streams &copy; 2026
-          </p>
+          <div className="flex gap-8 text-[10px] font-black uppercase tracking-[0.3em] text-zinc-500">
+            <Link href="/seal-m" className="hover:text-white transition-colors">Simulator</Link>
+            <Link href="/training" className="hover:text-white transition-colors">Training</Link>
+            <span className="opacity-30">|</span>
+            <span>&copy; 2026 Clover Knight Dev</span>
+          </div>
         </div>
       </footer>
     </main>

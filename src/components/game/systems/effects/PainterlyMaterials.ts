@@ -244,18 +244,21 @@ export const applyPainterlyStyle = (material: THREE.Material) => {
         
         shader.vertexShader = `
             varying vec3 vWorldPos;
+            varying vec3 vPainterlyNormal;
             ${shader.vertexShader}
         `.replace(
             '#include <worldpos_vertex>',
             `
             #include <worldpos_vertex>
             vWorldPos = (modelMatrix * vec4(transformed, 1.0)).xyz;
+            vPainterlyNormal = normalize(normalMatrix * normal);
             `
         );
 
         shader.fragmentShader = `
             uniform float time;
             varying vec3 vWorldPos;
+            varying vec3 vPainterlyNormal;
             ${PainterlyShaderUtils.brushstrokeNoise}
             ${shader.fragmentShader}
         `.replace(
@@ -270,7 +273,8 @@ export const applyPainterlyStyle = (material: THREE.Material) => {
             `
             #include <opaque_fragment>
             // Subtle rim light / saturator for readability + Shield Aura
-            float rim = 1.0 - max(0.0, dot(normalize(vNormal), vec3(0.0, 0.0, 1.0)));
+            vec3 normalVec = normalize(vPainterlyNormal);
+            float rim = 1.0 - max(0.0, dot(normalVec, vec3(0.0, 0.0, 1.0)));
             
             // Pulse effect for shield
             float pulse = (0.8 + 0.2 * sin(time * 4.0));

@@ -31,7 +31,6 @@ export default function GamePage() {
     setMapObstacles, mapObstacles, debug, unitRegistry,
     triggerAirstrike, updateSimulation,
     damageQueue, settingsRef, simTimeRef,
-    vehicles, unitIndex,
     spellsRef, mmSpellsRef, fighterSpellsRef, tankSpellsRef, assassinSpellsRef,
     compBuffers,
     spawnQueueRef, unitDataPoolRef,
@@ -413,8 +412,6 @@ export default function GamePage() {
           damageQueue={damageQueue}
           settingsRef={settingsRef}
           simTimeRef={simTimeRef}
-          vehicles={vehicles}
-          unitIndex={unitIndex}
           spellsRef={spellsRef}
           mmSpellsRef={mmSpellsRef}
           fighterSpellsRef={fighterSpellsRef}

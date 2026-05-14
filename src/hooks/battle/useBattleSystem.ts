@@ -1230,6 +1230,9 @@ export const useBattleSystem = () => {
       const weatherCfg = (WEATHER_CONFIG as any)[weather] || {};
       const weatherMults = weatherCfg.multipliers || {};
 
+      // --- PLAYER CHARACTER POSITION (from store, updated by PlayerController) ---
+      const playerCharPos = state.playerPosition; // [x, y, z]
+
       // --- QUEUED SPAWN PROCESSING ---
       // FIX: Use head pointer instead of shift() to avoid O(N) array mutation every frame.
       // Compact queue every 60 frames to reclaim memory.
@@ -1394,15 +1397,33 @@ export const useBattleSystem = () => {
           const dzB = uData.position[2] - targetBaseZ;
           const distToBaseSq = dxB * dxB + dzB * dzB;
 
-          const towerWeight = 0.01;
+          const towerWeight = 0.005; // Lowered: player char is a much better target
           bestScore = towerWeight / (distToBaseSq + 0.1);
           const targetedBaseId = u.type === "player" ? "enemy-base" : "player-base";
           const myBaseId = u.type === "player" ? "player-base" : "enemy-base";
 
+          // ━━━ PLAYER CHARACTER TARGETING (Enemy units only) ━━━
+          // Enemy units treat the player character as a high-priority target.
+          if (u.type === "enemy" && playerCharPos) {
+            const pcDx = _px[i] - playerCharPos[0];
+            const pcDz = _pz[i] - playerCharPos[2];
+            const pcDistSq = pcDx * pcDx + pcDz * pcDz;
+            const PLAYER_DETECT_RADIUS_SQ = 35 * 35; // 35 units detection range
+            if (pcDistSq < PLAYER_DETECT_RADIUS_SQ) {
+              // Player character is a VERY high priority target for all enemy types
+              const playerCharWeight = isAssassin ? 50.0 : isFighter ? 20.0 : 15.0;
+              const pcScore = playerCharWeight / (pcDistSq + 0.1);
+              if (pcScore > bestScore) {
+                bestScore = pcScore;
+                bestTargetId = "player-character";
+              }
+            }
+          }
+
           const neighbors = battleGrid.queryRadius(
             uData.position[0],
             uData.position[2],
-            isFighter || isAssassin ? 16 : 14, // Slightly wider to ensure defenders see base attackers
+            isFighter || isAssassin ? 16 : 14,
           );
           for (let j = 0; j < neighbors.length; j++) {
             const potential = neighbors[j];
@@ -1430,9 +1451,12 @@ export const useBattleSystem = () => {
               weight = 2.0;
             }
 
-            // PRIORITY DEFENSE: Heavily prioritize enemies attacking our base!
+            // PRIORITY DEFENSE: Heavily prioritize enemies attacking player char!
+            if (potential.targetId === "player-character") {
+              weight *= 30.0;
+            }
             if (potential.targetId === myBaseId) {
-              weight *= 50.0;
+              weight *= 10.0;
             }
 
             const score = weight / (dSq + 0.1);
@@ -1477,6 +1501,7 @@ export const useBattleSystem = () => {
         const targetBaseZ = u.type === "player" ? -dist : dist;
         const isBaseTarget =
           u.targetId === "player-base" || u.targetId === "enemy-base";
+        const isPlayerCharTarget = u.targetId === "player-character";
 
         const isRanged = u.unitClass === "mage" || u.unitClass === "marksman"; // --- Skill/Buff Range Adjustment ---
 
@@ -1490,8 +1515,16 @@ export const useBattleSystem = () => {
         const distToBaseSq = dxB * dxB + dzB * dzB;
         const baseInRange = distToBaseSq < rangeSq;
 
+        // --- PLAYER CHARACTER RANGE CHECK ---
+        let playerCharInRange = false;
+        if (isPlayerCharTarget && playerCharPos) {
+          const pcDx = _px[i] - playerCharPos[0];
+          const pcDz = _pz[i] - playerCharPos[2];
+          playerCharInRange = (pcDx * pcDx + pcDz * pcDz) < rangeSq;
+        }
+
         let currentTarget: ActiveUnit | undefined =
-          u.targetId && !isBaseTarget
+          u.targetId && !isBaseTarget && !isPlayerCharTarget
             ? unitIndexRef.current.get(u.targetId)
             : undefined;
         if (
@@ -1508,17 +1541,15 @@ export const useBattleSystem = () => {
         // ============================================================
 
         const cfg = CLASS_CONFIG[u.unitClass];
-        const cooldown = cfg.skill_cooldown * (1 - u.cooldownReduction);
-        const skillReady =
-          !uData.lastSkillTime || simNow - uData.lastSkillTime > cooldown;
-
-        if (skillReady && !u.isDying) {
+        const cooldown = (cfg.skill_cooldown || 1000) * (1 - u.cooldownReduction);
+        
+        if (simNow - (uData.lastSkillTime || 0) >= cooldown && !u.isDying) {
           // 1. FIGHTER: Cyclone Slash (AOE around self)
           if (u.unitClass === "fighter") {
             const neighbors = battleGrid.queryRadius(
               _px[i],
               _pz[i],
-              cfg.skill_range,
+              (cfg.skill_range || 10),
             );
             let enemyCount = 0;
             for (let n = 0; n < neighbors.length; n++) {
@@ -1866,7 +1897,77 @@ export const useBattleSystem = () => {
           u.isShield = false;
         }
 
-        if (currentTarget && tData) {
+        // ━━━ PLAYER CHARACTER ATTACK ━━━
+        // When enemy targets the player character and is in attack range, stop and deal damage.
+        if (isPlayerCharTarget && playerCharPos && playerCharInRange) {
+          uData.status = "attacking";
+          v.maxSpeed = 0;
+          const currentCooldown = u.attackCooldown * feverCooldownMult;
+          if (simNow - (uData.lastAttackTime || 0) > currentCooldown) {
+            // Deal damage to player HP (stored in store as playerBaseHp for now)
+            const dmg = u.attack * 0.5; // 50% damage to player character (balanced)
+            playerBaseHpRef.current = Math.max(0, playerBaseHpRef.current - dmg);
+            lastPlayerBaseDamageTime.current = simNow;
+            accumulateDamage(
+              "player-character",
+              dmg,
+              [playerCharPos[0], playerCharPos[1] + 1.5, playerCharPos[2]],
+              towerConfigRef.current.enemy.color,
+              simNow
+            );
+            uData.lastAttackTime = simNow;
+
+            // Fire visual attack effect toward player character
+            const teamColor = towerConfigRef.current.enemy.color;
+            const fwdX = playerCharPos[0] - _px[i];
+            const fwdZ = playerCharPos[2] - _pz[i];
+            const fwdLen = Math.sqrt(fwdX * fwdX + fwdZ * fwdZ) || 1;
+            if (u.unitClass === "marksman" || u.unitClass === "mage") {
+              const pool = mmSpellsRef.current;
+              const s = pool[mmSpellPtr.current];
+              s.fromX = _px[i];
+              s.fromY = uData.position[1] + 1.8;
+              s.fromZ = _pz[i];
+              s.toX = playerCharPos[0];
+              s.toY = playerCharPos[1] + 1.2;
+              s.toZ = playerCharPos[2];
+              s.startTime = simNow;
+              s.color = teamColor;
+              s.active = true;
+              s.progress = 0;
+              s.isBullet = true;
+              (s as any).bulletSpeed = 80.0;
+              (s as any)._tIdx = undefined;
+              mmSpellPtr.current = (mmSpellPtr.current + 1) % pool.length;
+            } else {
+              // Melee flash
+              const pool = fighterSpellsRef.current;
+              const s = pool[fighterSpellPtr.current];
+              s.x = playerCharPos[0];
+              s.y = 1.2;
+              s.z = playerCharPos[2];
+              s.targetX = playerCharPos[0];
+              s.targetZ = playerCharPos[2];
+              s.rotation = Math.atan2(fwdX / fwdLen, fwdZ / fwdLen);
+              s.startTime = simNow;
+              s.color = teamColor;
+              s.active = true;
+              s.progress = 0;
+              (s as any).isCyclone = false;
+              (s as any)._tIdx = undefined;
+              fighterSpellPtr.current = (fighterSpellPtr.current + 1) % pool.length;
+            }
+          }
+        } else if (isPlayerCharTarget && playerCharPos && !playerCharInRange) {
+          // Chase player character
+          uData.status = "chasing";
+          const classWeatherMult = weatherMults[u.unitClass]?.move_speed_mult || 1.0;
+          v.maxSpeed = u.speed * classWeatherMult * feverSpeedMult;
+          const seek = v.steering.behaviors[0] as any;
+          if (seek?.target) {
+            seek.target.set(playerCharPos[0], 0, playerCharPos[2]);
+          }
+        } else if (currentTarget && tData) {
           const dxT = _px[i] - tData.position[0];
           const dzT = _pz[i] - tData.position[2];
           const dSq = dxT * dxT + dzT * dzT;
@@ -2484,14 +2585,17 @@ export const useBattleSystem = () => {
           } else if (uData.status === "attacking") {
             const tIdx2 = currentTarget ? currentTarget.poolIdx : -1;
             const td2 = tIdx2 !== -1 ? uiPool[tIdx2] : null;
-            const tx2 =
+            const isPlayerChar = u.targetId === "player-character";
+            const tx2 = isPlayerChar && playerCharPos ? playerCharPos[0] : (
               td2 && td2.isActive && td2.id === u.targetId
                 ? td2.position[0]
-                : 0;
-            const tz2 =
+                : 0
+            );
+            const tz2 = isPlayerChar && playerCharPos ? playerCharPos[2] : (
               td2 && td2.isActive && td2.id === u.targetId
                 ? td2.position[2]
-                : targetBaseZ;
+                : targetBaseZ
+            );
             const targetRot = Math.atan2(tx2 - _px[i], tz2 - _pz[i]);
             let diff = targetRot - uData.rotation[1];
             while (diff < -Math.PI) diff += Math.PI * 2;

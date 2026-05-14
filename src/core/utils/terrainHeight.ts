@@ -1,8 +1,19 @@
 import { SimplexNoise } from "three-stdlib";
 import * as THREE from "three";
 
-// Singleton noise instance for zero-allocation mathematical lookups
-const noise = new SimplexNoise();
+// Simple seeded random for SimplexNoise
+const createSeededRandom = (seed: string) => {
+    let h = 0;
+    for (let i = 0; i < seed.length; i++) h = (Math.imul(31, h) + seed.charCodeAt(i)) | 0;
+    return {
+        random: () => {
+            h = (Math.imul(1103515245, h) + 12345) & 0x7fffffff;
+            return (h >>> 0) / 0x80000000;
+        }
+    };
+};
+
+const noise = new SimplexNoise(createSeededRandom("SEAL_M_STABLE_SEED") as any);
 
 export function getTerrainElevation(
   x: number, 

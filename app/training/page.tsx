@@ -30,8 +30,6 @@ export default function TrainingPage() {
     damageQueue,
     settingsRef,
     simTimeRef,
-    vehicles,
-    unitIndex,
     spellsRef,
     mmSpellsRef,
     fighterSpellsRef,
@@ -192,8 +190,6 @@ export default function TrainingPage() {
             damageQueue={damageQueue}
             settingsRef={settingsRef}
             simTimeRef={simTimeRef}
-            vehicles={vehicles}
-            unitIndex={unitIndex}
             spellsRef={spellsRef}
             mmSpellsRef={mmSpellsRef}
             fighterSpellsRef={fighterSpellsRef}

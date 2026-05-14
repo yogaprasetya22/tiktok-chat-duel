@@ -15,7 +15,6 @@ import dynamic from 'next/dynamic';
 
 const Perf = dynamic(() => import("r3f-perf").then((mod) => mod.Perf), { ssr: false });
 
-import { Base, InstancedTowers } from "./environment/Base";
 import { VFXProvider, useVFX } from "./systems/VFXManager";
 import { BattleArmy } from "./systems/BattleArmy";
 import { WhimsicalDiorama } from "./environment/WhimsicalDiorama";
@@ -25,13 +24,13 @@ import { DamageHUDBatcher } from "./systems/DamageHUDBatcher";
 import { EffectComposer, Bloom, ToneMapping } from "@react-three/postprocessing";
 
 import { TowerConfig, MapObstacle, UnitRuntimeData } from "@/src/core/domain/unit.types";
-import * as YUKA from "yuka";
+
 import { useStore } from "@/src/state/useStore";
 import React, { useState, useRef, useEffect } from "react";
 import { Activity, RefreshCw } from "lucide-react";
 import * as THREE from 'three';
 import { PlayerController, keyboardMap } from "./PlayerController";
-import { DummyTarget } from "./systems/DummyTarget";
+
 
 // Map removed as requested. Base ground provided by OrbitControls/Sky.
 
@@ -158,15 +157,15 @@ interface GameCanvasProps {
   settingsRef: React.RefObject<any>;
   simTimeRef: React.RefObject<number>;
   setTowerConfig?: (config: TowerConfig | ((prev: TowerConfig) => TowerConfig)) => void;
-  vehicles: React.RefObject<YUKA.Vehicle[]>;
-  unitIndex: React.RefObject<Map<string, any>>;
   spellsRef: React.RefObject<any[]>;
   mmSpellsRef: React.RefObject<any[]>;
   fighterSpellsRef: React.RefObject<any[]>;
   tankSpellsRef: React.RefObject<any[]>;
   assassinSpellsRef: React.RefObject<any[]>;
-  downloadPerfLogs: () => void;
-  clearVFXCache: () => void;
+  downloadPerfLogs?: () => void;
+  clearVFXCache?: () => void;
+  compBuffers?: any;
+  spawnUnit?: (level?: number, userName?: string, type?: "player" | "enemy", isBoss?: boolean, forcedClass?: any, profileImage?: string, forcedRarity?: any) => void;
 }
 
 
@@ -179,11 +178,10 @@ export const GameCanvas = React.memo(({
   isFullscreen,
   updateSimulation,
   damageQueue,
+  spawnUnit,
   settingsRef,
   simTimeRef,
   setTowerConfig,
-  vehicles,
-  unitIndex,
   spellsRef,
   mmSpellsRef,
   fighterSpellsRef,
@@ -191,13 +189,20 @@ export const GameCanvas = React.memo(({
   assassinSpellsRef,
   downloadPerfLogs,
   clearVFXCache,
+  compBuffers,
 }: GameCanvasProps) => {
 
   const [dpr, setDpr] = useState(1.0);
+  const [envReady, setEnvReady] = useState(false); // Terrain BVH readiness gate
   const gameState = useStore(s => s.gameState);
   const isSettingsOpen = useStore(s => s.isSettingsOpen);
   const environment = useStore(s => s.environment);
   const setEnvironment = useStore(s => s.setEnvironment);
+
+  // Reset env gate whenever environment type changes so character re-waits for new BVH
+  useEffect(() => {
+    setEnvReady(false);
+  }, [environment]);
 
 
   // --- High-Performance Simulation Controls (Leva) ---
@@ -259,7 +264,7 @@ export const GameCanvas = React.memo(({
     fogDensity: { value: 0.002, min: 0, max: 0.05, step: 0.0001, label: "Fog Density" },
     fogNear: { value: 60, min: 10, max: 300, step: 5, label: "Fog Near" },
     fogFar: { value: 450, min: 100, max: 1000, step: 10, label: "Fog Far" },
-    exposure: { value: 1.5, min: 0.1, max: 2.0, step: 0.1, label: "Sky Exposure" },
+    exposure: { value: 2.0, min: 0.1, max: 4.0, step: 0.1, label: "Sky Exposure" },
 
 
     sensitivity: { 
@@ -273,6 +278,13 @@ export const GameCanvas = React.memo(({
 
   }, { collapsed: true }) as any;
 
+  useEffect(() => {
+    if (envReady) {
+      // Spawn 1 enemy tank for testing
+      spawnUnit?.(10, "Enemy Tank", "enemy", false, "tank");
+    }
+  }, [envReady, spawnUnit]);
+
 
 
   const [{ perfPosition, minimal, deepAnalyze, showPerf }, setDiag] = useControls("Diagnostics", () => ({
@@ -282,7 +294,7 @@ export const GameCanvas = React.memo(({
     triangles: { value: 0, label: "Estimated Triangles", editable: false },
     suspect: { value: "OPTIMAL", label: "Lag Suspect", editable: false },
     "Performance Tool": folder({
-      showPerf: { value: true, label: "Show R3F-Perf" },
+      showPerf: { value: false, label: "Show R3F-Perf" },
       perfPosition: {
         value: "top-right",
         options: ["top-right", "top-left", "bottom-right", "bottom-left"],
@@ -405,7 +417,7 @@ export const GameCanvas = React.memo(({
           />
         )}
 
-        {!isFullscreen && (
+        {!isFullscreen && !envReady && (
           <MapControls
             enableDamping={true}
             dampingFactor={0.05}
@@ -424,11 +436,25 @@ export const GameCanvas = React.memo(({
             <WhimsicalDiorama
               baseDistance={towerConfig.baseDistance || 24}
               settingsRef={settingsRef}
+              debug={debug}
+              onReady={() => {
+                requestAnimationFrame(() => {
+                  requestAnimationFrame(() => setEnvReady(true));
+                });
+              }}
             />
           ) : (
             <StormEnvironment
               baseDistance={towerConfig.baseDistance || 24}
               potatoMode={settingsRef.current.potatoMode}
+              debug={debug}
+              onReady={() => {
+                // Extra rAF buffer: ensures StaticCollider has fully
+                // registered the BVH before un-pausing the character
+                requestAnimationFrame(() => {
+                  requestAnimationFrame(() => setEnvReady(true));
+                });
+              }}
             />
           )}
 
@@ -446,52 +472,26 @@ export const GameCanvas = React.memo(({
               updateSimulation={updateSimulation}
               settingsRef={settingsRef}
               simTimeRef={simTimeRef}
-              vehicles={vehicles}
-              unitIndex={unitIndex}
               spellsRef={spellsRef}
               mmSpellsRef={mmSpellsRef}
               fighterSpellsRef={fighterSpellsRef}
               tankSpellsRef={tankSpellsRef}
               assassinSpellsRef={assassinSpellsRef}
+              compBuffers={compBuffers}
             />
 
 
 
-            <InstancedTowers 
-              distance={towerConfig.baseDistance || 24} 
-              settingsRef={settingsRef} 
-            />
+            {/* BASE AND TOWERS HIDDEN — enemies now target player character */}
 
-            <Base
-              maxHp={towerConfig.baseHp}
-              position={[0, 0, towerConfig.baseDistance || 24]}
-              type="player"
-              name={towerConfig.player.name}
-              customColor={towerConfig.player.color}
+            <PlayerController
+              damageQueue={damageQueue}
+              settingsRef={settingsRef}
+              paused={!envReady}
+              unitRegistry={unitRegistry}
             />
-            <Base
-              maxHp={towerConfig.baseHp}
-              position={[0, 0, -(towerConfig.baseDistance || 24)]}
-              type="enemy"
-              name={towerConfig.enemy.name}
-              customColor={towerConfig.enemy.color}
-            />
-
-            <PlayerController damageQueue={damageQueue} settingsRef={settingsRef} />
             
-            {/* COMBAT TEST TARGETS */}
-            <group position={[5, 1, 0]}>
-              <DummyTarget position={[0, 0, 0]} name="Target Alpha" />
-            </group>
-            <group position={[-5, 1, -5]}>
-              <DummyTarget position={[0, 0, 0]} name="Target Beta" />
-            </group>
-            <group position={[-2, 1, 8]}>
-              <DummyTarget position={[0, 0, 0]} name="Target Gamma" />
-            </group>
-            <group position={[10, 1, -10]}>
-              <DummyTarget position={[0, 0, 0]} name="Target Delta" />
-            </group>
+
 
             {/* DEBUG OBSTACLES */}
             {debug && mapObstacles.map((obs: MapObstacle, i: number) => (

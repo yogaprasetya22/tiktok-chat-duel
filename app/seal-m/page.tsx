@@ -20,8 +20,6 @@ export default function SealMPage() {
     damageQueue,
     settingsRef,
     simTimeRef,
-    vehicles,
-    unitIndex,
     spellsRef,
     mmSpellsRef,
     fighterSpellsRef,
@@ -29,6 +27,8 @@ export default function SealMPage() {
     assassinSpellsRef,
     downloadPerfLogs,
     clearVFXCache,
+    compBuffers,
+    spawnUnit,
   } = useBattleSystem();
 
 
@@ -113,10 +113,9 @@ export default function SealMPage() {
           isFullscreen={true}
           updateSimulation={updateSimulation}
           damageQueue={damageQueue}
+          spawnUnit={spawnUnit}
           settingsRef={settingsRef}
           simTimeRef={simTimeRef}
-          vehicles={vehicles}
-          unitIndex={unitIndex}
           spellsRef={spellsRef}
           mmSpellsRef={mmSpellsRef}
           fighterSpellsRef={fighterSpellsRef}
@@ -124,6 +123,7 @@ export default function SealMPage() {
           assassinSpellsRef={assassinSpellsRef}
           downloadPerfLogs={downloadPerfLogs}
           clearVFXCache={clearVFXCache}
+          compBuffers={compBuffers}
         />
 
         {/* In-game HUD */}

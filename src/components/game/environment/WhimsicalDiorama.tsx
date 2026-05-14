@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useEffect } from 'react';
 import React from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
@@ -20,6 +20,7 @@ import { PainterlyGrass } from './effects/PainterlyGrass';
 
 import { Rain, Lightning } from './effects/WeatherEffects';
 import { FloatingDebris } from './effects/FloatingDebris';
+import { InstancedTrees } from './effects/InstancedTrees';
 
 /**
  * WhimsicalDiorama - The main environment component
@@ -27,16 +28,18 @@ import { FloatingDebris } from './effects/FloatingDebris';
 interface WhimsicalDioramaProps {
     baseDistance?: number;
     settingsRef?: React.RefObject<any>;
+    debug?: boolean;
+    onReady?: () => void;
 }
 
-export const WhimsicalDiorama = ({ baseDistance = 24, settingsRef }: WhimsicalDioramaProps) => {
+export const WhimsicalDiorama = ({ baseDistance = 24, settingsRef, debug = false, onReady }: WhimsicalDioramaProps) => {
     const weather = useStore(s => s.weather);
-    const gameState = useStore(s => s.gameState);
-    const isSetup = gameState === 'SETUP';
 
     const terrainGeometry = useMemo(() => {
         const size = 1500.0;
-        const resolution = isSetup ? 32 : 64; 
+        // CRITICAL FIX: Removed isSetup dependency — rebuilding geometry on SETUP->PLAYING
+        // caused a BVH registration gap, allowing the character to fall through the map.
+        const resolution = settingsRef?.current?.potatoMode ? 64 : 128;
         const geo = new THREE.PlaneGeometry(size, size, resolution, resolution);
         const pos = geo.attributes.position;
         
@@ -48,9 +51,17 @@ export const WhimsicalDiorama = ({ baseDistance = 24, settingsRef }: WhimsicalDi
         }
 
         geo.computeVertexNormals();
-        (geo as any).computeBoundsTree(); // CRITICAL: Enables collision
+        (geo as any).computeBoundsTree({ maxDepth: 64, maxLeafTris: 5 });
         return geo;
-    }, [baseDistance, isSetup]);
+    }, [baseDistance]); // REMOVED isSetup — this was the root cause!
+
+    // Signal parent that BVH is ready (next frame after geometry mounts)
+    useEffect(() => {
+        const id = requestAnimationFrame(() =>
+            requestAnimationFrame(() => onReady?.())
+        );
+        return () => cancelAnimationFrame(id);
+    }, [terrainGeometry, onReady]);
 
     useFrame((state) => {
         const time = state.clock.elapsedTime;
@@ -65,14 +76,14 @@ export const WhimsicalDiorama = ({ baseDistance = 24, settingsRef }: WhimsicalDi
             {/* 1. SKYBOX & SUNLIGHT (High Noon / 12 PM) */}
             <Sky sunPosition={[5, 100, 5]} />
 
-            <ambientLight intensity={1.0} color="#ffffff" />
+            <ambientLight intensity={2.0} color="#ffffff" />
 
             <directionalLight
                 position={[5, 100, 5]}
-                intensity={isSetup ? 0.8 : 6.0}
+                intensity={12.0}
 
                 color="#ffffff"
-                castShadow={!isSetup}
+                castShadow
                 shadow-mapSize={[1024, 1024]}
 
                 shadow-camera-left={-200}
@@ -82,7 +93,7 @@ export const WhimsicalDiorama = ({ baseDistance = 24, settingsRef }: WhimsicalDi
                 shadow-camera-near={0.5}
                 shadow-camera-far={500}
             />
-            <pointLight position={[0, 15, 0]} intensity={2.0} color="#ffaa00" distance={150} />
+            <pointLight position={[0, 15, 0]} intensity={4.0} color="#ffaa00" distance={250} />
 
 
             {/* 2. WEATHER EFFECTS */}
@@ -92,28 +103,35 @@ export const WhimsicalDiorama = ({ baseDistance = 24, settingsRef }: WhimsicalDi
 
 
             {/* 3. TERRAIN ISLAND & MOUNTAINS */}
-            <StaticCollider>
+            <StaticCollider 
+                debug={debug}
+                BVHOptions={{
+                    strategy: 1, // SAH
+                    maxDepth: 64,
+                    maxLeafTris: 5,
+                    verbose: false
+                }}
+            >
                 <mesh 
                     geometry={terrainGeometry}
                     rotation={[-Math.PI / 2, 0, 0]} 
                     position={[0, -0.6, 0]} 
-                    receiveShadow={!isSetup}
+                    receiveShadow
                 >
-                    <primitive object={PainterlyTerrainMaterial} attach="material" />
+                    <primitive object={PainterlyTerrainMaterial} attach="material" wireframe={debug} />
                 </mesh>
             </StaticCollider>
 
-            {/* 4. GRASS & ENVIRONMENT (TREES REMOVED) */}
-            <PainterlyGrass baseDistance={baseDistance} />
+            {/* 4. GRASS & ENVIRONMENT */}
+            <PainterlyGrass baseDistance={baseDistance} mode="DIORAMA" />
+            <InstancedTrees mode="DIORAMA" baseDistance={baseDistance} />
 
 
-            {/* 5. WATER PLANE */}
-            <StaticCollider>
-                <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.85, 0]}>
-                    <planeGeometry args={[1500, 1500]} />
-                    <primitive object={PainterlyWaterMaterial} attach="material" />
-                </mesh>
-            </StaticCollider>
+            {/* 5. WATER PLANE (NO COLLIDER) */}
+            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.85, 0]}>
+                <planeGeometry args={[1500, 1500]} />
+                <primitive object={PainterlyWaterMaterial} attach="material" />
+            </mesh>
 
 
             {/* 6. FLOATING DEBRIS */}

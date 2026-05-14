@@ -6,6 +6,7 @@ import { useRef, useMemo, useEffect } from "react";
 import { useFrame } from "@react-three/fiber";
 import { Sky } from "@react-three/drei";
 import { computeBoundsTree, disposeBoundsTree, acceleratedRaycast } from "three-mesh-bvh";
+import * as BufferGeometryUtils from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { StaticCollider, characterStatus } from "bvhecctrl";
 
 import * as THREE from "three";
@@ -13,6 +14,7 @@ import { useStore } from "@/src/state/useStore";
 import { getTerrainElevation } from "@/src/core/utils/terrainHeight";
 import { useVFX } from "../systems/VFXManager";
 import { applyPainterlyStyle, PainterlyShaderUtils } from "../systems/effects/PainterlyMaterials";
+import { InstancedTrees } from "./effects/InstancedTrees";
 
 // Add BVH support to THREE with any cast to avoid lint errors
 (THREE.BufferGeometry.prototype as any).computeBoundsTree = computeBoundsTree;
@@ -21,9 +23,9 @@ import { applyPainterlyStyle, PainterlyShaderUtils } from "../systems/effects/Pa
 
 const TerrainMaterial = new THREE.ShaderMaterial({
   uniforms: {
-    baseColor: { value: new THREE.Color("#4a7c44") },
-    peakColor: { value: new THREE.Color("#8fb386") },
-    rockColor: { value: new THREE.Color("#6b7c5a") },
+    baseColor: { value: new THREE.Color("#3d5c36") }, // Deeper forest green
+    peakColor: { value: new THREE.Color("#95b58b") }, // Softer peak
+    rockColor: { value: new THREE.Color("#5a5e52") }, // Darker rock
   },
   vertexShader: `
     varying float vElevation;
@@ -62,13 +64,19 @@ const TerrainMaterial = new THREE.ShaderMaterial({
 const TERRAIN_SIZE = 1500;
 const GROUND_Y     = -0.3;
 
-const Terrain = ({ baseDistance, potatoMode }: { baseDistance: number; potatoMode?: boolean }) => {
-  const gameState = useStore(s => s.gameState);
-  const isSetup   = gameState === "SETUP";
-
-  // Compute terrain geometry on CPU to ensure physics matches visuals perfectly
+const Terrain = ({ baseDistance, potatoMode, debug, onReady }: {
+  baseDistance: number;
+  potatoMode?: boolean;
+  debug?: boolean;
+  onReady?: () => void;
+}) => {
+  // CRITICAL FIX: Do NOT use isSetup as a dependency.
+  // When gameState changes SETUP -> PLAYING, terrain geometry was being rebuilt from scratch.
+  // During the rebuild window, the old BVH was disposed but the new one not yet registered,
+  // causing the character to fall through the map.
+  // We now always build at full resolution and never rebuild on game state change.
   const terrainGeo = useMemo(() => {
-    const segs = isSetup ? 12 : (potatoMode ? 24 : 48); // Optimize segments
+    const segs = potatoMode ? 24 : 48;
     const geo = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, segs, segs);
     const pos = geo.attributes.position;
     
@@ -79,56 +87,65 @@ const Terrain = ({ baseDistance, potatoMode }: { baseDistance: number; potatoMod
         pos.setZ(i, elevation);
     }
     geo.computeVertexNormals();
-    (geo as any).computeBoundsTree(); // CRITICAL: Enables collision for BVHEcctrl
+    (geo as any).computeBoundsTree({ maxDepth: 64, maxLeafTris: 5 });
     return geo;
-  }, [baseDistance, isSetup, potatoMode]);
+  }, [baseDistance, potatoMode]); // REMOVED isSetup — this was the root cause!
+
+  // Signal parent that terrain BVH is ready (1 frame after mount)
+  useEffect(() => {
+    const id = requestAnimationFrame(() => onReady?.());
+    return () => cancelAnimationFrame(id);
+  }, [terrainGeo, onReady]);
 
   return (
-    <StaticCollider>
-      <mesh 
-        geometry={terrainGeo} 
-        rotation={[-Math.PI / 2, 0, 0]} 
-        position={[0, GROUND_Y, 0]} 
-        receiveShadow={!potatoMode && !isSetup}
-      >
-        <primitive object={TerrainMaterial} attach="material" />
-      </mesh>
-    </StaticCollider>
+    <mesh 
+      geometry={terrainGeo} 
+      rotation={[-Math.PI / 2, 0, 0]} 
+      position={[0, GROUND_Y, 0]} 
+      receiveShadow={!potatoMode}
+    >
+      <primitive object={TerrainMaterial} attach="material" wireframe={debug} />
+    </mesh>
   );
 };
 
 const MOUNTAIN_COUNT = 48;
 const MountainMaterial = new THREE.MeshStandardMaterial({
-  color: "#3a4a35",
+  color: "#2a3a25", // Darker, more distant feel
   roughness: 1,
   flatShading: true,
 });
 
 const DistantMountains = () => {
-  const meshRef = useRef<THREE.InstancedMesh>(null!);
-  const dummy   = useMemo(() => new THREE.Object3D(), []);
+  const mergedGeo = useMemo(() => {
+    const geometries: THREE.BufferGeometry[] = [];
+    const dummy = new THREE.Object3D();
 
-  useEffect(() => {
     for (let i = 0; i < MOUNTAIN_COUNT; i++) {
-      const angle  = (i / MOUNTAIN_COUNT) * Math.PI * 2 + Math.random() * 0.3;
-      const radius = 600 + Math.random() * 400;
-      const scaleH = 40 + Math.random() * 80;
-      const scaleW = 30 + Math.random() * 50;
+      const angle  = (i / MOUNTAIN_COUNT) * Math.PI * 2 + i * 0.3; // Deterministic random
+      const radius = 600 + (Math.sin(i) * 0.5 + 0.5) * 400;
+      const scaleH = 40 + (Math.cos(i) * 0.5 + 0.5) * 80;
+      const scaleW = 30 + (Math.sin(i * 2) * 0.5 + 0.5) * 50;
 
       dummy.position.set(Math.cos(angle) * radius, scaleH * 0.3 - 0.6, Math.sin(angle) * radius);
-      dummy.rotation.y = Math.random() * Math.PI;
+      dummy.rotation.y = i * 0.5;
       dummy.scale.set(scaleW, scaleH, scaleW);
       dummy.updateMatrix();
-      meshRef.current.setMatrixAt(i, dummy.matrix);
+
+      const cone = new THREE.ConeGeometry(1, 1, 6);
+      cone.applyMatrix4(dummy.matrix);
+      geometries.push(cone);
     }
-    meshRef.current.instanceMatrix.needsUpdate = true;
-  }, [dummy]);
+
+    const merged = BufferGeometryUtils.mergeGeometries(geometries);
+    (merged as any).computeBoundsTree();
+    return merged;
+  }, []);
 
   return (
-    <instancedMesh ref={meshRef} args={[undefined, undefined, MOUNTAIN_COUNT]} frustumCulled>
-      <coneGeometry args={[1, 1, 6]} />
+    <mesh geometry={mergedGeo}>
       <primitive object={MountainMaterial} attach="material" />
-    </instancedMesh>
+    </mesh>
   );
 };
 
@@ -138,43 +155,46 @@ const RockMat    = new THREE.MeshStandardMaterial({ color: "#6b7060", roughness:
 RockMat.onBeforeCompile  = applyPainterlyStyle as any;
 
 const Rocks = ({ potatoMode }: { potatoMode?: boolean }) => {
-  const meshRef = useRef<THREE.InstancedMesh>(null!);
-  const dummy   = useMemo(() => new THREE.Object3D(), []);
-  const count   = potatoMode ? Math.floor(ROCK_COUNT / 3) : ROCK_COUNT;
+  const count = potatoMode ? Math.floor(ROCK_COUNT / 3) : ROCK_COUNT;
 
-  useEffect(() => {
+  const mergedGeo = useMemo(() => {
+    const geometries: THREE.BufferGeometry[] = [];
+    const dummy = new THREE.Object3D();
     let placed = 0;
+
     for (let i = 0; placed < count && i < count * 4; i++) {
-      const angle  = Math.random() * Math.PI * 2;
-      const radius = 15 + Math.random() * 485;
-      const x      = Math.cos(angle) * radius;
-      const z      = Math.sin(angle) * radius;
+      const angle = (i * 0.77); // Deterministic
+      const radius = 15 + (Math.sin(i) * 0.5 + 0.5) * 485;
+      const x = Math.cos(angle) * radius;
+      const z = Math.sin(angle) * radius;
 
       if (Math.abs(x) < 14 && Math.abs(z) < 30) continue;
 
-      const s = 0.3 + Math.random() * 2.5;
+      const s = 0.3 + (Math.cos(i) * 0.5 + 0.5) * 2.5;
       dummy.position.set(x, s * 0.4 - 0.6, z);
-      dummy.rotation.set(Math.random(), Math.random() * Math.PI * 2, Math.random());
+      dummy.rotation.set(i * 0.1, i * 0.2, i * 0.3);
       dummy.scale.setScalar(s);
       dummy.updateMatrix();
-      meshRef.current.setMatrixAt(placed, dummy.matrix);
+
+      const geo = new THREE.DodecahedronGeometry(1, 0);
+      geo.applyMatrix4(dummy.matrix);
+      geometries.push(geo);
       placed++;
     }
-    meshRef.current.count = placed;
-    meshRef.current.instanceMatrix.needsUpdate = true;
-  }, [count, dummy]);
+
+    const merged = BufferGeometryUtils.mergeGeometries(geometries);
+    (merged as any).computeBoundsTree();
+    return merged;
+  }, [count]);
 
   return (
-    <StaticCollider>
-      <instancedMesh ref={meshRef} args={[undefined, undefined, count]} castShadow receiveShadow frustumCulled>
-        <dodecahedronGeometry args={[1, 0]} />
-        <primitive object={RockMat} attach="material" />
-      </instancedMesh>
-    </StaticCollider>
+    <mesh geometry={mergedGeo} castShadow receiveShadow>
+      <primitive object={RockMat} attach="material" />
+    </mesh>
   );
 };
 
-const GRASS_COUNT  = 600;
+const GRASS_COUNT  = 1800; // Increased for density
 
 const GRASS_AREA   = 500;
 
@@ -205,7 +225,7 @@ const GrassMat = new THREE.ShaderMaterial({
   side: THREE.DoubleSide,
 });
 
-const StaticGrass = ({ potatoMode }: { potatoMode?: boolean }) => {
+const StaticGrass = ({ potatoMode, baseDistance = 24 }: { potatoMode?: boolean, baseDistance?: number }) => {
   const meshRef = useRef<THREE.InstancedMesh>(null!);
   const dummy   = useMemo(() => new THREE.Object3D(), []);
   const weather = useStore(s => s.weather);
@@ -220,24 +240,39 @@ const StaticGrass = ({ potatoMode }: { potatoMode?: boolean }) => {
     const half = GRASS_AREA / 2;
     let idx = 0;
 
+    // Seeded random for stable placement
+    let seed = 99;
+    const rnd = () => {
+      seed = (seed * 16807) % 2147483647;
+      return (seed - 1) / 2147483646;
+    };
+
     for (let row = 0; row < cols && idx < count; row++) {
       for (let col = 0; col < cols && idx < count; col++) {
-        const x = -half + col * spacing + (Math.random() - 0.5) * spacing * 0.9;
-        const z = -half + row * spacing + (Math.random() - 0.5) * spacing * 0.9;
+        const x = -half + col * spacing + (rnd() - 0.5) * spacing * 0.9;
+        const z = -half + row * spacing + (rnd() - 0.5) * spacing * 0.9;
 
         if (Math.abs(x) < 14 && Math.abs(z) < 60) continue;
 
-        const elevation = getTerrainElevation(x, z, "STORM", 24) - 0.3; // baseDistance logic needs to match
-        dummy.position.set(x, elevation, z);
-        dummy.rotation.y = Math.random() * Math.PI;
-        dummy.scale.set(0.8 + Math.random() * 0.6, 0.35 + Math.random() * 0.85, 0.8 + Math.random() * 0.6);
+        // CRITICAL FIX: Match PlaneGeometry -z rotation mapping
+        const elevation = getTerrainElevation(x, -z, "STORM", baseDistance);
+
+        // Do not place grass on mountains!
+        if (elevation > 0.5) continue;
+
+        dummy.position.set(x, elevation - 0.3, z);
+        dummy.rotation.y = rnd() * Math.PI;
+        dummy.scale.set(0.8 + rnd() * 0.6, 0.35 + rnd() * 0.85, 0.8 + rnd() * 0.6);
         dummy.updateMatrix();
         mesh.setMatrixAt(idx++, dummy.matrix);
       }
     }
     mesh.count = idx;
     mesh.instanceMatrix.needsUpdate = true;
-  }, [count, dummy]);
+    
+    // Prevent disappearing from camera
+    mesh.computeBoundingSphere();
+  }, [count, dummy, baseDistance]); // Added baseDistance to deps
 
   useFrame(state => {
     GrassMat.uniforms.time.value = state.clock.elapsedTime;
@@ -309,7 +344,12 @@ const Lightning = () => {
   return <pointLight ref={lightRef} position={[0, 60, -20]} distance={500} color="#cce6ff" intensity={0} />;
 };
 
-export const StormEnvironment = ({ baseDistance = 24, potatoMode = false }: { baseDistance?: number; potatoMode?: boolean; }) => {
+export const StormEnvironment = ({ baseDistance = 24, potatoMode = false, debug = false, onReady }: {
+  baseDistance?: number;
+  potatoMode?: boolean;
+  debug?: boolean;
+  onReady?: () => void;
+}) => {
   const weather    = useStore(s => s.weather);
   const setWeather = useStore(s => s.setWeather);
   const gameState  = useStore(s => s.gameState);
@@ -386,10 +426,22 @@ export const StormEnvironment = ({ baseDistance = 24, potatoMode = false }: { ba
         shadow-camera-bottom={-80}
       />
 
-      <Terrain baseDistance={baseDistance} />
-      <Rocks potatoMode={potatoMode} />
-      <StaticGrass potatoMode={potatoMode} />
-      <DistantMountains />
+      <StaticCollider 
+        debug={debug}
+        BVHOptions={{
+          strategy: 1, // SAH
+          maxDepth: 64,
+          maxLeafTris: 5,
+          verbose: false
+        }}
+      >
+        <Terrain baseDistance={baseDistance} debug={debug} onReady={onReady} />
+        <Rocks potatoMode={potatoMode} />
+        <DistantMountains />
+      </StaticCollider>
+      
+      <StaticGrass potatoMode={potatoMode} baseDistance={baseDistance} />
+      <InstancedTrees mode="STORM" baseDistance={baseDistance} />
       {(weather === "RAIN" || weather === "THUNDER") && <Rain />}
       {weather === "THUNDER" && <Lightning />}
       <fog attach="fog" args={[fogColor, fogNear, fogFar]} />

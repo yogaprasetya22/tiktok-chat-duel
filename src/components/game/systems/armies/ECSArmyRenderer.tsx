@@ -332,12 +332,15 @@ const ECSArmyRendererInner = ({
     const rawMap = unitRegistry.current;
     if (!rawMap) return;
 
+    if (!activeIndicesRef) return;
     const indices = activeIndicesRef.current;
     if (!indices) return;
 
     const time = state.clock.elapsedTime;
     const camQ = state.camera.quaternion;
+    if (!settingsRef) return;
     const settings = settingsRef.current;
+    if (!settings) return;
     const frustum = (state as any).battleFrustum;
 
     const nowMs = Date.now();
@@ -516,7 +519,7 @@ const ECSArmyRendererInner = ({
             // ── Cooldown Radial Sync ──
             if (cooldownRef.current && cooldownAttr && uData.hp > 0) {
               const skillCfg = CLASS_CONFIG[classKey];
-              const cdTime = skillCfg.skill_cooldown * (1.0 - ((uData as any).cooldownReduction || 0));
+              const cdTime = (skillCfg.skill_cooldown || 1000) * (1.0 - ((uData as any).cooldownReduction || 0));
               const timeSinceSkill = (simTimeRef.current || 0) - (uData.lastSkillTime || 0);
               const progress = Math.min(1.0, timeSinceSkill / cdTime);
 

@@ -13,8 +13,8 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
-  title: "TikTok Live Chat",
-  description: "Real-time TikTok Live Chat experience",
+  title: "Seal M: Battle Simulator",
+  description: "Advanced 3D Battle Simulation for Seal M: Clover Knight",
 };
 
 export default function RootLayout({

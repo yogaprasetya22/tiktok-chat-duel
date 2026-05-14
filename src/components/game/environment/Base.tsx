@@ -5,6 +5,7 @@ import { useFrame } from "@react-three/fiber";
 import { MeshoptDecoder } from 'meshoptimizer';
 import * as THREE from 'three';
 import { applyPainterlyStyle } from "../systems/effects/PainterlyMaterials";
+import { InstancedStaticCollider } from "bvhecctrl";
 
 const _obj = new THREE.Object3D();
 const _rot = new THREE.Euler();
@@ -244,7 +245,9 @@ const TowerPart = React.memo(({
   }, [distance, yOffset, scale, rotation]);
 
   return (
-    <instancedMesh ref={meshRef} args={[geometry, material, 2]} receiveShadow frustumCulled={false} />
+    <InstancedStaticCollider>
+      <instancedMesh ref={meshRef} args={[geometry, material, 2]} receiveShadow frustumCulled={false} />
+    </InstancedStaticCollider>
   );
 });
 
@@ -326,7 +329,9 @@ const EnvPart = React.memo(({
   }, [instances]);
 
   return (
-    <instancedMesh ref={meshRef} args={[geometry, material, instances.length]} receiveShadow frustumCulled={false} />
+    <InstancedStaticCollider>
+      <instancedMesh ref={meshRef} args={[geometry, material, instances.length]} receiveShadow frustumCulled={false} />
+    </InstancedStaticCollider>
   );
 });
 
