@@ -1,7 +1,7 @@
 'use client';
 
 import { useStore } from "@/src/state/useStore";
-import { Trophy, TrendingUp, Skull, Award } from "lucide-react";
+import { Trophy, TrendingUp, Award } from "lucide-react";
 import { useMemo } from "react";
 
 interface LeaderboardEntry {
