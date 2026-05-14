@@ -1,65 +1,37 @@
+/**
+ * StormEnvironment — Open World Edition (Physics Stabilized)
+ */
+
 import { useRef, useMemo, useEffect } from "react";
 import { useFrame } from "@react-three/fiber";
-import { Environment } from "@react-three/drei";
+import { Sky } from "@react-three/drei";
+import { computeBoundsTree, disposeBoundsTree, acceleratedRaycast } from "three-mesh-bvh";
+import { StaticCollider, characterStatus } from "bvhecctrl";
+
 import * as THREE from "three";
 import { useStore } from "@/src/state/useStore";
-import { cinematicState } from "@/src/state/cinematicState";
-
+import { getTerrainElevation } from "@/src/core/utils/terrainHeight";
+import { useVFX } from "../systems/VFXManager";
 import { applyPainterlyStyle, PainterlyShaderUtils } from "../systems/effects/PainterlyMaterials";
 
+// Add BVH support to THREE with any cast to avoid lint errors
+(THREE.BufferGeometry.prototype as any).computeBoundsTree = computeBoundsTree;
+(THREE.BufferGeometry.prototype as any).disposeBoundsTree = disposeBoundsTree;
+(THREE.Mesh.prototype as any).raycast = acceleratedRaycast;
 
-// --- 1. Terrain Shader ---
 const TerrainMaterial = new THREE.ShaderMaterial({
   uniforms: {
-    baseColor: { value: new THREE.Color("#4a7c44") }, // Vibrant green
-    peakColor: { value: new THREE.Color("#8fb386") }, // Light green/sunny
-    baseDist: { value: 24.0 },
+    baseColor: { value: new THREE.Color("#4a7c44") },
+    peakColor: { value: new THREE.Color("#8fb386") },
+    rockColor: { value: new THREE.Color("#6b7c5a") },
   },
   vertexShader: `
     varying float vElevation;
     varying vec2 vUv;
-
-    vec3 permute(vec3 x) { return mod(((x*34.0)+1.0)*x, 289.0); }
-    float snoise(vec2 v){
-      const vec4 C = vec4(0.211324865405187, 0.366025403784439, -0.577350269189626, 0.024390243902439);
-      vec2 i  = floor(v + dot(v, C.yy) );
-      vec2 x0 = v -   i + dot(i, C.xx);
-      vec2 i1;
-      i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
-      vec4 x12 = x0.xyxy + C.xxzz;
-      x12.xy -= i1;
-      i = mod(i, 289.0);
-      vec3 p = permute( permute( i.y + vec3(0.0, i1.y, 1.0 )) + i.x + vec3(0.0, i1.x, 1.0 ));
-      vec3 m = max(0.5 - vec3(dot(x0,x0), dot(x12.xy,x12.xy), dot(x12.zw,x12.zw)), 0.0);
-      m = m*m ; m = m*m ;
-      vec3 x = 2.0 * fract(p * C.www) - 1.0;
-      vec3 h = abs(x) - 0.5;
-      vec3 ox = floor(x + 0.5);
-      vec3 a0 = x - ox;
-      m *= 1.79284291400159 - 0.85373472095314 * ( a0*a0 + h*h );
-      vec3 g;
-      g.x  = a0.x  * x0.x  + h.x  * x0.y;
-      g.yz = a0.yz * x12.xz + h.yz * x12.yw;
-      return 130.0 * dot(m, g);
-    }
-
-    uniform float baseDist;
-
     void main() {
       vUv = uv;
-      vec3 pos = position;
-      
-      float dist = length(pos.xy);
-      float mask = smoothstep(baseDist + 10.0, baseDist + 35.0, dist); 
-      
-      float elevation = snoise(pos.xy * 0.015) * 20.0;
-      elevation += snoise(pos.xy * 0.04) * 5.0;
-      elevation *= mask;
-      
-      pos.z += max(elevation, 0.0);
-      vElevation = pos.z;
-      
-      gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+      vElevation = position.z; // Elevation is already applied to geometry Z
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
     }
   `,
   fragmentShader: `
@@ -67,479 +39,360 @@ const TerrainMaterial = new THREE.ShaderMaterial({
     varying vec2 vUv;
     uniform vec3 baseColor;
     uniform vec3 peakColor;
+    uniform vec3 rockColor;
     ${PainterlyShaderUtils.brushstrokeNoise}
     ${PainterlyShaderUtils.toonMix}
 
     void main() {
-      float strokes = brushstrokes(vUv * 100.0, 0.4);
-      float t = smoothstep(0.0, 20.0, vElevation) + strokes * 0.1;
+      float strokes = brushstrokes(vUv * 80.0, 0.35);
+      float t = smoothstep(0.0, 35.0, vElevation) + strokes * 0.08;
       vec3 finalColor = toonMix(baseColor, peakColor, t * 1.5);
-      
-      // Battlefield Road / Path (Z-axis focal point)
-      float roadMask = smoothstep(6.0, 3.0, abs(vUv.x - 0.5) * 100.0);
-      vec3 roadColor = vec3(0.5, 0.45, 0.4); // Dirt/Soil color
-      finalColor = mix(finalColor, roadColor, roadMask * 0.4);
-      
+
+      float rockMask = smoothstep(22.0, 35.0, vElevation);
+      finalColor = mix(finalColor, rockColor, rockMask * 0.6);
+
+      float road = smoothstep(6.0, 3.0, abs(vUv.x - 0.5) * 150.0);
+      finalColor = mix(finalColor, vec3(0.5, 0.45, 0.4), road * 0.4);
+
       gl_FragColor = vec4(finalColor, 1.0);
     }
-
   `,
-  wireframe: false,
 });
+
+const TERRAIN_SIZE = 1500;
+const GROUND_Y     = -0.3;
 
 const Terrain = ({ baseDistance, potatoMode }: { baseDistance: number; potatoMode?: boolean }) => {
   const gameState = useStore(s => s.gameState);
-  useFrame(() => {
-    TerrainMaterial.uniforms.baseDist.value = baseDistance;
-  });
+  const isSetup   = gameState === "SETUP";
+
+  // Compute terrain geometry on CPU to ensure physics matches visuals perfectly
+  const terrainGeo = useMemo(() => {
+    const segs = isSetup ? 12 : (potatoMode ? 24 : 48); // Optimize segments
+    const geo = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, segs, segs);
+    const pos = geo.attributes.position;
+    
+    for (let i = 0; i < pos.count; i++) {
+        const x = pos.getX(i);
+        const y = pos.getY(i);
+        const elevation = getTerrainElevation(x, y, "STORM", baseDistance);
+        pos.setZ(i, elevation);
+    }
+    geo.computeVertexNormals();
+    (geo as any).computeBoundsTree(); // CRITICAL: Enables collision for BVHEcctrl
+    return geo;
+  }, [baseDistance, isSetup, potatoMode]);
 
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.6, 0]} receiveShadow={!potatoMode && gameState !== 'SETUP'} frustumCulled={false}>
-      <planeGeometry args={[400, 400, (potatoMode || gameState === 'SETUP') ? 1 : 40, (potatoMode || gameState === 'SETUP') ? 1 : 40]} />
-      <primitive object={TerrainMaterial} attach="material" />
-    </mesh>
+    <StaticCollider>
+      <mesh 
+        geometry={terrainGeo} 
+        rotation={[-Math.PI / 2, 0, 0]} 
+        position={[0, GROUND_Y, 0]} 
+        receiveShadow={!potatoMode && !isSetup}
+      >
+        <primitive object={TerrainMaterial} attach="material" />
+      </mesh>
+    </StaticCollider>
   );
 };
 
-// --- 2. Environment Rocks ---
-const ROCK_COUNT = 60;
-const Rock = () => {
-  const meshRef = useRef<THREE.InstancedMesh>(null);
-  const dummy = useMemo(() => new THREE.Object3D(), []);
+const MOUNTAIN_COUNT = 48;
+const MountainMaterial = new THREE.MeshStandardMaterial({
+  color: "#3a4a35",
+  roughness: 1,
+  flatShading: true,
+});
+
+const DistantMountains = () => {
+  const meshRef = useRef<THREE.InstancedMesh>(null!);
+  const dummy   = useMemo(() => new THREE.Object3D(), []);
 
   useEffect(() => {
-    if (!meshRef.current) return;
-    for (let i = 0; i < ROCK_COUNT; i++) {
-        const r = 35 + Math.random() * 70;
-        const angle = Math.random() * Math.PI * 2;
-        const x = r * Math.cos(angle);
-        const z = r * Math.sin(angle);
-        
-        if (Math.abs(x) < 12) continue;
+    for (let i = 0; i < MOUNTAIN_COUNT; i++) {
+      const angle  = (i / MOUNTAIN_COUNT) * Math.PI * 2 + Math.random() * 0.3;
+      const radius = 600 + Math.random() * 400;
+      const scaleH = 40 + Math.random() * 80;
+      const scaleW = 30 + Math.random() * 50;
 
-        dummy.position.set(x, -0.2, z);
-        dummy.rotation.set(Math.random(), Math.random(), Math.random());
-        dummy.scale.setScalar(0.5 + Math.random() * 2.5);
-        dummy.updateMatrix();
-        meshRef.current.setMatrixAt(i, dummy.matrix);
+      dummy.position.set(Math.cos(angle) * radius, scaleH * 0.3 - 0.6, Math.sin(angle) * radius);
+      dummy.rotation.y = Math.random() * Math.PI;
+      dummy.scale.set(scaleW, scaleH, scaleW);
+      dummy.updateMatrix();
+      meshRef.current.setMatrixAt(i, dummy.matrix);
     }
     meshRef.current.instanceMatrix.needsUpdate = true;
-    meshRef.current.geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 150);
-  }, []);
+  }, [dummy]);
 
   return (
-    <instancedMesh ref={meshRef} args={[null as any, null as any, ROCK_COUNT]} frustumCulled={false}>
-      <icosahedronGeometry args={[1, 0]} />
-      <meshStandardMaterial 
-        color="#666666" 
-        roughness={0.8} 
-        onBeforeCompile={applyPainterlyStyle} 
-      />
+    <instancedMesh ref={meshRef} args={[undefined, undefined, MOUNTAIN_COUNT]} frustumCulled>
+      <coneGeometry args={[1, 1, 6]} />
+      <primitive object={MountainMaterial} attach="material" />
     </instancedMesh>
   );
 };
 
-// --- 3. Environment Trees ---
-const TREE_COUNT = 120;
-const _occRaycaster = new THREE.Raycaster();
-const _occDir = new THREE.Vector3();
+const ROCK_COUNT = 40;
 
-const Forest = ({ potatoMode }: { potatoMode?: boolean }) => {
-    const trunkRef    = useRef<THREE.InstancedMesh>(null);
-    const topRef      = useRef<THREE.InstancedMesh>(null);
-    const trunkMatRef = useRef<THREE.MeshStandardMaterial>(null);
-    const topMatRef   = useRef<THREE.MeshStandardMaterial>(null);
-    const dummy       = useMemo(() => new THREE.Object3D(), []);
-    const treeData    = useRef<{x: number, z: number, s: number}[]>([]);
+const RockMat    = new THREE.MeshStandardMaterial({ color: "#6b7060", roughness: 0.85 });
+RockMat.onBeforeCompile  = applyPainterlyStyle as any;
 
-    useEffect(() => {
-        if (treeData.current.length === 0) {
-            for (let i = 0; i < TREE_COUNT; ) {
-                let valid = false;
-                let x = 0, z = 0, r = 0;
-                
-                // Try 50 times to find a valid spot
-                for (let attempt = 0; attempt < 50; attempt++) {
-                    r = 65 + Math.random() * 100; // Push them further out minimum radius
-                    const angle = Math.random() * Math.PI * 2;
-                    x = r * Math.cos(angle);
-                    z = r * Math.sin(angle);
-                    
-                    // FIX: Camera orbits around X = -55 to 55. Keep trees strictly OUTSIDE this zone
-                    // so they NEVER block the cinematic view
-                    if (Math.abs(x) < 65) continue;
+const Rocks = ({ potatoMode }: { potatoMode?: boolean }) => {
+  const meshRef = useRef<THREE.InstancedMesh>(null!);
+  const dummy   = useMemo(() => new THREE.Object3D(), []);
+  const count   = potatoMode ? Math.floor(ROCK_COUNT / 3) : ROCK_COUNT;
 
-                    // FIX: Prevent trees from intersecting (pohon saling tembus)
-                    let overlap = false;
-                    for (let j = 0; j < i; j++) {
-                        const dx = x - treeData.current[j].x;
-                        const dz = z - treeData.current[j].z;
-                        if (dx * dx + dz * dz < 100) { // minimum distance 10 meters between trees
-                            overlap = true;
-                            break;
-                        }
-                    }
-                    if (!overlap) {
-                        valid = true;
-                        break;
-                    }
-                }
-                
-                if (valid) {
-                    treeData.current.push({ x, z, s: 1.0 + Math.random() * 2.0 });
-                    i++;
-                } else {
-                    // If we can't find a spot after 50 attempts, just force it to avoid infinite loop
-                    treeData.current.push({ x: 100 + Math.random() * 50, z: 100 + Math.random() * 50, s: 1.0 });
-                    i++;
-                }
-            }
-        }
-    }, []);
+  useEffect(() => {
+    let placed = 0;
+    for (let i = 0; placed < count && i < count * 4; i++) {
+      const angle  = Math.random() * Math.PI * 2;
+      const radius = 15 + Math.random() * 485;
+      const x      = Math.cos(angle) * radius;
+      const z      = Math.sin(angle) * radius;
 
-    useEffect(() => {
-        if (!trunkRef.current || !topRef.current) return;
-        const count = potatoMode ? Math.floor(TREE_COUNT / 2) : TREE_COUNT;
-        for (let i = 0; i < count; i++) {
-            const { x, z, s } = treeData.current[i];
-            if (Math.abs(x) < 15) continue;
-            dummy.position.set(x, 1, z);
-            dummy.scale.set(s, s, s);
-            dummy.updateMatrix();
-            trunkRef.current.setMatrixAt(i, dummy.matrix);
-            dummy.position.set(x, 4 * s, z);
-            dummy.scale.set(s * 2, s * 3, s * 2);
-            dummy.updateMatrix();
-            topRef.current.setMatrixAt(i, dummy.matrix);
-        }
-        trunkRef.current.instanceMatrix.needsUpdate = true;
-        topRef.current.instanceMatrix.needsUpdate = true;
-        trunkRef.current.geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 150);
-        topRef.current.geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 150);
-    }, [potatoMode, dummy]);
+      if (Math.abs(x) < 14 && Math.abs(z) < 30) continue;
 
-    // Per-frame occlusion — throttled + early exits for performance
-    const occFrameRef = useRef(0);
-    const occBlockedRef = useRef(false);
+      const s = 0.3 + Math.random() * 2.5;
+      dummy.position.set(x, s * 0.4 - 0.6, z);
+      dummy.rotation.set(Math.random(), Math.random() * Math.PI * 2, Math.random());
+      dummy.scale.setScalar(s);
+      dummy.updateMatrix();
+      meshRef.current.setMatrixAt(placed, dummy.matrix);
+      placed++;
+    }
+    meshRef.current.count = placed;
+    meshRef.current.instanceMatrix.needsUpdate = true;
+  }, [count, dummy]);
 
-    useFrame(({ camera }, delta) => {
-        const tMat = trunkMatRef.current;
-        const cMat = topMatRef.current;
-        if (!tMat || !cMat) return;
-
-        // Use module-level import (no runtime require())
-        const isActive = cinematicState.isActive;
-
-        if (!isActive) {
-            if (tMat.opacity < 0.99) {
-                const restored = Math.min(1, tMat.opacity + delta * 4);
-                tMat.opacity = restored; cMat.opacity = restored;
-            }
-            return;
-        }
-
-        // Early exit: camera overhead (Y > 28) — no side occlusion possible
-        if (camera.position.y > 28) {
-            if (tMat.opacity < 0.99) {
-                const restored = Math.min(1, tMat.opacity + delta * 3);
-                tMat.opacity = restored; cMat.opacity = restored;
-            }
-            return;
-        }
-
-        // OPTIMIZATION: Throttle raycast to every 30 frames (~2x/sec).
-        // The opacity lerp is slow (delta*10) so the eye never notices delayed detection.
-        occFrameRef.current++;
-        if (occFrameRef.current % 30 === 0) {
-            const camPos = camera.position;
-            _occDir.set(
-                cinematicState.focusX - camPos.x,
-                cinematicState.focusY - camPos.y,
-                cinematicState.focusZ - camPos.z
-            );
-            const dist = _occDir.length();
-            if (dist > 0.1) {
-                _occDir.divideScalar(dist);
-                _occRaycaster.set(camPos, _occDir);
-                _occRaycaster.far = dist + 1;
-                // Only check top mesh (simpler cone > cylinder for trees)
-                const hits = topRef.current ? _occRaycaster.intersectObject(topRef.current) : [];
-                occBlockedRef.current = hits.length > 0;
-            }
-        }
-
-        // Apply cached occlusion result every frame (just an opacity lerp — cheap)
-        const target = occBlockedRef.current ? 0.1 : 1.0;
-        const speed  = occBlockedRef.current ? 10  : 3;
-        const next   = tMat.opacity + (target - tMat.opacity) * Math.min(1, delta * speed);
-        tMat.opacity = next; cMat.opacity = next;
-    });
-
-    return (
-        <group>
-            <instancedMesh ref={trunkRef} args={[null as any, null as any, TREE_COUNT]} frustumCulled={false}>
-                <cylinderGeometry args={[0.2, 0.4, 4, 6]} />
-                <meshStandardMaterial
-                    ref={trunkMatRef}
-                    color="#4d2915"
-                    onBeforeCompile={(s: any) => applyPainterlyStyle(s as any)}
-                    transparent opacity={1} depthWrite={true}
-                />
-            </instancedMesh>
-            <instancedMesh ref={topRef} args={[null as any, null as any, TREE_COUNT]} frustumCulled={false}>
-                <coneGeometry args={[1, 2, 6]} />
-                <meshStandardMaterial
-                    ref={topMatRef}
-                    color="#1a3d1a"
-                    onBeforeCompile={(s: any) => applyPainterlyStyle(s as any)}
-                    transparent opacity={1} depthWrite={true}
-                />
-            </instancedMesh>
-        </group>
-    );
+  return (
+    <StaticCollider>
+      <instancedMesh ref={meshRef} args={[undefined, undefined, count]} castShadow receiveShadow frustumCulled>
+        <dodecahedronGeometry args={[1, 0]} />
+        <primitive object={RockMat} attach="material" />
+      </instancedMesh>
+    </StaticCollider>
+  );
 };
 
+const GRASS_COUNT  = 600;
 
+const GRASS_AREA   = 500;
 
-
-// --- 2. GPU Accelerated Rain ---
-/*
-const RAIN_COUNT = 500;
-const RainMaterial = new THREE.ShaderMaterial({
-  uniforms: {
-    time: { value: 0 },
-  },
+const GrassMat = new THREE.ShaderMaterial({
+  uniforms: { time: { value: 0 }, windStrength: { value: 1.0 } },
   vertexShader: `
-    uniform float time;
+    uniform float time; uniform float windStrength;
+    varying float vY;
     void main() {
-      vec4 worldPos = instanceMatrix * vec4(position, 1.0);
-      float speed = 80.0;
-      
-      // Rain physics on GPU
-      worldPos.y -= mod(time * speed + worldPos.y, 60.0);
-      worldPos.x += mod(time * speed * 0.05, 5.0);
-      worldPos.z -= mod(time * speed * 0.05, 5.0);
-      
-      gl_Position = projectionMatrix * viewMatrix * worldPos;
+      vY = position.y;
+      vec4 world = instanceMatrix * vec4(position, 1.0);
+      if (position.y > -0.4) {
+        float w = sin(time * 2.0 * windStrength + world.x * 0.1 + world.z * 0.07) * 0.4 * windStrength;
+        world.x += w * (position.y + 0.5) * 0.4;
+        world.z += w * (position.y + 0.5) * 0.2;
+      }
+      gl_Position = projectionMatrix * viewMatrix * world;
     }
   `,
   fragmentShader: `
+    varying float vY;
     void main() {
-      gl_FragColor = vec4(0.48, 0.54, 0.66, 0.6);
+      float t = clamp((vY + 0.5), 0.0, 1.0);
+      vec3 c = mix(vec3(0.1, 0.28, 0.1), vec3(0.35, 0.75, 0.2), t);
+      gl_FragColor = vec4(c, 1.0);
     }
   `,
+  side: THREE.DoubleSide,
+});
+
+const StaticGrass = ({ potatoMode }: { potatoMode?: boolean }) => {
+  const meshRef = useRef<THREE.InstancedMesh>(null!);
+  const dummy   = useMemo(() => new THREE.Object3D(), []);
+  const weather = useStore(s => s.weather);
+  const count   = potatoMode ? Math.floor(GRASS_COUNT / 4) : GRASS_COUNT;
+
+  useEffect(() => {
+    const mesh = meshRef.current;
+    if (!mesh) return;
+
+    const cols = Math.ceil(Math.sqrt(count));
+    const spacing = GRASS_AREA / cols;
+    const half = GRASS_AREA / 2;
+    let idx = 0;
+
+    for (let row = 0; row < cols && idx < count; row++) {
+      for (let col = 0; col < cols && idx < count; col++) {
+        const x = -half + col * spacing + (Math.random() - 0.5) * spacing * 0.9;
+        const z = -half + row * spacing + (Math.random() - 0.5) * spacing * 0.9;
+
+        if (Math.abs(x) < 14 && Math.abs(z) < 60) continue;
+
+        const elevation = getTerrainElevation(x, z, "STORM", 24) - 0.3; // baseDistance logic needs to match
+        dummy.position.set(x, elevation, z);
+        dummy.rotation.y = Math.random() * Math.PI;
+        dummy.scale.set(0.8 + Math.random() * 0.6, 0.35 + Math.random() * 0.85, 0.8 + Math.random() * 0.6);
+        dummy.updateMatrix();
+        mesh.setMatrixAt(idx++, dummy.matrix);
+      }
+    }
+    mesh.count = idx;
+    mesh.instanceMatrix.needsUpdate = true;
+  }, [count, dummy]);
+
+  useFrame(state => {
+    GrassMat.uniforms.time.value = state.clock.elapsedTime;
+    const windTarget = (weather === "STORM" || weather === "THUNDER") ? 2.5 : 1.0;
+    GrassMat.uniforms.windStrength.value = THREE.MathUtils.lerp(GrassMat.uniforms.windStrength.value, windTarget, 0.03);
+  });
+
+  return (
+    <instancedMesh ref={meshRef} args={[undefined, undefined, count]} frustumCulled>
+      <planeGeometry args={[0.3, 1.0, 1, 4]} />
+      <primitive object={GrassMat} attach="material" />
+    </instancedMesh>
+  );
+};
+
+const RAIN_COUNT   = 600;
+const RainMaterial = new THREE.ShaderMaterial({
+  uniforms: { time: { value: 0 } },
+  vertexShader: `
+    uniform float time;
+    void main() {
+      vec4 w = instanceMatrix * vec4(position, 1.0);
+      w.y -= mod(time * 80.0 + w.y, 80.0);
+      w.x += mod(time * 4.0, 6.0);
+      w.z -= mod(time * 4.0, 6.0);
+      gl_Position = projectionMatrix * viewMatrix * w;
+    }
+  `,
+  fragmentShader: `void main() { gl_FragColor = vec4(0.48, 0.54, 0.66, 0.5); }`,
   transparent: true,
 });
 
-/*
 const Rain = () => {
-...
-};
-
-const Lightning = () => {
-...
-};
-*/
-
-const GRASS_COUNT = 800;
-const GrassMaterial = new THREE.ShaderMaterial({
-  uniforms: {
-    time: { value: 0 },
-    windStrength: { value: 1.0 },
-  },
-  vertexShader: `
-    uniform float time;
-    uniform float windStrength;
-    varying float vY;
-
-    void main() {
-      vY = position.y;
-      vec4 worldPos = instanceMatrix * vec4(position, 1.0);
-      
-      float wind = sin(time * (2.0 * windStrength) + worldPos.x * 0.1 + worldPos.z * 0.05) * 0.5 * windStrength;
-      wind += sin(time * (3.5 * windStrength) + worldPos.x * 0.5) * 0.2 * windStrength;
-      
-      // Only the tips of the grass sway
-      if (position.y > -0.5) {
-        worldPos.x += wind * (position.y + 0.5) * 0.3;
-        worldPos.z += wind * (position.y + 0.5) * 0.3;
-      }
-      
-      gl_Position = projectionMatrix * viewMatrix * worldPos;
-    }
-  `,
-  fragmentShader: `
-    varying float vY;
-    void main() {
-      vec3 rootColor = vec3(0.15, 0.35, 0.15); // Sunny green roots
-      vec3 tipColor = vec3(0.4, 0.8, 0.3); // Bright lime-green tips
-      // normalize vY from [-0.5, 0.5] to [0, 1]
-      float mixFactor = clamp((vY + 0.5) * 1.0, 0.0, 1.0);
-      gl_FragColor = vec4(mix(rootColor, tipColor, mixFactor), 1.0);
-    }
-  `,
-  side: THREE.DoubleSide
-});
-
-const Grass = ({ baseDistance }: { baseDistance: number }) => {
-  const meshRef = useRef<THREE.InstancedMesh>(null);
-  const dummy = useMemo(() => new THREE.Object3D(), []);
-  const weather = useStore(s => s.weather);
+  const meshRef = useRef<THREE.InstancedMesh>(null!);
+  const dummy   = useMemo(() => new THREE.Object3D(), []);
 
   useEffect(() => {
-    if (!meshRef.current) return;
-    
-    // Fill the flattened area (safely avoiding rugged hills)
-    // baseDistance + 10 is the flat mask size
-    const maxRadius = baseDistance + 10.0;
-    
-    let instanceIndex = 0;
-    for (let i = 0; i < GRASS_COUNT * 2; i++) {
-        if (instanceIndex >= GRASS_COUNT) break;
-
-        const r = Math.sqrt(Math.random()) * maxRadius;
-        const angle = Math.random() * Math.PI * 2;
-        const x = r * Math.cos(angle);
-        const z = r * Math.sin(angle);
-        
-        if (Math.abs(x) < 18 && Math.abs(z) < baseDistance - 2) continue;
-
-        dummy.position.set(x, -0.6, z);
-        dummy.rotation.set(0, Math.random() * Math.PI, 0);
-        dummy.scale.set(1, 0.5 + Math.random() * 0.8, 1);
-        dummy.updateMatrix();
-        meshRef.current.setMatrixAt(instanceIndex, dummy.matrix);
-        instanceIndex++;
+    for (let i = 0; i < RAIN_COUNT; i++) {
+      dummy.position.set((Math.random() - 0.5) * 300, Math.random() * 80, (Math.random() - 0.5) * 300);
+      dummy.rotation.set(0.1, 0, -0.08);
+      dummy.updateMatrix();
+      meshRef.current.setMatrixAt(i, dummy.matrix);
     }
-    meshRef.current.count = instanceIndex;
     meshRef.current.instanceMatrix.needsUpdate = true;
-  }, [dummy, baseDistance]);
+  }, [dummy]);
 
-  useFrame((state) => {
-    GrassMaterial.uniforms.time.value = state.clock.elapsedTime;
-    const targetWind = (weather === 'STORM' || weather === 'THUNDER') ? 2.5 : 1.0;
-    GrassMaterial.uniforms.windStrength.value = THREE.MathUtils.lerp(GrassMaterial.uniforms.windStrength.value, targetWind, 0.05);
-  });
+  useFrame(s => (RainMaterial.uniforms.time.value = s.clock.elapsedTime));
 
   return (
-    <instancedMesh ref={meshRef} args={[undefined, undefined, GRASS_COUNT]} frustumCulled={false}>
-      <planeGeometry args={[0.3, 1.0, 1, 4]} />
-      <primitive object={GrassMaterial} attach="material" />
+    <instancedMesh ref={meshRef} args={[undefined, undefined, RAIN_COUNT]}>
+      <cylinderGeometry args={[0.012, 0.012, 1.2, 3]} />
+      <primitive object={RainMaterial} attach="material" />
     </instancedMesh>
   );
 };
 
-
-// --- Main Export ---
-export const StormEnvironment = ({ baseDistance = 36, potatoMode = false }: { baseDistance?: number, potatoMode?: boolean, isCinematic?: boolean }) => {
-  const setWeather = useStore(s => s.setWeather);
-  // Refs for smooth lighting transitions (ECS-style direct update)
-  const hemiRef = useRef<THREE.HemisphereLight>(null!);
-  const ambientRef = useRef<THREE.AmbientLight>(null!);
-  const dirRef = useRef<THREE.DirectionalLight>(null!);
-  const fogRef = useRef<THREE.Fog>(null!);
-  
-  const targetColor = useRef(new THREE.Color());
-
-  const weatherRef = useRef(useStore.getState().weather);
-
+const Lightning = () => {
+  const lightRef = useRef<THREE.PointLight>(null!);
   useEffect(() => {
-    // Subscribe to weather changes without re-rendering the whole tree
-    const unsub = useStore.subscribe((state: any) => {
-      weatherRef.current = state.weather;
-    });
-    return unsub;
+    const trigger = () => {
+      if (!lightRef.current) return;
+      lightRef.current.intensity = 200 + Math.random() * 300;
+      setTimeout(() => { if (lightRef.current) lightRef.current.intensity = 0; }, 50);
+      setTimeout(trigger, 4000 + Math.random() * 8000);
+    };
+    const t = setTimeout(trigger, 3000);
+    return () => clearTimeout(t);
   }, []);
+  return <pointLight ref={lightRef} position={[0, 60, -20]} distance={500} color="#cce6ff" intensity={0} />;
+};
 
-  // 3. Performance Optimized Weather Transition System (Running like a Bitecs System)
-  useFrame((_state, _delta) => {
-    const weather = weatherRef.current;
-    
-    // Calculate target values based on current weather
-    const isClear = weather === 'CLEAR';
-    const isThunder = weather === 'THUNDER';
-    
-    const tHemi = isClear ? 8.0 : (isThunder ? 7.0 : 6.0);
-    const tAmb  = isClear ? 5.0 : 4.0;
-    const tDir  = isClear ? 40.0 : 25.0;
-    
-    // Smooth Lerp Intensities
-    if (hemiRef.current) hemiRef.current.intensity = THREE.MathUtils.smoothstep(hemiRef.current.intensity, tHemi, 0.05);
-    if (ambientRef.current) ambientRef.current.intensity = THREE.MathUtils.smoothstep(ambientRef.current.intensity, tAmb, 0.05);
-    if (dirRef.current) dirRef.current.intensity = THREE.MathUtils.smoothstep(dirRef.current.intensity, tDir, 0.05);
-    
-    // Direct Fog Update - Make it very far away so it doesn't obscure the battle
-    if (fogRef.current) {
-        const targetFogCol = isClear ? "#ffffff" : "#cccccc";
-        targetColor.current.set(targetFogCol);
-        fogRef.current.color.lerp(targetColor.current, 0.05);
-        fogRef.current.near = THREE.MathUtils.lerp(fogRef.current.near, 1000, 0.05);
-        fogRef.current.far = THREE.MathUtils.lerp(fogRef.current.far, 5000, 0.05);
+export const StormEnvironment = ({ baseDistance = 24, potatoMode = false }: { baseDistance?: number; potatoMode?: boolean; }) => {
+  const weather    = useStore(s => s.weather);
+  const setWeather = useStore(s => s.setWeather);
+  const gameState  = useStore(s => s.gameState);
+  const isSetup    = gameState === "SETUP";
+  const { spawnVFX } = useVFX();
+
+  useFrame(state => {
+    if (isSetup || potatoMode) return;
+    if (state.clock.elapsedTime % 0.25 < 0.025) {
+      if (characterStatus && characterStatus.position) {
+          const px = characterStatus.position.x;
+          const pz = characterStatus.position.z;
+          if (weather === "CLEAR") {
+            spawnVFX([px + (Math.random()-0.5)*60, 1+Math.random()*5, pz + (Math.random()-0.5)*60], "dust-mote", "#ffffff");
+          } else if (weather === "THUNDER") {
+            spawnVFX([px + (Math.random()-0.5)*80, 0.5, pz + (Math.random()-0.5)*80], "environment-mist", "#a855f7");
+          }
+      }
     }
-
   });
 
-  // Random Weather Cycle Disabled
   useEffect(() => {
-    setWeather('CLEAR');
-  }, [setWeather]);
+    if (isSetup) return;
+    const cycle = () => {
+      const opts = ["CLEAR","RAIN","STORM","THUNDER"] as const;
+      setWeather(opts[Math.floor(Math.random() * opts.length)]);
+      setTimeout(cycle, 20000 + Math.random() * 30000);
+    };
+    const t = setTimeout(cycle, 60000);
+    return () => clearTimeout(t);
+  }, [setWeather, isSetup]);
 
   if (potatoMode) {
-      return (
-        <group>
-            <color attach="background" args={["#f0f5ff"]} />
-            <hemisphereLight intensity={2.0} groundColor="#d70f0fff" />
-            <ambientLight intensity={1.5} />
-            <directionalLight position={[20, 100, 20]} intensity={3.0} castShadow={false} />
-            <Terrain baseDistance={baseDistance} potatoMode={true} />
-        </group>
-      );
+    return (
+      <group>
+        <color attach="background" args={["#c8d8f0"]} />
+        <hemisphereLight intensity={1.5} groundColor="#556655" />
+        <ambientLight intensity={0.8} />
+        <Terrain baseDistance={baseDistance} potatoMode />
+      </group>
+    );
   }
 
-  const initialWeather = weatherRef.current;
+  const fogNear = weather === "CLEAR" ? 120 : 60;
+  const fogFar  = weather === "CLEAR" ? 1200 : 400;
+  const fogColor = weather === "CLEAR" ? "#c8dff0" : "#1a1a1a";
 
   return (
     <group>
-      {/* 
-         Optimization: Use a SINGLE Environment without a 'key' swap.
-         Changing the files property still triggers a reload, but 
-         doesn't destroy the component entirely.
-      */}
-      <Environment 
-        files={initialWeather === 'CLEAR' ? "/qwantani_sunset_1k.exr" : "/qwantani_night_1k.exr"} 
-        background={true} 
-        environmentIntensity={1.5}
+      <Sky
+        sunPosition={weather === "CLEAR" ? [10, 100, 10] : [0, -10, 0]}
+
+        turbidity={weather === "CLEAR" ? 2 : 12}
+        rayleigh={weather === "CLEAR" ? 0.8 : 3}
+        mieCoefficient={0.005}
+        mieDirectionalG={0.8}
+      />
+      <hemisphereLight intensity={weather === "CLEAR" ? 1.2 : 0.6} color={weather === "THUNDER" ? "#cfe2ff" : "#ffffff"} groundColor="#445544" />
+      <ambientLight intensity={1.2} />
+
+      <directionalLight
+        position={[10, 100, 10]}
+        intensity={weather === "CLEAR" ? 8.0 : 1.2}
+
+        castShadow={!isSetup}
+        shadow-mapSize={[512, 512]}
+        shadow-bias={-0.0001}
+
+
+        shadow-camera-far={200}
+        shadow-camera-left={-80}
+        shadow-camera-right={80}
+        shadow-camera-top={80}
+        shadow-camera-bottom={-80}
       />
 
-      <hemisphereLight
-        ref={hemiRef}
-        intensity={1.2}
-        color={"#ffffff"}
-        groundColor={"#222222"}
-      />
-      
-      <ambientLight ref={ambientRef} intensity={0.8} />
-      
-      {/* PERFORMANCE: castShadow DISABLED — units use cheap instanced blob shadows instead.
-          Directional shadow requires extra GPU render pass every frame which is too expensive. */}
-      <directionalLight
-        ref={dirRef}
-        position={[100, 40, -100]}
-        intensity={4.5}
-        castShadow={false}
-      />
-      
       <Terrain baseDistance={baseDistance} />
-      <Grass baseDistance={baseDistance} />
-      <Rock />
-      <Forest potatoMode={potatoMode} />
-      
-      {/* <RainManager active={weatherRef.current !== 'CLEAR'} />
-      <LightningManager active={weatherRef.current === 'THUNDER'} /> */}
-      
-      <fog ref={fogRef} attach="fog" args={["#111111", 80, 400]} />
+      <Rocks potatoMode={potatoMode} />
+      <StaticGrass potatoMode={potatoMode} />
+      <DistantMountains />
+      {(weather === "RAIN" || weather === "THUNDER") && <Rain />}
+      {weather === "THUNDER" && <Lightning />}
+      <fog attach="fog" args={[fogColor, fogNear, fogFar]} />
     </group>
   );
 };
-
-// Weather sub-components disabled

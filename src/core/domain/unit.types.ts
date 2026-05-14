@@ -1,8 +1,7 @@
 // ============================================================
-export type TeamType = 'player' | 'enemy';
-export type ClassKey = 'fighter' | 'tank' | 'mage' | 'marksman' | 'assassin';
-
-export const WORLD_UNIT_POOL_SIZE = 1500;
+// BATTLE SYSTEM - TYPE DEFINITIONS
+// ============================================================
+// All interfaces and types for the battle simulation system.
 // This module has NO side effects and NO React dependencies.
 // ============================================================
 
@@ -43,9 +42,6 @@ export interface ClassStatusStats {
     range: number;
     tenacity: number;
     cooldown_reduction: number;
-    skill_cooldown: number;   // New: Base cooldown for active skills (ms)
-    skill_range: number;      // New: Range required to trigger skill
-    skill_duration: number;    // New: How long the skill effect lasts (ms)
     ai_behavior: {
         separation: number;
         encirclement: number;
@@ -57,21 +53,14 @@ export interface ClassStatusStats {
 
 export type ClassConfig = Record<"fighter" | "tank" | "mage" | "marksman" | "assassin", ClassStatusStats>;
 
-export interface GiftBinding {
-    keyword: string;
-    formationId: string; // References GIFT_FORMATIONS
-}
-
 export interface TeamConfig {
     name: string;
     color: string;
     active: boolean;
     commentKeyword: string;
     commentType: "contains" | "exact";
-    giftKeyword?: string; // Kept for backwards compatibility
-    giftBindings: GiftBinding[];
-    score?: number;
-    flagUrl?: string;
+    giftKeyword: string;
+    giftMultiplier?: number; // Multiplier for gifts (e.g., 2 = 2x units per gift)
 }
 
 export interface TowerConfig {
@@ -90,7 +79,6 @@ export interface TowerConfig {
 }
 
 
-export type UnitRarity = 'common' | 'elite' | 'epic' | 'legendary';
 
 export interface ActiveUnit extends UnitStats {
     id: string;
@@ -105,9 +93,6 @@ export interface ActiveUnit extends UnitStats {
     deathTime?: number;
     isBoss: boolean;
     animationOffset: number;
-    isBuffed?: boolean;
-    isShield?: boolean;
-    isRolling?: boolean;
     attackCooldown: number;
     critChance: number;
     lastBlinkTime?: number;
@@ -116,12 +101,6 @@ export interface ActiveUnit extends UnitStats {
     pendingCrit?: boolean;
     isCriticalReady?: boolean;
     untargetableUntil?: number;
-    profileImage?: string;
-    rarity?: UnitRarity;
-    isTeleporting?: boolean;
-    isArmorBroken?: boolean;
-    poolIdx: number;
-    dSq?: number;
 }
 
 export interface MapObstacle {
@@ -136,8 +115,6 @@ export interface KillEvent {
     victim: string;
     victimType: "unit" | "boss" | "base";
     timestamp: number;
-    profileImage?: string;
-    rarity?: UnitRarity;
 }
 
 export interface BattleStats {
@@ -149,7 +126,6 @@ export interface BattleStats {
     unitsSpawned: Record<string, number>;
     playerHits: Record<string, number>;
     enemyHits: Record<string, number>;
-    profileImages: Record<string, string>;
     
     // Detailed Analytics
     classStats: Record<string, {
@@ -205,16 +181,6 @@ export interface UnitRuntimeData {
     dSq?: number;
     pendingCrit?: boolean;
     lastEffectTime?: number;
-    lastSkillTime?: number; // New: tracking skill cooldown
-    isBuffed?: boolean;     // New: state for Eagle Eye
-    isRolling?: boolean;    // New: state for Tactical Roll
-    isShield?: boolean;      // New: state for Tank Shield
-    isTeleporting?: boolean; // New: state for Assassin Teleport
-    isArmorBroken?: boolean; // New: state for Armor Break (Fighter skill)
-    profileImage?: string;
-    rarity?: UnitRarity;
-    spawnTime: number;
-    poolIdx: number;
 }
 
 
@@ -261,6 +227,16 @@ export interface SimulationSettings {
     unitScale: number; // Visual scale multiplier
     vfxIntensity: number;
     maxUnits: number;
+
+    // Environment tweaks (optional — driven by Leva in seal-m)
+    treeCount?: number;   // default 300
+    treeScale?: number;   // default 1.0
+    fogNear?: number;     // default 60
+    fogFar?: number;      // default 450
+    fov?: number;         // camera FOV, default 50
+    mouseSensitivity?: number; // default 0.002
+    vfxQuality?: 'LOW' | 'MEDIUM' | 'HIGH';
+    treeDensity?: number;
 
     // Performance & Diagnostics
     potatoMode: boolean;

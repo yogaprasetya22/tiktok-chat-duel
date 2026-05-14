@@ -7,16 +7,17 @@ import { Text } from '@react-three/drei';
 import { useVFX } from './VFXManager';
 import { ActiveUnit, TowerConfig, SimulationSettings, UnitRuntimeData } from '@/src/core/domain/unit.types';
 import * as YUKA from 'yuka';
-import { useStore } from "@/src/state/useStore";
-import { FighterSpellEffect } from './effects/FighterSpellEffect';
-import { TankSpellEffect } from './effects/TankSpellEffect';
-import { AssassinSpellEffect } from './effects/AssassinSpellEffect';
-import { ECSArmyRenderer } from './armies/ECSArmyRenderer';
+import { FighterArmy } from './armies/FighterArmy';
+import { TankArmy } from './armies/TankArmy';
+import { MageArmy } from './armies/MageArmy';
+import { MarksmanArmy } from './armies/MarksmanArmy';
+import { AssassinArmy } from './armies/AssassinArmy';
 import { InstancedImpostorRenderer } from './armies/InstancedImpostorRenderer';
 import { MageSpellEffect, SpellEntry } from './effects/MageSpellEffect';
 import { MMSpellEffect } from './effects/MMSpellEffect';
-import { ShieldEffect } from './effects/ShieldEffect';
-// 
+import { FighterSpellEffect } from './effects/FighterSpellEffect';
+import { TankSpellEffect } from './effects/TankSpellEffect';
+import { AssassinSpellEffect } from './effects/AssassinSpellEffect';
 
 interface BattleArmyProps {
   unitRegistry: React.RefObject<UnitRuntimeData[]>;
@@ -32,20 +33,13 @@ interface BattleArmyProps {
   tankSpellsRef: React.RefObject<any[]>;
   assassinSpellsRef: React.RefObject<any[]>;
   vfxRef?: React.RefObject<any>;
-  compBuffers: any;
 }
 
 
 
-import { WORLD_UNIT_POOL_SIZE as MAX_UNITS } from '@/src/core/domain/unit.types';
-const NAME_POOL_SIZE = 150;
-const TEST_IMAGE_URL = 'https://t3.ftcdn.net/jpg/13/11/22/86/360_F_1311228699_YoiLc5aJ3RWz3uRfdEtlV0UYSQjqf7RW.jpg';
+const MAX_UNITS = 300; // Matched with optimized simulation pool
+const NAME_POOL_SIZE = 120; // Safe high-performance limit for standard battles
 
-const textureLoader = new THREE.TextureLoader();
-textureLoader.setCrossOrigin('anonymous');
-const textureCache = new Map<string, { tex: THREE.Texture, lastUsed: number }>();
-const textureLoading = new Set<string>();
-const MAX_CONCURRENT_LOADS = 4; // FPS guard: don't fire too many fetches at once
 
 const tempObject = new THREE.Object3D();
 
@@ -55,219 +49,66 @@ _hideObj.position.set(0, -100, 0);
 _hideObj.scale.set(0, 0, 0);
 _hideObj.updateMatrix();
 const _hideMatrix = _hideObj.matrix.clone();
-const _vec = new THREE.Vector3();
-const _projMatrix = new THREE.Matrix4();
-const _frustum = new THREE.Frustum();
-const _col = new THREE.Color();
 
 
 
-const RARITY_COLORS: Record<string, string> = {
-  common: '#E2E8F0',    // Bright Slate
-  elite: '#3B82F6',     // Epic Blue
-  epic: '#A855F7',      // Mythic Purple
-  legendary: '#FBBF24', // Legendary Gold
+const LEVEL_COLORS: Record<number, string> = {
+  1: '#FFFFFF', 2: '#4CAF50', 3: '#2196F3', 4: '#9c27b0', 5: '#facc15',
 };
-const getRarityColor = (rarity?: string): string => RARITY_COLORS[rarity || 'common'] ?? '#E2E8F0';
-
-const RARITY_BADGES: Record<string, string> = {
-  common: '',
-  elite: '✦ ',
-  epic: '★ ',
-  legendary: '👑 ',
+const getLevelColor = (level: number): string => LEVEL_COLORS[Math.min(level, 5)] ?? '#FFFFFF';
+const getLevelBadge = (level: number): string => {
+  if (level >= 5) return '[GODLY] ';
+  if (level >= 4) return '[ELITE] ';
+  if (level >= 3) return '[PRO] ';
+  return '';
 };
-const getRarityBadge = (rarity?: string): string => RARITY_BADGES[rarity || 'common'] ?? '';
 
 
-
-const AuraShadowShader = {
-  vertexShader: `
-    #ifndef USE_INSTANCING_COLOR
-      attribute vec3 instanceColor;
-    #endif
-    #ifndef USE_INSTANCING
-      attribute mat4 instanceMatrix;
-    #endif
-
-    varying vec2 vUv;
-    varying vec3 vColor;
-    void main() {
-      vUv = uv;
-      vColor = instanceColor;
-      gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
-    }
-  `,
-  fragmentShader: `
-    varying vec2 vUv;
-    varying vec3 vColor;
-    void main() {
-      float d = length(vUv - 0.5) * 2.0;
-      if (d > 1.0) discard;
-      
-      // Ultra cheap linear fade for massive fill-rate savings
-      float alpha = (1.0 - d) * 0.4;
-      
-      // Fast single mix: 40% team color aura, 60% black core shadow
-      vec3 finalCol = mix(vColor, vec3(0.02), 0.6);
-      
-      gl_FragColor = vec4(finalCol, alpha);
-    }
-  `
-};
 
 const MLHealthBarShader = {
+  uniforms: { time: { value: 0 } },
   vertexShader: `
-    attribute vec2 aHealthInfo; // x = hp, y = maxHp
+    attribute float aMaxHp;
     varying vec2 vUv;
-    varying vec2 vHealthInfo;
-    #ifndef USE_INSTANCING_COLOR
-        attribute vec3 instanceColor;
-    #endif
-    varying vec3 vColor;
+    varying float vMaxHp;
     void main() {
-      vUv = uv; 
-      vHealthInfo = aHealthInfo;
-      vColor = instanceColor;
+      vUv = uv; vMaxHp = aMaxHp;
       gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
     }
   `,
   fragmentShader: `
     varying vec2 vUv;
-    varying vec2 vHealthInfo;
-    varying vec3 vColor;
+    varying float vMaxHp;
     void main() {
-      float hp = vHealthInfo.x;
-      float maxHp = vHealthInfo.y;
-      float pct = maxHp > 0.0 ? clamp(hp / maxHp, 0.0, 1.0) : 0.0;
-      
-      // Calculate Border
-      float borderWidth = 0.015;
-      float borderHeight = 0.08;
-      bool isBorder = vUv.x < borderWidth || vUv.x > 1.0 - borderWidth || vUv.y < borderHeight || vUv.y > 1.0 - borderHeight;
-      if (isBorder) {
-          gl_FragColor = vec4(0.05, 0.05, 0.05, 0.9); // Black border
-          return;
-      }
-      
-      // Calculate Notches (every 250 HP)
-      float totalSmallSegments = maxHp / 250.0;
+      float x = vUv.x;
+      if (x < 0.01 || x > 0.99) discard;
+      float totalSmallSegments = vMaxHp / 250.0;
       float smallNotchStep = 1.0 / totalSmallSegments;
-      float smallNotch = mod(vUv.x, smallNotchStep);
-      
-      // Thick notches every 1000 HP
-      float thickNotchStep = 1.0 / (maxHp / 1000.0);
-      float thickNotch = mod(vUv.x, thickNotchStep);
-      
-      bool isThickNotch = thickNotch < 0.015 && maxHp > 1001.0 && vUv.x > 0.02 && vUv.x < 0.98;
-      bool isSmallNotch = smallNotch < 0.01 && vUv.x > 0.02 && vUv.x < 0.98;
-      
-      if (isThickNotch) {
-          gl_FragColor = vec4(0.0, 0.0, 0.0, 0.95); // Black thick notch
-          return;
-      }
-      if (isSmallNotch) {
-          gl_FragColor = vec4(0.0, 0.0, 0.0, 0.6); // Semi-transparent small notch
-          return;
-      }
-      
-      // Draw Fill vs Background
-      if (vUv.x <= pct) {
-          gl_FragColor = vec4(vColor, 1.0); // Health fill area
-      } else {
-          gl_FragColor = vec4(0.1, 0.1, 0.1, 0.75); // Missing health background area
-      }
-    }
-  `
-};
-
-const RadialCooldownShader = {
-  vertexShader: `
-    attribute float aProgress;
-    varying vec2 vUv;
-    varying float vProgress;
-    #ifndef USE_INSTANCING_COLOR
-      attribute vec3 instanceColor;
-    #endif
-    varying vec3 vColor;
-    
-    void main() {
-      vUv = uv;
-      vProgress = aProgress;
-      vColor = instanceColor;
-      gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
-    }
-  `,
-  fragmentShader: `
-    varying vec2 vUv;
-    varying float vProgress;
-    varying vec3 vColor;
-    void main() {
-      vec2 uv = vUv - 0.5;
-      float dist = length(uv);
-      
-      // Ring shape
-      float inner = 0.38;
-      float outer = 0.5;
-      if (dist > outer || dist < inner) discard;
-
-      // Radial Fill (Clockwise from Top)
-      float angle = atan(uv.x, uv.y); // Range -PI to PI. Top is 0.
-      if (angle < 0.0) angle += 6.283185;
-      
-      float normAngle = angle / 6.283185;
-      
-      // If progress is 1.0 (ready), show full ring. If 0.0, show nothing.
-      if (normAngle > vProgress) discard;
-
-      // Glow effect based on proximity to center of ring thickness
-      float glow = 1.0 - abs(dist - (inner + outer) * 0.5) / (outer - inner);
-      
-      // Team Color Sync (vColor) + Readiness White Glow
-      vec3 color = mix(vColor, vec3(1.0), vProgress * 0.5);
-      
-      gl_FragColor = vec4(color * (1.2 + glow), 0.8 * glow);
-    }
-  `
-};
-
-const ProfileImageShader = {
-  vertexShader: `
-    varying vec2 vUv;
-    void main() {
-      vUv = uv;
-      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-    }
-  `,
-  fragmentShader: `
-    uniform sampler2D tDiffuse;
-    varying vec2 vUv;
-    void main() {
-      float d = distance(vUv, vec2(0.5));
-      if (d > 0.5) discard;
-      
-      // Simple anti-aliasing for the circular edge
-      float alpha = smoothstep(0.5, 0.48, d);
-      
-      vec4 tex = texture2D(tDiffuse, vUv);
-      gl_FragColor = vec4(tex.rgb, tex.a * alpha);
+      float smallNotch = mod(x, smallNotchStep);
+      float thickNotchStep = 1.0 / (vMaxHp / 1000.0);
+      float thickNotch = mod(x, thickNotchStep);
+      if (thickNotch < 0.018 && vMaxHp > 1000.0) gl_FragColor = vec4(0.0, 0.0, 0.0, 0.9);
+      else if (smallNotch < 0.01) gl_FragColor = vec4(0.0, 0.0, 0.0, 0.4);
+      else discard;
     }
   `
 };
 
 const BattleArmyComponent = ({
   unitRegistry, towerConfig, updateSimulation, settingsRef, simTimeRef,
-  unitIndex, spellsRef, mmSpellsRef, fighterSpellsRef,
-  tankSpellsRef, assassinSpellsRef, vfxRef, compBuffers
+  vehicles, unitIndex, spellsRef, mmSpellsRef, fighterSpellsRef,
+  tankSpellsRef, assassinSpellsRef, vfxRef
 }: BattleArmyProps) => {
   const shadowRef = useRef<THREE.InstancedMesh>(null!);
-  const healthBarRef = useRef<THREE.InstancedMesh>(null!);
-  const cooldownRef = useRef<THREE.InstancedMesh>(null!);
+  const healthBgRef = useRef<THREE.InstancedMesh>(null!);
+  const healthFillRef = useRef<THREE.InstancedMesh>(null!);
+  const notchRef = useRef<THREE.InstancedMesh>(null!);
 
   const { spawnVFX } = useVFX();
 
-  // Shared ref: each army class adds its rendered unit indices (poolIdx) here each frame.
+  // Shared ref: each army class adds its rendered unit IDs here each frame.
   // The InstancedImpostorRenderer reads this to skip already-rendered units.
-  const renderedIdsRef = useRef<Set<number>>(new Set());
+  const renderedIdsRef = useRef<Set<string>>(new Set());
 
   // --- VFX BRIDGE: Link the context to the ref ---
   useEffect(() => {
@@ -276,102 +117,76 @@ const BattleArmyComponent = ({
     }
   }, [spawnVFX, vfxRef]);
 
+
+
   useEffect(() => {
+    if (notchRef.current) {
+      const maxHpArray = new Float32Array(MAX_UNITS).fill(250);
+      const attr = new THREE.InstancedBufferAttribute(maxHpArray, 1);
+      notchRef.current.geometry.setAttribute('aMaxHp', attr);
+    }
+
     tempObject.position.set(0, -1000, 0);
-    tempObject.scale.set(0.001, 0.001, 0.001);
+    tempObject.scale.set(0, 0, 0);
     tempObject.updateMatrix();
     if (shadowRef.current) {
-      for (let i = 0; i < 1500; i++) {
+      for (let i = 0; i < MAX_UNITS; i++) {
         shadowRef.current.setMatrixAt(i, tempObject.matrix);
-        healthBarRef.current?.setMatrixAt(i, tempObject.matrix);
-        cooldownRef.current?.setMatrixAt(i, tempObject.matrix);
+        healthBgRef.current?.setMatrixAt(i, tempObject.matrix);
+        healthFillRef.current?.setMatrixAt(i, tempObject.matrix);
+        notchRef.current?.setMatrixAt(i, tempObject.matrix);
       }
       shadowRef.current.instanceMatrix.needsUpdate = true;
-      if (healthBarRef.current) healthBarRef.current.instanceMatrix.needsUpdate = true;
-      if (cooldownRef.current) cooldownRef.current.instanceMatrix.needsUpdate = true;
     }
   }, []);
 
-  const healthGeo = useMemo(() => {
-    const geo = new THREE.PlaneGeometry(1.2, 0.18);
-    const healthInfoArray = new Float32Array(MAX_UNITS * 2);
-    for (let i = 0; i < MAX_UNITS; i++) {
-      healthInfoArray[i * 2] = 250;
-      healthInfoArray[i * 2 + 1] = 250;
-    }
-    const attr = new THREE.InstancedBufferAttribute(healthInfoArray, 2);
-    attr.setUsage(THREE.DynamicDrawUsage);
-    geo.setAttribute('aHealthInfo', attr);
-    return geo;
-  }, []);
-  const shadowGeo = useMemo(() => {
-    const geo = new THREE.CircleGeometry(0.6, 6); // Hexagon provides 50% vertex reduction and looks completely fine for soft shadows
-    geo.rotateX(-Math.PI / 2); // Pre-rotate on CPU once to save 1,500 rotation matrix calculations per frame
-    return geo;
-  }, []);
-  const cooldownGeo = useMemo(() => {
-    const geo = new THREE.PlaneGeometry(1, 1);
-    geo.rotateX(-Math.PI / 2);
-    const progressArray = new Float32Array(1500);
-    const attr = new THREE.InstancedBufferAttribute(progressArray, 1);
-    attr.setUsage(THREE.DynamicDrawUsage);
-    geo.setAttribute('aProgress', attr);
-    return geo;
-  }, []);
-  const cooldownMat = useMemo(() => new THREE.ShaderMaterial({
-    ...RadialCooldownShader,
-    transparent: true,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending,
-    vertexColors: true,
-    defines: { USE_INSTANCING: '', USE_INSTANCING_COLOR: '' }
-  }), []);
+  const healthGeo = useMemo(() => new THREE.PlaneGeometry(0.8, 0.12), []);
+  const shadowGeo = useMemo(() => new THREE.CircleGeometry(0.6, 12), []);
+  const healthBgMat = useMemo(() => new THREE.MeshBasicMaterial({ color: '#000000', transparent: true, opacity: 0.85, depthWrite: false }), []);
+  const healthFillMat = useMemo(() => new THREE.MeshBasicMaterial({ vertexColors: false, depthWrite: false }), []);
+  const notchMat = useMemo(() => new THREE.ShaderMaterial({ ...MLHealthBarShader, transparent: true, depthWrite: false }), []);
+  const shadowMat = useMemo(() => new THREE.MeshBasicMaterial({ color: '#000000', transparent: true, opacity: 0.3, depthWrite: false }), []);
 
-  const shadowMat = useMemo(() => new THREE.ShaderMaterial({
-    ...AuraShadowShader,
-    transparent: true,
-    depthWrite: false,
-    vertexColors: true,
-  }), []);
-  const healthBarMat = useMemo(() => new THREE.ShaderMaterial({
-    ...MLHealthBarShader,
-    transparent: true,
-    depthWrite: false,
-    vertexColors: true,
-    defines: { USE_INSTANCING: '', USE_INSTANCING_COLOR: '' }
-  }), []);
+  useEffect(() => { if (healthFillMat) healthFillMat.transparent = true; }, [healthFillMat]);
 
-
+  const nameGroupRef = useRef<THREE.Group>(null!);
   const namePoolMap = useRef<Map<string, number>>(new Map());
   const nameAvailableSlots = useRef<number[]>(Array.from({ length: NAME_POOL_SIZE }, (_, i) => i));
-  const nameGroupRefs = useRef<(THREE.Group | null)[]>(Array(NAME_POOL_SIZE).fill(null));
   const nameTextRefs = useRef<(any | null)[]>(Array(NAME_POOL_SIZE).fill(null));
-  const nameBadgeRefs = useRef<(any | null)[]>(Array(NAME_POOL_SIZE).fill(null));
-  const nameImageRefs = useRef<(THREE.Mesh | null)[]>(Array(NAME_POOL_SIZE).fill(null));
-  const nameImageMaterials = useRef<(THREE.ShaderMaterial | null)[]>(Array(NAME_POOL_SIZE).fill(null));
-  const nameBorderRefs = useRef<(THREE.Mesh | null)[]>(Array(NAME_POOL_SIZE).fill(null));
   const nameSlotContent = useRef<string[]>(Array(NAME_POOL_SIZE).fill(''));
-  const nameSlotBadge = useRef<string[]>(Array(NAME_POOL_SIZE).fill(''));
   const nameSlotColor = useRef<string[]>(Array(NAME_POOL_SIZE).fill('#ffffff'));
-  const nameSlotImage = useRef<string[]>(Array(NAME_POOL_SIZE).fill(''));
-  // Tracks which unit ID currently owns each slot — prevents cross-unit texture contamination
-  const nameSlotOwner = useRef<string[]>(Array(NAME_POOL_SIZE).fill(''));
-  // Generation counter: incremented every time a slot is reassigned.
-  // Async texture callbacks capture this at launch time and discard if it changed.
-  const slotGeneration = useRef<Uint32Array>(new Uint32Array(NAME_POOL_SIZE));
-
 
   const lastNameCullTime = useRef(0);
   const cachedActiveUnits = useRef<any[]>([]);
   const frameCountRef = useRef(0);
-  useFrame((state, delta) => {
-    // 0. Update Frustum for class animators
-    _projMatrix.multiplyMatrices(state.camera.projectionMatrix, state.camera.matrixWorldInverse);
-    _frustum.setFromProjectionMatrix(_projMatrix);
-    (state as any).battleFrustum = _frustum;
 
-    // Optimized Simulation Step
-    updateSimulation(delta);
+  const simAccumulator = useRef(0);
+  const SIM_STEP = 1 / 30; // 30Hz Logic
+  useFrame((state, delta) => {
+    // 1. HARD CLAMPING (ANTI-FAST-FORWARD & AUTO SLOW-MO)
+    // Rule: If frame time > 100ms, we force the physics to process only 33ms or 66ms.
+    // This makes the game run in "Bullet Time" (slow-motion) during lag spikes
+    // instead of exploding with speed bursts once the lag ends.
+    let simulationDelta = delta;
+    if (delta > 0.1) simulationDelta = SIM_STEP; // Force Slow-Mo if lagging > 10fps
+
+    const clampedDelta = Math.min(SIM_STEP * 2, simulationDelta);
+    simAccumulator.current += clampedDelta;
+
+    let steps = 0;
+    while (simAccumulator.current >= SIM_STEP && steps < 2) {
+      updateSimulation(SIM_STEP);
+      simAccumulator.current -= SIM_STEP;
+      steps++;
+    }
+
+    // Safety: discard any extra accumulated time to prevent "Future Catch-up"
+    if (simAccumulator.current > SIM_STEP) simAccumulator.current = 0;
+
+    // DIAGNOSTIC LOCK: Prove to user the clock is stable
+    if (frameCountRef.current % 180 === 0) {
+      console.log(`[Jam Internal] Locked: ${SIM_STEP.toFixed(4)}s | Buffer: ${simAccumulator.current.toFixed(4)}s`);
+    }
 
     const rawMap = unitRegistry.current;
     if (!rawMap) return;
@@ -380,329 +195,114 @@ const BattleArmyComponent = ({
     const camPos = state.camera.position;
     frameCountRef.current++;
 
-    // PERFORMANCE: Use consistent constants at the top
-    const HUD_DETAIL_DIST_SQ = 22500; // 150m range (Increased for cinematic wide shots)
-    const HUD_MAX_RANGE_SQ = 22500; // Match detail dist so all visible units are evaluated
-
-    // PERFORMANCE: Throttle sorting and unit filtering to every 20 frames
-    const shouldSort = frameCountRef.current % 20 === 0 || cachedActiveUnits.current.length === 0;
-    // PERFORMANCE: Throttle dSq distance calculation to every 3 frames
-    const shouldCalcDist = frameCountRef.current % 3 === 0;
-    // Hoist indices so both throttle blocks can use it
-    const indices = compBuffers?.activeIndices?.current || [];
-
-    if (shouldCalcDist) {
-      for (let k = 0; k < indices.length; k++) {
-        const i = indices[k];
+    // PERFORMANCE: Throttle sorting and unit filtering to every 5 frames
+    if (frameCountRef.current % 5 === 0 || cachedActiveUnits.current.length === 0) {
+      const activeUnits: any[] = [];
+      for (let i = 0; i < rawMap.length; i++) {
         const u = rawMap[i];
-        if (!u || !u.isActive || u.hp <= 0 || u.position[1] < -50) continue;
+        if (!u.isActive || u.hp <= 0) continue;
         const dx = camPos.x - u.position[0];
         const dz = camPos.z - u.position[2];
         u.dSq = dx * dx + dz * dz;
-      }
-    }
-
-    if (shouldSort) {
-      // Zero-allocation bucket clearing using persistent state
-      const b = (state as any)._persBuckets ||= { fighter: [], tank: [], mage: [], marksman: [], assassin: [] };
-      b.fighter.length = 0; b.tank.length = 0; b.mage.length = 0; b.marksman.length = 0; b.assassin.length = 0;
-
-      const nearUnits = (state as any)._persNearUnits ||= [];
-      nearUnits.length = 0;
-
-      for (let k = 0; k < indices.length; k++) {
-        const i = indices[k];
-        const u = rawMap[i];
-        if (!u || !u.isActive || u.hp <= 0 || u.position[1] < -50) continue;
-
-        if (b[u.unitClass]) b[u.unitClass].push(u);
-        if ((u.dSq || 0) < HUD_MAX_RANGE_SQ) {
-          nearUnits.push(u);
-        }
+        activeUnits.push(u);
       }
 
-      // Sort only units near the camera to save CPU
-      nearUnits.sort((a: any, b: any) => {
+      activeUnits.sort((a, b) => {
         if (a.isBoss !== b.isBoss) return a.isBoss ? -1 : 1;
-        return (a.dSq || 0) - (b.dSq || 0);
+        return a.dSq - b.dSq;
       });
-
-      cachedActiveUnits.current = nearUnits;
-      (state as any).unitBuckets = b;
+      cachedActiveUnits.current = activeUnits;
     }
 
     const activeUnits = cachedActiveUnits.current;
-    (state as any).sortedActiveUnits = activeUnits;
+    // Ultimate Visibility: Names stay visible even when zoomed out far (200m)
+    const HUD_DETAIL_DIST_SQ = 200 * 200;
     const isPotato = !!settingsRef.current.potatoMode;
-    const gameMode = (state as any)._cachedGameMode ||= useStore.getState().gameMode;
-    const frustum = (state as any).battleFrustum as THREE.Frustum;
-
     if (isPotato) {
       if (frameCountRef.current % 15 === 0) {
-        for (let i = 0; i < 1500; i++) {
+        for (let i = 0; i < MAX_UNITS; i++) {
           shadowRef.current?.setMatrixAt(i, _hideMatrix);
-          healthBarRef.current?.setMatrixAt(i, _hideMatrix);
-          cooldownRef.current?.setMatrixAt(i, _hideMatrix);
+          healthBgRef.current?.setMatrixAt(i, _hideMatrix);
+          healthFillRef.current?.setMatrixAt(i, _hideMatrix);
+          notchRef.current?.setMatrixAt(i, _hideMatrix);
         }
         shadowRef.current.instanceMatrix.needsUpdate = true;
-        if (healthBarRef.current) healthBarRef.current.instanceMatrix.needsUpdate = true;
+        healthBgRef.current.instanceMatrix.needsUpdate = true;
+        healthFillRef.current.instanceMatrix.needsUpdate = true;
+        notchRef.current.instanceMatrix.needsUpdate = true;
       }
     }
 
-    // ─── 2. Name Labels Lifecycle ─────────────────────────────────────────────
-
-    // FIX B: Immediate cleanup tiap frame — jangan tunggu 4 frame
-    // Cek kematian, jauh dari kamera, atau inactive langsung
-    for (const [uid, slot] of namePoolMap.current.entries()) {
-      const uIdx = unitIndex.current.get(uid);
-      const u = uIdx ? rawMap[uIdx.poolIdx ?? -1] : null;
-
-      const isDead = !u || !u.isActive || u.hp <= 0 || u.position[1] < -50;
-      const isTooFar = (u?.dSq ?? 0) > HUD_DETAIL_DIST_SQ;
-
-      if (isDead || isTooFar || isPotato) {
-        const group = nameGroupRefs.current[slot];
-        if (group) {
-          group.visible = false;
-          group.position.set(0, -200, 0);
-        }
-        if (nameTextRefs.current[slot]) nameTextRefs.current[slot].visible = false;
-        if (nameImageRefs.current[slot]) nameImageRefs.current[slot].visible = false;
-        if (nameBorderRefs.current[slot]) nameBorderRefs.current[slot].visible = false;
-        nameAvailableSlots.current.push(slot);
-        namePoolMap.current.delete(uid);
-        nameSlotImage.current[slot] = '';
-        nameSlotOwner.current[slot] = '';
-        // Invalidate any pending async loads for this slot
-        slotGeneration.current[slot]++;
-      }
-    }
-
-    if (frameCountRef.current % 4 === 0) {
+    // 2. Name Labels Lifecycle (Positioning is now delegated to Armies)
+    if (time - lastNameCullTime.current > 0.1) {
       lastNameCullTime.current = time;
 
-      // Assign slots ke unit baru yang dekat (dari yang paling dekat)
-      if (!isPotato) {
-        let updatesThisFrame = 0;
-        const MAX_UPDATES_PER_FRAME = 2;
+      // Cleanup names for units that are dead, too far, or if in potato mode
+      for (const [uid, slot] of namePoolMap.current.entries()) {
+        const uIdx = parseInt(uid.split('-')[1]);
+        const u = rawMap[uIdx];
+        // Release name slot if unit is dead, too far, or potato mode is on
+        const gone = !u || !u.isActive || u.id !== uid || u.hp <= 0 || (u.dSq || 0) > HUD_DETAIL_DIST_SQ || isPotato;
+        if (gone) {
+          if (nameTextRefs.current[slot]) {
+            nameTextRefs.current[slot].visible = false;
+            nameTextRefs.current[slot].position.set(0, -100, 0); // extra hide
+          }
+          nameAvailableSlots.current.push(slot);
+          namePoolMap.current.delete(uid);
+        }
+      }
 
-        const assignCount = Math.min(activeUnits.length, 60);
-        for (let i = 0; i < assignCount; i++) {
+      // Assign slots to new near units
+      if (!isPotato) {
+        for (let i = 0; i < activeUnits.length; i++) {
           const u = activeUnits[i];
           const id = u.id;
-
-          if (namePoolMap.current.has(id)) continue;
-          if (namePoolMap.current.size >= NAME_POOL_SIZE || nameAvailableSlots.current.length === 0) break;
-
-          // FRUSTUM CULLING: Jangan assign slot ke unit di balik kamera
-          const pos = _vec.set(u.position[0], u.position[1] + 2, u.position[2]);
-          if (frustum && !frustum.containsPoint(pos)) continue;
-          if ((u.dSq || 0) > HUD_DETAIL_DIST_SQ) continue;
+          if (namePoolMap.current.has(id) || namePoolMap.current.size >= NAME_POOL_SIZE || nameAvailableSlots.current.length === 0) continue;
+          if (u.dSq > HUD_DETAIL_DIST_SQ) continue;
 
           const slot = nameAvailableSlots.current.shift()!;
           namePoolMap.current.set(id, slot);
-          // Track which unit owns this slot & bump generation to invalidate stale loads
-          nameSlotOwner.current[slot] = id;
-          slotGeneration.current[slot]++;
-          nameSlotImage.current[slot] = ''; // Force re-evaluation of image
           const mesh = nameTextRefs.current[slot];
-          const badgeMesh = nameBadgeRefs.current[slot];
-          const group = nameGroupRefs.current[slot];
-
           if (mesh) {
-            const badge = getRarityBadge(u.rarity);
-            const userName = (u.userName || 'Guest');
+            const badge = getLevelBadge(u.level || 1);
+            const label = badge + u.userName;
+            if (nameSlotContent.current[slot] !== label) { mesh.text = label; nameSlotContent.current[slot] = label; }
 
-            let needsSync = false;
-            if (nameSlotContent.current[slot] !== userName) {
-              mesh.text = userName;
-              nameSlotContent.current[slot] = userName;
-              needsSync = true;
-            }
+            const col = getLevelColor(u.level || 1);
+            if (nameSlotColor.current[slot] !== col) { mesh.color = col; nameSlotColor.current[slot] = col; }
 
-            if (badgeMesh && nameSlotBadge.current[slot] !== badge) {
-              badgeMesh.text = badge;
-              nameSlotBadge.current[slot] = badge;
-              badgeMesh.sync();
-              badgeMesh.visible = true;
-            }
-
-            const rawCol = u.type === 'player' ? towerConfig.player.color : towerConfig.enemy.color;
-            _col.set(rawCol).offsetHSL(0, 0, 0.2);
-            const teamStyle = _col.getStyle();
-
-            if (nameSlotColor.current[slot] !== teamStyle) {
-              mesh.color = teamStyle;
-              if (badgeMesh) badgeMesh.color = teamStyle;
-              nameSlotColor.current[slot] = teamStyle;
-              const borderMesh = nameBorderRefs.current[slot];
-              if (borderMesh) {
-                (borderMesh.material as THREE.MeshBasicMaterial).color.copy(_col);
-                (borderMesh.material as THREE.MeshBasicMaterial).opacity = 1.0;
-              }
-              needsSync = true;
-            }
-
-            const targetFontSize = u.isBoss ? 1.0 : 0.45;
-            if (mesh.fontSize !== targetFontSize) {
-              mesh.fontSize = targetFontSize;
-              if (badgeMesh) badgeMesh.fontSize = targetFontSize * 0.85; // Badge slightly smaller than name
-              needsSync = true;
-            }
-
+            mesh.fontSize = u.isBoss ? 0.95 : 0.45;
             mesh.outlineWidth = 0.08;
-            mesh.outlineColor = "#000000";
-            if (badgeMesh) {
-              badgeMesh.outlineWidth = 0.08;
-              badgeMesh.outlineColor = "#000000";
-            }
-
-            if (needsSync && updatesThisFrame < MAX_UPDATES_PER_FRAME) {
-              mesh.sync();
-              updatesThisFrame++;
-            }
             mesh.visible = true;
-
-            // Handle Profile Image — with strict owner verification to prevent race conditions
-            const imgMesh = nameImageRefs.current[slot];
-            if (imgMesh) {
-              const currentOwner = u.id; // The unit that SHOULD own this slot right now
-              
-              // GUARD: If slot ownership doesn't match, skip — slot is stale
-              if (nameSlotOwner.current[slot] !== currentOwner) {
-                imgMesh.visible = false;
-              } else {
-                const imgUrl = (gameMode === "TRAINING" || !u.profileImage)
-                  ? TEST_IMAGE_URL
-                  : `/api/proxy-image?url=${encodeURIComponent(u.profileImage)}`;
-                
-                if (nameSlotImage.current[slot] !== imgUrl) {
-                  nameSlotImage.current[slot] = imgUrl;
-                  const gen = slotGeneration.current[slot]; // captured for closure
-                  const capturedOwner = currentOwner; // captured for closure
-                  const mat = nameImageMaterials.current[slot];
-
-                  // Always clear immediately so no ghost image from previous user shows
-                  if (mat) mat.uniforms.tDiffuse.value = null;
-
-                  if (textureCache.has(imgUrl)) {
-                    // Cache hit: verify owner AGAIN before applying
-                    const entry = textureCache.get(imgUrl)!;
-                    entry.lastUsed = Date.now();
-                    if (mat && nameSlotOwner.current[slot] === capturedOwner) {
-                      mat.uniforms.tDiffuse.value = entry.tex;
-                    }
-                  } else if (!textureLoading.has(imgUrl)) {
-                    if (textureLoading.size < MAX_CONCURRENT_LOADS) {
-                      textureLoading.add(imgUrl);
-                      textureLoader.load(imgUrl, (tex) => {
-                        tex.colorSpace = THREE.SRGBColorSpace;
-                        textureCache.set(imgUrl, { tex, lastUsed: Date.now() });
-                        textureLoading.delete(imgUrl);
-
-                        // TRIPLE GUARD: Check generation + owner + URL all match before applying
-                        if (
-                          slotGeneration.current[slot] === gen &&
-                          nameSlotOwner.current[slot] === capturedOwner &&
-                          nameSlotImage.current[slot] === imgUrl &&
-                          mat
-                        ) {
-                          mat.uniforms.tDiffuse.value = tex;
-                        }
-
-                        // LRU eviction: keep cache small to avoid memory pressure
-                        if (textureCache.size > 80) {
-                          let oldestKey = '';
-                          let oldestTime = Infinity;
-                          for (const [key, val] of textureCache.entries()) {
-                            if (val.lastUsed < oldestTime) { oldestTime = val.lastUsed; oldestKey = key; }
-                          }
-                          if (oldestKey) {
-                            textureCache.get(oldestKey)?.tex.dispose();
-                            textureCache.delete(oldestKey);
-                          }
-                        }
-                      }, undefined, () => { textureLoading.delete(imgUrl); });
-                    } else {
-                      // Over limit: Revert tracking so it retries next frame
-                      nameSlotImage.current[slot] = '';
-                    }
-                  }
-                }
-                imgMesh.visible = true;
-                // Slightly smaller profile image: boss=3.2, regular=2.0
-                imgMesh.scale.setScalar(u.isBoss ? 3.2 : 2.0);
-              }
-            }
-
-            // Handle Decorative Rarity Border
-            const borderMesh = nameBorderRefs.current[slot];
-            if (borderMesh) {
-              const rCol = getRarityColor(u.rarity);
-              (borderMesh.material as THREE.MeshBasicMaterial).color.set(rCol);
-              let pulse = 1.0;
-              if (u.rarity === 'legendary') pulse = 1.0 + Math.sin(time * 6) * 0.1;
-              else if (u.rarity === 'epic') pulse = 1.0 + Math.sin(time * 4) * 0.05;
-              borderMesh.scale.setScalar((u.isBoss ? 3.2 : 2.0) * 1.15 * pulse);
-              borderMesh.visible = true;
-            }
-
-            if (group) {
-              // NOTE: Do NOT set group.visible = true here!
-              // ECSArmyRenderer sets position first, THEN makes it visible.
-              // Setting visible here would flash the label at (0,0,0) for 1 frame.
-            }
           }
         }
       }
     }
 
-    // ─── 5. Signal Updates — Only upload GPU buffers when data actually changed
-    if (activeUnits.length > 0) {
-      if (shadowRef.current) {
-        // Shadow and cooldown don't need 60fps — throttle to every 2 frames
-        if (frameCountRef.current % 2 === 0) {
-          shadowRef.current.instanceMatrix.needsUpdate = true;
-          if (shadowRef.current.instanceColor) shadowRef.current.instanceColor.needsUpdate = true;
-          if (cooldownRef.current) {
-            cooldownRef.current.instanceMatrix.needsUpdate = true;
-            if (cooldownRef.current.instanceColor) cooldownRef.current.instanceColor.needsUpdate = true;
-            const cAttr = cooldownRef.current.geometry.getAttribute('aProgress');
-            if (cAttr) cAttr.needsUpdate = true;
-          }
-        }
-      }
-      // FIX: Throttle health bar GPU upload to every 2 frames.
-      // Damage flash lasts 100ms, so 33ms polling (every 2 frames) is still visually accurate.
-      // This halves the GPU buffer upload bandwidth at peak 30 units.
-      if (healthBarRef.current && frameCountRef.current % 2 === 0) {
-        healthBarRef.current.instanceMatrix.needsUpdate = true;
-        if (healthBarRef.current.instanceColor) healthBarRef.current.instanceColor.needsUpdate = true;
-        const attr = healthBarRef.current.geometry.getAttribute('aHealthInfo');
-        if (attr) attr.needsUpdate = true;
-      }
+    // 3. Signal Updates for InstancedMeshes (Positions are updated by individual Armies)
+    if (shadowRef.current) shadowRef.current.instanceMatrix.needsUpdate = true;
+    if (healthBgRef.current) healthBgRef.current.instanceMatrix.needsUpdate = true;
+    if (healthFillRef.current) {
+      healthFillRef.current.instanceMatrix.needsUpdate = true;
+      if (healthFillRef.current.instanceColor) healthFillRef.current.instanceColor.needsUpdate = true;
+    }
+    if (notchRef.current) {
+      notchRef.current.instanceMatrix.needsUpdate = true;
+      const maxHpAttr = notchRef.current.geometry.getAttribute('aMaxHp');
+      if (maxHpAttr) maxHpAttr.needsUpdate = true;
     }
   });
 
   return (
     <group>
-      {/* ECSArmyRenderer: Unified renderer replacing FighterArmy/TankArmy/MageArmy/MarksmanArmy/AssassinArmy
-          - LAZY POOL: 0 models at startup, clone only when units actually spawn → no idle FPS drop
-          - SINGLE useFrame: one loop for all 5 classes reading from ECS TypedArrays
-          - Pure data-driven: no OOP, no class instances */}
-      <ECSArmyRenderer
-        unitRegistry={unitRegistry}
-        activeIndicesRef={compBuffers?.activeIndices}
-        towerConfig={towerConfig}
-        settingsRef={settingsRef}
-        simTimeRef={simTimeRef}
-        renderedIdsRef={renderedIdsRef}
-        shadowRef={shadowRef}
-        healthBarRef={healthBarRef}
-        cooldownRef={cooldownRef}
-        namePoolMap={namePoolMap}
-        nameGroupRefs={nameGroupRefs}
-      />
+      {/* Full-3D Animated Unit Rendering by Class — Each gets 120-200 slot offset in the HUD buffer */}
+      <FighterArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} renderedIdsRef={renderedIdsRef} shadowRef={shadowRef} healthBgRef={healthBgRef} healthFillRef={healthFillRef} notchRef={notchRef} hudBaseIdx={0} namePoolMap={namePoolMap} nameTextRefs={nameTextRefs} fighterSpellsRef={fighterSpellsRef} />
+      <TankArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} renderedIdsRef={renderedIdsRef} shadowRef={shadowRef} healthBgRef={healthBgRef} healthFillRef={healthFillRef} notchRef={notchRef} hudBaseIdx={60} namePoolMap={namePoolMap} nameTextRefs={nameTextRefs} tankSpellsRef={tankSpellsRef} />
+      <MageArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} spellsRef={spellsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} renderedIdsRef={renderedIdsRef} shadowRef={shadowRef} healthBgRef={healthBgRef} healthFillRef={healthFillRef} notchRef={notchRef} hudBaseIdx={120} namePoolMap={namePoolMap} nameTextRefs={nameTextRefs} />
+      <MarksmanArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} spellsRef={spellsRef} mmSpellsRef={mmSpellsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} renderedIdsRef={renderedIdsRef} shadowRef={shadowRef} healthBgRef={healthBgRef} healthFillRef={healthFillRef} notchRef={notchRef} hudBaseIdx={180} namePoolMap={namePoolMap} nameTextRefs={nameTextRefs} />
+      <AssassinArmy unitsMap={unitRegistry} towerConfig={towerConfig} settingsRef={settingsRef} simTimeRef={simTimeRef} vehicles={vehicles} unitIndex={unitIndex} renderedIdsRef={renderedIdsRef} shadowRef={shadowRef} healthBgRef={healthBgRef} healthFillRef={healthFillRef} notchRef={notchRef} hudBaseIdx={240} namePoolMap={namePoolMap} nameTextRefs={nameTextRefs} assassinSpellsRef={assassinSpellsRef} />
+
 
       {/* LOD Impostor Layer: far-away units rendered as InstancedMesh billboards (2 draw calls) */}
       <InstancedImpostorRenderer
@@ -711,15 +311,6 @@ const BattleArmyComponent = ({
         playerColor={towerConfig.player.color}
         enemyColor={towerConfig.enemy.color}
         settingsRef={settingsRef}
-        activeIndices={compBuffers?.activeIndices}
-      />
-
-      {/* GLSL Combat Effects */}
-      <ShieldEffect
-        unitRegistry={unitRegistry}
-        activeIndicesRef={compBuffers?.activeIndices}
-        settingsRef={settingsRef}
-        simTimeRef={simTimeRef}
       />
 
       {/* Mage GLSL Spell Projectiles */}
@@ -733,79 +324,30 @@ const BattleArmyComponent = ({
       <TankSpellEffect tankSpellsRef={tankSpellsRef} simTimeRef={simTimeRef} />
       <AssassinSpellEffect assassinSpellsRef={assassinSpellsRef} simTimeRef={simTimeRef} />
 
-      {/* Centralized HUD Layer (Extended pool to support class offsets) */}
-      <instancedMesh ref={shadowRef} args={[null as any, null as any, 1500]} geometry={shadowGeo} material={shadowMat} frustumCulled={false} />
-      <instancedMesh ref={cooldownRef} args={[null as any, null as any, 1500]} geometry={cooldownGeo} material={cooldownMat} frustumCulled={false} />
-      <instancedMesh ref={healthBarRef} args={[null as any, null as any, 1500]} geometry={healthGeo} material={healthBarMat} renderOrder={7} frustumCulled={false} />
+      {/* Centralized HUD Layer */}
+      <instancedMesh ref={shadowRef} args={[null as any, null as any, MAX_UNITS]} geometry={shadowGeo} material={shadowMat} />
+      <instancedMesh ref={healthBgRef} args={[null as any, null as any, MAX_UNITS]} geometry={healthGeo} material={healthBgMat} renderOrder={4} />
+      <instancedMesh ref={healthFillRef} args={[null as any, null as any, MAX_UNITS]} geometry={healthGeo} material={healthFillMat} renderOrder={5} />
+      <instancedMesh ref={notchRef} args={[null as any, null as any, MAX_UNITS]} geometry={healthGeo} material={notchMat} renderOrder={6} />
 
-      <group>
-        {useMemo(() => Array.from({ length: NAME_POOL_SIZE }, (_, i) => (
-          <group
-            key={"name-slot-" + i}
-            ref={(el) => { nameGroupRefs.current[i] = el; }}
+      <group ref={nameGroupRef}>
+        {Array.from({ length: NAME_POOL_SIZE }, (_, i) => (
+          <Text
+            key={"name-" + i}
+            ref={(el) => { nameTextRefs.current[i] = el; }}
             visible={false}
-            position={[0, -200, 0]}
+            fontSize={0.45}
+            color="#ffffff"
+            outlineWidth={0.08}
+            outlineColor="#000000"
+            anchorX="center"
+            anchorY="middle"
+            renderOrder={10}
+            depthOffset={-2}
           >
-            <Text
-              ref={(el) => { nameBadgeRefs.current[i] = el; }}
-              visible={false}
-              fontSize={0.45}
-              color="#ffffff"
-              outlineWidth={0.06}
-              outlineColor="#000000"
-              anchorX="center"
-              anchorY="middle"
-              position={[0, 0.45, 0]} // Center Above Name
-              renderOrder={100}
-              depthOffset={-10}
-            >
-              {' '}
-            </Text>
-            <Text
-              ref={(el) => { nameTextRefs.current[i] = el; }}
-              visible={false}
-              fontSize={0.4}
-              color="#ffffff"
-              outlineWidth={0.06}
-              outlineColor="#000000"
-              anchorX="center"
-              anchorY="middle"
-              position={[0, 0, 0]} // Perfectly centered over bar
-              renderOrder={100}
-              depthOffset={-10}
-            >
-              {' '}
-            </Text>
-            <mesh
-              ref={(el) => { nameImageRefs.current[i] = el; }}
-              visible={false}
-              position={[0, 3.2, 0]} // Higher to avoid badge
-              renderOrder={102}
-            >
-              <planeGeometry args={[0.7, 0.7]} />
-              <shaderMaterial
-                ref={(el) => { nameImageMaterials.current[i] = el; }}
-                vertexShader={ProfileImageShader.vertexShader}
-                fragmentShader={ProfileImageShader.fragmentShader}
-                uniforms={{
-                  tDiffuse: { value: null },
-                  uOpacity: { value: 0.82 }
-                }}
-                transparent={true}
-                depthWrite={false}
-              />
-            </mesh>
-            <mesh
-              ref={(el) => { nameBorderRefs.current[i] = el; }}
-              visible={false}
-              position={[0, 3.2, -0.01]}
-              renderOrder={101}
-            >
-              <circleGeometry args={[0.35, 16]} />
-              <meshBasicMaterial color="#ffffff" transparent opacity={0.72} />
-            </mesh>
-          </group>
-        )), [])}
+            {''}
+          </Text>
+        ))}
       </group>
     </group>
   );

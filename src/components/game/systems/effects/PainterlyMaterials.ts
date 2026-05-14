@@ -147,10 +147,10 @@ export const PainterlyTerrainMaterial = new THREE.ShaderMaterial({
             float mask = smoothstep(baseDist + 15.0, baseDist + 50.0, dist); 
             
             float elevation = snoise(pos.xy * 0.015) * 35.0;
-            elevation += snoise(pos.xy * 0.04) * 8.0;
-            elevation *= mask;
+            // elevation += snoise(pos.xy * 0.04) * 8.0;
+            // elevation *= mask;
             
-            pos.z += max(elevation, 0.0);
+            // pos.z += max(elevation, 0.0);
             vElevation = pos.z;
 
             vec4 worldPos = modelMatrix * vec4(pos, 1.0);

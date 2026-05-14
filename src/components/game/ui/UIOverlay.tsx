@@ -1,15 +1,9 @@
 import { TowerConfig } from "@/src/hooks/battle/useBattleSystem";
-import { GiftBinding } from "@/src/core/domain/unit.types";
-import {
-  Settings2, Sword, Zap, Trophy, Users, MessageSquare, Gift,
-  CheckCircle2, Camera, Loader2, AlertTriangle, ChevronRight,
-  Shield, X, MessageCircle,
-  Activity, Target, Flame, Sparkles,
-} from "lucide-react";
-import React, { useState, useEffect, useRef } from "react";
+import { Maximize2, Minimize2, Palette, Settings2, Sword, Zap, Trophy, Users, MessageSquare, Gift, CheckCircle2, Camera, Loader2, AlertTriangle, Target, ChevronRight, CloudRain, Wind, CloudLightning, Sun, Shield } from "lucide-react";
+import React, { useState } from "react";
 import { MVPScreen } from "../../ui/MVPScreen";
 import { useStore } from "@/src/state/useStore";
-import { GIFT_FORMATIONS, lookupGiftByKeyword, GIFT_DICTIONARY } from "@/src/core/logic/gift/giftDictionary";
+import { WEATHER_CONFIG } from "@/src/core/logic/combat/constants";
 import Link from "next/link";
 
 interface UIOverlayProps {
@@ -31,459 +25,106 @@ interface UIOverlayProps {
     topSpawner: { username: string; value: number } | null;
     playerTopHit: { username: string; value: number } | null;
     enemyTopHit: { username: string; value: number } | null;
-    top5?: Array<{
-      username: string;
-      kills: number;
-      damage: number;
-      spawns: number;
-      profileImage?: string;
-    }>;
   };
   testingMode: boolean;
   onToggleTesting: () => void;
-  displayMessages: any[];
+  onDownloadReplay: () => void;
+  isFullscreen: boolean;
+  onToggleFullscreen: () => void;
+  updateSettingsRef?: (settings: any) => void;
+  standalone?: boolean;
 }
 
-const StatusIndicators = React.memo(({ connected }: { connected: boolean }) => {
-  const [fps, setFps] = useState(0);
-  const [ping, setPing] = useState(0);
-  const frameCount = useRef(0);
-  const lastTime = useRef(performance.now());
-
-  useEffect(() => {
-    let frameId: number;
-    const updateStats = () => {
-      frameCount.current++;
-      const now = performance.now();
-      const elapsed = now - lastTime.current;
-
-      if (elapsed >= 1000) {
-        setFps(Math.round((frameCount.current * 1000) / elapsed));
-        frameCount.current = 0;
-        lastTime.current = now;
-
-        if (connected) {
-          setPing(Math.floor(20 + Math.random() * 30));
-        } else {
-          setPing(0);
-        }
-      }
-      frameId = requestAnimationFrame(updateStats);
-    };
-
-    updateStats();
-    return () => cancelAnimationFrame(frameId);
-  }, [connected]);
-
+// Optimization: Memoize KillFeed to prevent full UI re-renders
+const MemoizedKillFeed = React.memo(({ killEvents, towerConfig }: { killEvents: any[], towerConfig: any }) => {
   return (
-    <div className="absolute top-2 left-2 flex gap-1 pointer-events-none select-none z-50 scale-90 md:scale-100 origin-top-left">
-      <div className="hud-glass rounded-lg px-1.5 py-0.5 flex items-center gap-1 border border-white/5">
-        <Activity className={`w-2.5 h-2.5 ${fps < 30 ? 'text-rose-500' : fps < 55 ? 'text-amber-500' : 'text-emerald-500'}`} />
-        <span className="text-[9px] font-black tabular-nums text-white/90">{fps} <span className="text-[6px] text-white/40 uppercase tracking-tighter">fps</span></span>
-      </div>
-      <div className="hud-glass rounded-lg px-1.5 py-0.5 flex items-center gap-1 border border-white/5">
-        <Zap className={`w-2.5 h-2.5 ${ping > 100 ? 'text-rose-500' : 'text-emerald-500'}`} />
-        <span className="text-[9px] font-black tabular-nums text-white/90">{ping} <span className="text-[6px] text-white/40 uppercase tracking-tighter">ms</span></span>
-      </div>
+    <div className="absolute top-20 md:top-28 left-4 md:left-6 w-56 md:w-72 flex flex-col gap-1 md:gap-1.5 items-start pointer-events-none z-[1100] select-none touch-none">
+      {killEvents.slice(-3).map((event) => event && event.id && (
+        <div key={event.id} className="animate-in slide-in-from-left-4 fade-in duration-500 bg-zinc-950/95 px-3 py-1.5 rounded-xl border border-white/10 flex items-center gap-3 shadow-xl">
+          <span className="text-white font-black italic text-[10px] tracking-tighter" style={{ color: towerConfig.player.color }}>{event.killer}</span>
+          <Sword className="w-3 h-3 text-rose-500" />
+          <span className="text-white/60 font-bold text-[9px] tracking-tight">{event.victim}</span>
+        </div>
+      ))}
     </div>
   );
 });
 
-const KillFeed = React.memo(({ towerConfig }: { towerConfig: any }) => {
-  const killEvents = useStore(s => s.killEvents);
-  return (
-  <div className="absolute top-12 left-2 w-48 md:w-48 flex flex-col gap-1 pointer-events-none select-none z-50">
-    {killEvents.slice(-4).map((event) => {
-      if (!event?.id) return null;
-      const rarity = event.rarity || 'common';
-      const rColor = RARITY_COLOR[rarity];
-      const isBoss = event.victimType === 'boss';
-
-      return (
-        <div key={event.id}
-          className="animate-slide-up flex items-center gap-2 px-3 py-1.5 rounded-lg border relative overflow-hidden group"
-          style={{
-            backgroundColor: isBoss ? 'rgba(239, 68, 68, 0.2)' : 'rgba(0,0,0,0.85)',
-            borderColor: isBoss ? '#ef4444' : `${rColor}33`,
-            boxShadow: isBoss ? '0 0 15px rgba(239,68,68,0.3)' : `0 0 10px ${rColor}11`
-          }}>
-          <div className="absolute left-0 top-0 bottom-0 w-1" style={{ backgroundColor: isBoss ? '#ef4444' : rColor }} />
-
-          {event.profileImage && (
-            <div className="w-5 h-5 rounded-full overflow-hidden border border-white/20 flex-shrink-0 shadow-sm">
-              <img src={event.profileImage} alt="" className="w-full h-full object-cover" />
-            </div>
-          )}
-
-          <div className="flex items-center gap-1.5 min-w-0 flex-1">
-            <span className="text-[9px] font-black italic tracking-tight truncate text-white"
-              style={{ textShadow: `0 0 4px ${towerConfig.player.color}88` }}>
-              {event.killer}
-            </span>
-            <div className="flex-shrink-0 flex items-center justify-center p-0.5 rounded bg-white/5">
-              <Sword className={`w-2.5 h-2.5 ${isBoss ? 'text-rose-500 animate-pulse' : 'text-white/40'}`} />
-            </div>
-            <div className="flex flex-col min-w-0">
-              <span className={`text-[8px] font-black truncate uppercase tracking-tighter ${isBoss ? 'text-rose-400' : 'text-white/40'}`}>
-                {event.victim}
-              </span>
-              <span className="text-[6px] font-black uppercase opacity-40 tracking-widest leading-none">
-                {isBoss ? 'BOSS DEFEATED' : rarity}
-              </span>
-            </div>
-          </div>
-
-          {rarity === 'legendary' && (
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-yellow-500/10 to-transparent -translate-x-full animate-[shimmer_2s_infinite]" />
-          )}
-        </div>
-      );
-    })}
-  </div>
-  ); });
-
-const Leaderboard = React.memo(({ team, color, name }: { team: 'player' | 'enemy', color: string, name: string }) => {
+// Optimization: Memoize Leaderboard to prevent full UI re-renders
+const MemoizedLeaderboard = React.memo(({ stats, team, color, name }: { stats: any, team: 'player' | 'enemy', color: string, name: string }) => {
   const isPlayer = team === 'player';
-  const topKills = useStore(s => isPlayer ? s.topPlayerKills : s.topEnemyKills);
-
+  const kills = isPlayer ? stats.playerKills : stats.enemyKills;
+  
   return (
-    <div className={`absolute top-48 md:top-56 ${isPlayer ? 'left-4' : 'right-4'} w-32 md:w-48 select-none scale-80 md:scale-90 origin-top-${isPlayer ? 'left' : 'right'}`}>
-      <div className="hud-glass rounded-2xl p-2 md:p-4 space-y-2 animate-fade-in-scale border border-white/10 shadow-2xl">
-        <div className="flex items-center gap-2 border-b border-white/10 pb-2">
-          <Trophy className="w-3.5 h-3.5" style={{ color }} />
-          <span className="text-[9px] md:text-[12px] font-black text-white uppercase tracking-[0.2em] truncate">{name} LEADERBOARD</span>
+    <div className={`absolute top-24 md:top-28 ${isPlayer ? 'left-2 md:left-6' : 'right-2 md:right-6'} w-36 md:w-56 pointer-events-auto z-[1100] select-none touch-none`}>
+      <div className={`bg-black/60 backdrop-blur-md rounded-xl md:rounded-3xl border border-white/5 p-2 md:p-4 shadow-xl space-y-2 md:space-y-4 animate-in ${isPlayer ? 'slide-in-from-left-8' : 'slide-in-from-right-8'} duration-1000 group/board hover:bg-black/80 transition-colors`}>
+        <div className="flex items-center justify-between border-b border-white/5 pb-2">
+          {isPlayer ? (
+            <>
+              <div className="flex items-center gap-1.5 md:gap-2">
+                <Trophy className="w-3 md:w-4 h-3 md:h-4 text-indigo-400" />
+                <span className="text-[9px] md:text-[11px] font-black text-white/80 uppercase tracking-widest">{name}</span>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center gap-1.5 md:gap-2">
+                <span className="text-[9px] md:text-[11px] font-black text-white/80 uppercase tracking-widest">{name}</span>
+                <Trophy className="w-3 md:w-4 h-3 md:h-4" style={{ color: color }} />
+              </div>
+            </>
+          )}
         </div>
-        <div className="space-y-2">
-          {topKills.map((entry, i) => {
-              const isTop3 = i < 3;
-              const rankColor = i === 0 ? '#fbbf24' : i === 1 ? '#cbd5e1' : i === 2 ? '#cd7f32' : color;
-              return (
-                <div key={entry.username} className="flex items-center justify-between group transition-all duration-300 hover:translate-x-1">
-                  <div className="flex items-center gap-2 min-w-0 flex-1">
-                    <div className={`w-5 h-5 md:w-7 md:h-7 rounded-lg flex items-center justify-center font-black text-[10px] md:text-[12px] transition-all shadow-xl ${i === 0 ? 'animate-pulse scale-110 shadow-yellow-500/20' : ''
-                      }`}
-                      style={{
-                        backgroundColor: isTop3 ? `${rankColor}33` : 'rgba(255,255,255,0.05)',
-                        borderColor: isTop3 ? rankColor : 'rgba(255,255,255,0.1)',
-                        borderWidth: '1.5px',
-                        color: isTop3 ? rankColor : '#ffffff44'
-                      }}>
+        
+        <div className="space-y-4">
+          {Object.entries(kills || {})
+            .sort(([, a]: any, [, b]: any) => b - a)
+            .slice(0, 5)
+            .map(([username, value], i) => (
+            <div key={username} className={`flex items-center justify-between group animate-in ${isPlayer ? 'slide-in-from-left-4' : 'slide-in-from-right-4'} fade-in`} style={{ animationDelay: `${i * 100}ms` }}>
+              {isPlayer ? (
+                <>
+                  <div className="flex items-center gap-1.5 md:gap-3">
+                    <div className={`w-5 h-5 md:w-7 md:h-7 rounded-md md:rounded-lg flex items-center justify-center font-black italic text-[9px] md:text-xs text-white/40 border border-white/5 ${
+                      i === 0 ? 'animate-pulse shadow-lg' : 'bg-white/5'
+                    }`}
+                    style={{ backgroundColor: i === 0 ? `${color}44` : undefined, borderColor: i === 0 ? color : undefined, color: i === 0 ? '#fff' : undefined }}>
                       {i + 1}
                     </div>
-                    {entry.image && (
-                      <div className={`w-5 h-5 md:w-7 md:h-7 rounded-full overflow-hidden border-2 flex-shrink-0 ${i === 0 ? 'border-yellow-400 shadow-lg shadow-yellow-400/20' : 'border-white/10'}`}>
-                        <img src={entry.image} alt="" className="w-full h-full object-cover" />
-                      </div>
-                    )}
-                    <span className={`text-[10px] md:text-[13px] font-black truncate uppercase tracking-tight ${i === 0 ? 'text-white' : 'text-white/60'}`}>{entry.username}</span>
+                    <div className="flex flex-col min-w-0">
+                        <span className="text-[10px] md:text-xs font-black text-white/70 group-hover:text-white truncate max-w-[60px] md:max-w-[100px] tracking-tight transition-colors">{username}</span>
+                    </div>
                   </div>
-                  <span className="text-[11px] md:text-[14px] font-black italic pl-2 flex items-center gap-1" style={{ color: isTop3 ? rankColor : '#ffffff88' }}>
-                    {entry.value}
-                    <Sword className="w-2.5 h-2.5 md:w-3 md:h-3 opacity-50" />
-                  </span>
-                </div>
-              );
-            })}
-          {topKills.length === 0 && (
-            <p className="text-[8px] uppercase tracking-[0.2em] text-white/20 font-black text-center py-2 italic">Waiting for kills...</p>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-});
-
-const Scoreboard = React.memo(({ towerConfig }: { towerConfig: TowerConfig }) => {
-  const playerWins = useStore(s => s.playerWins);
-  const enemyWins = useStore(s => s.enemyWins);
-  const armyCounts = useStore(s => s.armyCounts);
-  const totalArmy = Math.max(1, armyCounts.player + armyCounts.enemy);
-  const tensionPercent = (armyCounts.player / totalArmy) * 100;
-
-  return (
-    <div className="w-full max-w-[320px] md:max-w-[380px] -mt-8 scale-90 md:scale-95 origin-top mx-auto">
-      <div className="bg-gradient-to-b from-zinc-900/60 to-black/60 rounded-b-[2rem] border-x border-b border-white/10 shadow-2xl overflow-hidden relative">
-        <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
-
-        <div className="flex items-center justify-between px-6 py-3 md:px-8 md:py-4">
-          <div className="flex flex-col items-start min-w-0 flex-1">
-            <div className="flex items-center gap-2 w-full">
-              <div className="w-2 h-2 rounded-full bg-indigo-500 shadow-[0_0_10px_#6366f1]" />
-              <span className="text-[11px] md:text-[14px] font-black uppercase text-indigo-400 tracking-[0.2em] truncate">
-                {towerConfig?.player.name || "TEAM A"}
-              </span>
-            </div>
-            <span className="text-2xl md:text-3xl font-black italic text-white leading-none tracking-tighter drop-shadow-lg">{playerWins}</span>
-          </div>
-
-          <div className="px-4 flex flex-col items-center justify-center relative">
-            <div className="absolute inset-0 bg-white/5 blur-2xl rounded-full" />
-            <div className="w-8 h-8 rounded-full bg-zinc-900 border border-white/10 flex items-center justify-center relative z-10 shadow-inner">
-              <span className="text-[10px] font-black italic text-white/40 tracking-tighter">VS</span>
-            </div>
-          </div>
-
-          <div className="flex flex-col items-end min-w-0 flex-1 text-right">
-            <div className="flex items-center justify-end gap-2 w-full">
-              <span className="text-[10px] md:text-[12px] font-black uppercase text-rose-400 tracking-[0.2em] truncate">
-                {towerConfig?.enemy.name || "TEAM B"}
-              </span>
-              <div className="w-2 h-2 rounded-full bg-rose-500 shadow-[0_0_10px_#f43f5e]" />
-            </div>
-            <span className="text-2xl md:text-3xl font-black italic text-white leading-none tracking-tighter drop-shadow-lg">{enemyWins}</span>
-          </div>
-        </div>
-
-        <div className="h-2 w-full bg-black/40 flex relative">
-          <div className="h-full bg-gradient-to-r from-indigo-600 to-indigo-400 transition-all duration-700 ease-out relative"
-            style={{ width: `${tensionPercent}%`, boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.2)' }}>
-            <div className="absolute inset-0 bg-white/10 opacity-30 animate-pulse" />
-          </div>
-          <div className="h-full bg-gradient-to-l from-rose-600 to-rose-400 transition-all duration-700 ease-out relative"
-            style={{ width: `${100 - tensionPercent}%`, boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.2)' }}>
-            <div className="absolute inset-0 bg-white/10 opacity-30 animate-pulse" />
-          </div>
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1 h-6 bg-white shadow-[0_0_15px_#fff] z-10 rotate-12"
-            style={{ left: `${tensionPercent}%` }} />
-        </div>
-      </div>
-    </div>
-  );
-});
-
-const FeverTimeOverlay = React.memo(() => {
-  const isFeverTime = useStore(s => s.isFeverTime);
-  if (!isFeverTime) return null;
-  return (
-    <div className="absolute inset-0 pointer-events-none z-30 flex items-center justify-center overflow-hidden">
-      <div className="absolute inset-0 bg-red-600/10 animate-pulse mix-blend-overlay" />
-      <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse at center, transparent 40%, rgba(180,0,0,0.25) 100%)' }} />
-      <div className="absolute top-1/4 animate-bounce-slow flex flex-col items-center">
-        <div className="flex items-center gap-4">
-          <Flame className="w-12 h-12 md:w-20 md:h-20 text-orange-500 fill-orange-500/20 blur-[2px] animate-pulse" />
-          <h1 className="text-6xl md:text-8xl font-black italic text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 to-red-600 drop-shadow-[0_0_30px_rgba(220,38,38,0.8)] uppercase tracking-tighter">
-            FEVER TIME
-          </h1>
-          <Flame className="w-12 h-12 md:w-20 md:h-20 text-orange-500 fill-orange-500/20 blur-[2px] animate-pulse" />
-        </div>
-        <p className="text-center text-white/90 font-black tracking-[0.3em] uppercase text-sm mt-2 drop-shadow-md">
-          2x Speed & Attack!
-        </p>
-      </div>
-    </div>
-  );
-});
-
-const OrbitalLightningOverlay = React.memo(() => {
-  const active = useStore(s => s.orbitalLightningActive);
-
-  if (!active) return null;
-  return (
-    <div className="absolute inset-0 pointer-events-none z-30 overflow-hidden">
-      <div className="absolute inset-0 bg-blue-200/10 animate-pulse" />
-      <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse at center, transparent 30%, rgba(0,0,80,0.3) 100%)' }} />
-      
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2">
-        <div className="flex items-center gap-3">
-          <Zap className="w-10 h-10 md:w-16 md:h-16 text-blue-300 fill-blue-400/30 animate-pulse" />
-          <h1 className="text-5xl md:text-7xl font-black italic uppercase tracking-tighter text-transparent bg-clip-text bg-gradient-to-b from-white to-blue-400 drop-shadow-[0_0_30px_rgba(99,102,241,0.9)]">
-            ORBITAL STRIKE
-          </h1>
-          <Zap className="w-10 h-10 md:w-16 md:h-16 text-blue-300 fill-blue-400/30 animate-pulse" />
-        </div>
-        <p className="text-center text-blue-200/90 font-black tracking-[0.3em] uppercase text-sm drop-shadow-md">
-          ⚡ Enemy Forces Annihilated!
-        </p>
-      </div>
-    </div>
-  );
-});
-
-const MedicalSupplyOverlay = React.memo(() => {
-  const active = useStore(s => s.medicalSupplyActive);
-
-  if (!active) return null;
-  return (
-    <div className="absolute inset-0 pointer-events-none z-30 overflow-hidden flex items-center justify-center">
-      <div className="absolute inset-0 bg-emerald-500/10 animate-pulse" />
-      <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse at center, rgba(16,185,129,0.15) 0%, transparent 70%)' }} />
-
-      <div className="absolute top-1/4 flex flex-col items-center gap-2">
-        <div className="flex items-center gap-3">
-          <Sparkles className="w-10 h-10 md:w-14 md:h-14 text-emerald-300 fill-emerald-400/30 animate-pulse" />
-          <h1 className="text-5xl md:text-7xl font-black italic uppercase tracking-tighter text-transparent bg-clip-text bg-gradient-to-b from-white to-emerald-400 drop-shadow-[0_0_30px_rgba(16,185,129,0.9)]">
-            MEDIC SUPPLY
-          </h1>
-          <Sparkles className="w-10 h-10 md:w-14 md:h-14 text-emerald-300 fill-emerald-400/30 animate-pulse" />
-        </div>
-        <p className="text-center text-emerald-200/90 font-black tracking-[0.3em] uppercase text-sm drop-shadow-md">
-          💚 Player Forces Healing!
-        </p>
-      </div>
-    </div>
-  );
-});
-
-const UnitIcon = ({ cls, className = "w-3 h-3" }: { cls: string, className?: string }) => {
-  switch (cls) {
-    case 'fighter': return <Sword className={className} />;
-    case 'tank': return <Shield className={className} />;
-    case 'mage': return <Sparkles className={className} />;
-    case 'marksman': return <Target className={className} />;
-    case 'assassin': return <Zap className={className} />;
-    default: return null;
-  }
-};
-
-const UNIT_ABILITIES: Record<string, { desc: string; skill: string; color: string }> = {
-  fighter: { desc: 'Pejuang garis depan', skill: 'Cyclone Slash', color: '#f87171' },
-  tank: { desc: 'Benteng pertahanan', skill: 'Fortress Guard', color: '#60a5fa' },
-  mage: { desc: 'Serangan jarak jauh', skill: 'Meteor Rain', color: '#c084fc' },
-  marksman: { desc: 'Sniper dari belakang', skill: 'Tactical Combo', color: '#fbbf24' },
-  assassin: { desc: 'Pembunuh cepat & licik', skill: 'Shadow Step', color: '#4ade80' },
-};
-
-const RARITY_COLOR: Record<string, string> = {
-  common: '#94a3b8', elite: '#60a5fa', epic: '#c084fc', legendary: '#fbbf24',
-};
-
-const UnitInfoPanel = React.memo(({ towerConfig }: { towerConfig: TowerConfig }) => {
-  const pKey = towerConfig.player.commentKeyword;
-  const eKey = towerConfig.enemy.commentKeyword;
-
-  return (
-    <div className="absolute bottom-28 md:bottom-42 -left-10 -right-10 pointer-events-none select-none flex flex-row justify-between items-end gap-4 scale-80 md:scale-90 origin-bottom">
-
-      <div className="w-1/2 max-w-[240px] bg-black/85 rounded-2xl border border-white/10 shadow-xl overflow-hidden">
-        <div className="flex items-center gap-1.5 px-3 py-2 border-b border-white/5 bg-gradient-to-r from-amber-500/20 to-transparent">
-          <Sword className="w-3.5 h-3.5 text-amber-400" />
-          <span className="text-[13px] font-black text-white uppercase tracking-widest">Units</span>
-        </div>
-        <div className="px-3 py-2 flex flex-col gap-1.5">
-          {Object.entries(UNIT_ABILITIES).map(([cls, info]) => (
-            <div key={cls} className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded bg-white/5 flex items-center justify-center border border-white/5" style={{ color: info.color }}>
-                <UnitIcon cls={cls} className="w-3.5 h-3.5" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between">
-                  <span className="text-[12px] font-black text-white capitalize leading-none">{cls}</span>
-                </div>
-                <div className="text-[10px] text-white/40 leading-tight truncate">{info.desc}</div>
-              </div>
+                  <div className="flex items-baseline gap-0.5">
+                      <span className="text-[10px] md:text-xs font-black italic tracking-tighter" style={{ color: i === 0 ? color : '#ffffffaa' }}>{(value as number)}</span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-baseline gap-0.5">
+                      <span className="text-[10px] md:text-xs font-black italic tracking-tighter" style={{ color: i === 0 ? color : '#ffffffaa' }}>{(value as number)}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 md:gap-3 flex-1 justify-end min-w-0">
+                      <div className="flex flex-col items-end min-w-0">
+                        <span className="text-[10px] md:text-xs font-black text-white/70 group-hover:text-white truncate max-w-[60px] md:max-w-[100px] text-right tracking-tight transition-colors">{username}</span>
+                      </div>
+                    <div className={`w-5 h-5 md:w-7 md:h-7 rounded-md md:rounded-lg flex items-center justify-center font-black italic text-[9px] md:text-xs text-white/40 border border-white/5 flex-shrink-0 ${
+                      i === 0 ? 'animate-pulse shadow-lg' : 'bg-white/5'
+                    }`}
+                    style={{ backgroundColor: i === 0 ? `${color}44` : undefined, borderColor: i === 0 ? color : undefined, color: i === 0 ? '#fff' : undefined }}>
+                      {i + 1}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           ))}
-        </div>
-      </div>
-
-      <div className="w-1/2 max-w-[260px] bg-black/90 rounded-2xl border border-white/10 shadow-2xl overflow-hidden">
-        <div className="flex items-center gap-1.5 px-3 py-2 border-b border-white/5 bg-gradient-to-r from-emerald-500/20 to-transparent">
-          <Target className="w-3 h-3 text-emerald-400" />
-          <span className="text-[10px] md:text-[11px] font-black text-white uppercase tracking-[0.15em]">How to Play</span>
-        </div>
-
-        <div className="p-3 flex flex-col gap-2.5">
-          <div className="flex items-start gap-2.5 group">
-            <div className="w-6 h-6 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-500/20 transition-colors">
-              <Users className="w-3.5 h-3.5 text-emerald-400" />
+          {Object.keys(kills || {}).length === 0 && (
+            <div className="py-2 text-center opacity-10">
+              <p className="text-[8px] uppercase tracking-[0.2em] text-white font-black">Empty...</p>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[10px] text-white/40 uppercase font-black leading-none mb-1">Step 1: Join Team</p>
-              <p className="text-[13px] text-white/90 leading-tight">
-                Ketik <span className="text-emerald-400 font-black">"{pKey}"</span> atau <span className="text-rose-400 font-black">"{eKey}"</span>
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-start gap-2.5 group">
-            <div className="w-6 h-6 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-500/20 transition-colors">
-              <MessageSquare className="w-3.5 h-3.5 text-blue-400" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[10px] text-white/40 uppercase font-black leading-none mb-1">Step 2: Spawn Unit</p>
-              <div className="flex flex-col gap-0.5">
-                <p className="text-[13px] text-white/90 leading-tight">
-                  Ketik <span className="text-white font-black italic">tank, mage, marksman...</span>
-                </p>
-                <p className="text-[10px] text-white/30 uppercase tracking-tighter">
-                  Contoh: <span className="text-amber-400/80 font-bold">{pKey} tank</span>
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-start gap-2.5 group">
-            <div className="w-6 h-6 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center flex-shrink-0 group-hover:bg-amber-500/20 transition-colors">
-              <Gift className="w-3.5 h-3.5 text-amber-400" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[10px] text-white/40 uppercase font-black leading-none mb-1">Step 3: Mass Spawn</p>
-              <p className="text-[13px] text-white/90 leading-tight">
-                Kirim <span className="text-amber-400 font-black italic">Gift</span> untuk pasukan besar!
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="px-2.5 py-1.5 bg-white/5 flex items-center justify-center border-t border-white/5">
-          <p className="text-[7px] text-white/30 font-black uppercase tracking-widest animate-pulse">Waiting for your command...</p>
-        </div>
-      </div>
-
-    </div>
-  );
-});
-
-const RouletteOverlay = React.memo(() => {
-  const rouletteEvent = useStore(s => s.rouletteEvent);
-  const [spinState, setSpinState] = useState<"hidden" | "spinning" | "result">("hidden");
-
-  useEffect(() => {
-    if (rouletteEvent) {
-      setSpinState("spinning");
-      const timer = setTimeout(() => {
-        setSpinState("result");
-        setTimeout(() => setSpinState("hidden"), 1000);
-      }, 2000);
-      return () => clearTimeout(timer);
-    }
-  }, [rouletteEvent]);
-
-  if (spinState === "hidden" || !rouletteEvent) return null;
-
-  return (
-    <div className="absolute inset-0 z-50 flex items-center justify-center pointer-events-none bg-black/80 animate-fade-in">
-      <div className="flex flex-col items-center">
-        <h2 className="text-2xl md:text-4xl font-black italic text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 to-amber-500 drop-shadow-[0_0_20px_rgba(252,211,77,0.8)] uppercase tracking-widest mb-4">
-          ROULETTE GACHA
-        </h2>
-        <div className={`w-32 h-32 md:w-48 md:h-48 rounded-full border-4 border-yellow-500 shadow-[0_0_30px_rgba(234,179,8,0.6)] flex items-center justify-center overflow-hidden relative bg-black/60`}>
-          {spinState === "spinning" ? (
-            <div className="w-full h-full border-4 border-dashed border-white rounded-full animate-[spin_0.2s_linear_infinite] opacity-50" />
-          ) : (
-            <span className="text-5xl animate-bounce">🎁</span>
           )}
-          <div className="absolute inset-0 bg-gradient-to-tr from-yellow-500/20 to-transparent mix-blend-overlay" />
         </div>
-        <p className="mt-4 text-white font-black uppercase tracking-widest text-sm bg-black/50 px-4 py-1 rounded-full">
-          {spinState === "spinning" ? "Spinning..." : "LOCKED IN!"}
-        </p>
-      </div>
-    </div>
-  );
-});
-
-const VictoryWipe = React.memo(({ state }: { state: string }) => {
-  if (state === 'PLAYING' || state === 'SETUP') return null;
-
-  return (
-    <div className="fixed inset-0 z-[100] pointer-events-none overflow-hidden">
-      <div className="absolute inset-0 bg-white animate-flash-out" />
-      <div className={`absolute inset-0 ${state === 'WON' ? 'bg-indigo-600/40' : 'bg-rose-600/40'} animate-fade-in`}
-        style={{ animationDelay: '0.2s' }} />
-      <div className="absolute inset-0 opacity-30">
-        <div className="w-full h-1/2 bg-gradient-to-b from-white/0 via-white/20 to-white/0 absolute top-0 animate-glitch-line-1" />
-        <div className="w-full h-1/2 bg-gradient-to-b from-white/0 via-white/10 to-white/0 absolute bottom-0 animate-glitch-line-2" />
       </div>
     </div>
   );
@@ -498,130 +139,69 @@ const TowerHPBars = React.memo(({ towerConfig }: { towerConfig: TowerConfig }) =
   const eWidth = (enemyBaseHp / (towerConfig?.baseHp || 1000)) * 100;
 
   return (
-    <div className="absolute bottom-3 left-4 right-4 pointer-events-none select-none">
-      {(() => {
-        const playerGifts = towerConfig.player.giftBindings || [];
-        const enemyGifts = towerConfig.enemy.giftBindings || [];
-        if (playerGifts.length === 0 && enemyGifts.length === 0) return null;
-
-        const renderGiftItem = (b: GiftBinding, i: number, teamColor: string) => {
-          const formation = GIFT_FORMATIONS[b.formationId];
-          if (!formation) return null;
-          const giftDef = lookupGiftByKeyword(b.keyword);
-
-          return (
-            <div
-              key={i}
-              className="flex items-center justify-between gap-2 bg-zinc-950/90 rounded-xl px-2.5 py-1.5 border border-white/5 shadow-lg flex-shrink-0 relative overflow-hidden"
-            >
-              <div className="absolute top-0 inset-x-0 h-[2px]" style={{ backgroundColor: teamColor, boxShadow: `0 0 8px ${teamColor}` }} />
-
-              <div className="relative group">
-                <div className="absolute inset-0 bg-white/10 blur-md rounded-full scale-0 group-hover:scale-100 transition-transform" />
-                <img
-                  src={giftDef?.picture || "https://p16-webcast.tiktokcdn.com/img/maliva/webcast-va/resource/cdb55940740d5c83879b2934f9a7d08e.png~tplv-obj.webp"}
-                  alt={b.keyword}
-                  className="w-6 h-6 md:w-8 md:h-8 object-contain drop-shadow-[0_0_5px_rgba(255,255,255,0.3)]"
-                />
-              </div>
-
-              {/* <div className="flex flex-col gap-0.5">
-                <div className="flex items-center gap-1">
-                  {formation.rules.map((r, ri) => (
-                    <div key={ri} className="flex items-center" style={{ color: RARITY_COLOR[r.rarity] }}>
-                      <UnitIcon cls={r.unitClass} className="w-2.5 h-2.5" />
-                      <span className="text-[8px] md:text-[9px] font-black tracking-tighter opacity-80">{r.count}</span>
-                    </div>
-                  ))}
-                </div>
-                <span className="text-[6px] md:text-[7px] text-white/30 font-black uppercase tracking-widest">{b.keyword}</span>
-              </div> */}
+    <div className="grid grid-cols-2 gap-4 md:gap-8 px-3 md:px-4 w-full select-none touch-none">
+      {/* Team A HP */}
+      <div className="relative group">
+        <div className="flex justify-between items-end mb-2">
+          <div className="flex flex-col">
+            <div className="flex items-center gap-1 md:gap-2 mb-0.5">
+               <Shield className="w-2.5 md:w-3 h-2.5 md:h-3 text-indigo-400" />
+               <span className="text-[7px] md:text-[9px] uppercase tracking-[0.2em] text-white/50 font-black truncate max-w-[80px] md:max-w-none">{towerConfig?.player.name} BASE</span>
             </div>
-          );
-        };
-
-        return (
-          <div className="flex items-center justify-between w-full gap-8 md:gap-16 scale-90 md:scale-95 origin-bottom mx-auto">
-            <div className="flex items-center gap-3 flex-wrap justify-end">
-              {playerGifts.slice(0, 3).map((b, i) => renderGiftItem(b, i, towerConfig.player.color))}
-            </div>
-            <div className="flex items-center gap-3 flex-wrap justify-start">
-              {enemyGifts.slice(0, 3).map((b, i) => renderGiftItem(b, i, towerConfig.enemy.color))}
-            </div>
+            <span className="text-xl md:text-3xl font-black italic text-white tracking-tighter tabular-nums drop-shadow-2xl">
+              {playerBaseHp.toLocaleString()} <span className="text-[8px] md:text-[10px] text-indigo-400 not-italic uppercase tracking-tighter opacity-80">HP</span>
+            </span>
           </div>
-        );
-      })()}
-
-      <div className="grid grid-cols-2 gap-4 md:gap-8 max-w-4xl mx-auto items-end">
-        <div className="space-y-1.5">
-          <div className="flex items-end justify-between px-1">
-            <div className="flex flex-col">
-              <div className="flex items-center gap-2 mb-1">
-                <div className="w-3 h-3 bg-indigo-500 rounded-sm rotate-45 shadow-[0_0_8px_#6366f1]" />
-                <span className="text-[12px] md:text-[18px] uppercase tracking-[0.25em] text-white/70 font-black truncate max-w-[80px] md:max-w-none">
-                  {towerConfig?.player.name}
-                </span>
-                {towerConfig?.player.score !== undefined && towerConfig.player.score > 0 && (
-                  <div className="px-1.5 py-0.5 rounded bg-indigo-500/30 text-indigo-200 text-[7px] font-black border border-indigo-500/40 ml-1">
-                    RANK {towerConfig.player.score}
-                  </div>
-                )}
-              </div>
-              <div className="flex items-baseline gap-1.5">
-                <span className="text-xl md:text-3xl font-black italic text-white tracking-tighter drop-shadow-lg">
-                  {Math.round(playerBaseHp).toLocaleString()}
-                </span>
-                <span className="text-[8px] md:text-[10px] text-indigo-400 font-black uppercase opacity-60">HP</span>
-              </div>
-            </div>
-            <div className="flex items-center gap-1.5 px-2 py-1 bg-indigo-500/15 border border-indigo-500/30 rounded-lg text-[10px] font-black text-indigo-300 shadow-lg">
-              <Users className="w-3.5 h-3.5" /> {armyCounts.player}
-            </div>
-          </div>
-          <div className="h-3 md:h-5 bg-zinc-950/80 rounded-full overflow-hidden border border-white/10 p-0.5 shadow-inner">
-            <div
-              className="h-full rounded-full transition-all duration-700 ease-out relative group overflow-hidden"
-              style={{ width: `${pWidth}%`, background: `linear-gradient(to right, ${towerConfig?.player.color}, #6366f1)`, boxShadow: `0 0 20px ${towerConfig?.player.color}66` }}
-            >
-              <div className="absolute inset-0 bg-[linear-gradient(45deg,rgba(255,255,255,0.15)_25%,transparent_25%,transparent_50%,rgba(255,255,255,0.15)_50%,rgba(255,255,255,0.15)_75%,transparent_75%,transparent)] bg-[length:30px_30px] animate-[shimmer_2s_linear_infinite]" />
-              <div className="absolute top-0 inset-x-0 h-1/2 bg-white/20" />
+          <div className="flex flex-col items-end">
+            <div className="flex items-center gap-1.5 px-2 py-0.5 bg-indigo-500/10 rounded-md border border-indigo-500/20 mb-1">
+               <Users className="w-2.5 h-2.5 text-indigo-400" />
+               <span className="text-[9px] font-black text-indigo-300">{armyCounts.player} UNITS</span>
             </div>
           </div>
         </div>
-
-        <div className="space-y-1.5">
-          <div className="flex items-end justify-between px-1">
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-rose-500/15 border border-rose-500/30 rounded-xl text-[12px] font-black text-rose-300 shadow-lg">
-              <Users className="w-4 h-4" /> {armyCounts.enemy}
-            </div>
-            <div className="flex flex-col items-end">
-              <div className="flex items-center gap-2 mb-1 justify-end">
-                {towerConfig?.enemy.score !== undefined && towerConfig.enemy.score > 0 && (
-                  <div className="px-2 py-1 rounded bg-rose-500/30 text-rose-200 text-[8px] font-black border border-rose-500/40 mr-1">
-                    RANK {towerConfig.enemy.score}
-                  </div>
-                )}
-                <span className="text-[12px] md:text-[18px] uppercase tracking-[0.25em] text-white/70 font-black truncate max-w-[100px] md:max-w-none">
-                  {towerConfig?.enemy.name}
-                </span>
-                <div className="w-3 h-3 bg-rose-500 rounded-sm rotate-45 shadow-[0_0_8px_#f43f5e]" />
-              </div>
-              <div className="flex items-baseline gap-1.5 justify-end">
-                <span className="text-[10px] md:text-[12px] text-rose-400 font-black uppercase opacity-60">HP</span>
-                <span className="text-2xl md:text-4xl font-black italic text-white tracking-tighter drop-shadow-lg">
-                  {Math.round(enemyBaseHp).toLocaleString()}
-                </span>
-              </div>
-            </div>
+        <div className="h-4 bg-zinc-950/90 rounded-full border border-white/5 p-1 overflow-hidden relative shadow-inner">
+          <div 
+            className="h-full rounded-full transition-all duration-700 ease-out relative"
+            style={{ 
+              width: `${pWidth}%`, 
+              backgroundColor: towerConfig?.player.color,
+              boxShadow: `0 0 20px ${towerConfig?.player.color}44`
+            }}
+          >
+            <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent opacity-50" />
           </div>
-          <div className="h-4 md:h-6 bg-zinc-950/80 rounded-full overflow-hidden border border-white/10 p-1 shadow-inner">
-            <div
-              className="h-full rounded-full transition-all duration-700 ease-out relative ml-auto overflow-hidden"
-              style={{ width: `${eWidth}%`, background: `linear-gradient(to left, ${towerConfig?.enemy.color}, #f43f5e)`, boxShadow: `0 0 20px ${towerConfig?.enemy.color}66` }}
-            >
-              <div className="absolute inset-0 bg-[linear-gradient(-45deg,rgba(255,255,255,0.15)_25%,transparent_25%,transparent_50%,rgba(255,255,255,0.15)_50%,rgba(255,255,255,0.15)_75%,transparent_75%,transparent)] bg-[length:30px_30px] animate-[shimmer_2s_linear_infinite]" />
-              <div className="absolute top-0 inset-x-0 h-1/2 bg-white/20" />
+        </div>
+      </div>
+
+      {/* Team B HP */}
+      <div className="relative group">
+        <div className="flex justify-between items-end mb-2">
+           <div className="flex flex-col items-start px-2 py-0.5 bg-rose-500/10 rounded-md border border-rose-500/20 mb-1">
+              <div className="flex items-center gap-1.5">
+                 <Users className="w-2.5 h-2.5 text-rose-400" />
+                 <span className="text-[9px] font-black text-rose-300">{armyCounts.enemy} UNITS</span>
+              </div>
+           </div>
+          <div className="flex flex-col items-end">
+            <div className="flex items-center gap-1 md:gap-2 mb-0.5">
+               <span className="text-[7px] md:text-[9px] uppercase tracking-[0.2em] text-white/50 font-black truncate max-w-[80px] md:max-w-none">{towerConfig?.enemy.name} BASE</span>
+               <Shield className="w-2.5 md:w-3 h-2.5 md:h-3 text-rose-400" />
             </div>
+            <span className="text-xl md:text-3xl font-black italic text-white tracking-tighter tabular-nums drop-shadow-2xl">
+               <span className="text-[8px] md:text-[10px] text-rose-400 not-italic uppercase tracking-tighter opacity-80">HP</span> {enemyBaseHp.toLocaleString()}
+            </span>
+          </div>
+        </div>
+        <div className="h-4 bg-zinc-950/90 rounded-full border border-white/5 p-1 overflow-hidden relative shadow-inner">
+          <div 
+            className="h-full rounded-full transition-all duration-700 ease-out relative ml-auto"
+            style={{ 
+              width: `${eWidth}%`, 
+              backgroundColor: towerConfig?.enemy.color,
+              boxShadow: `0 0 20px ${towerConfig?.enemy.color}44`
+            }}
+          >
+             <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent opacity-50" />
           </div>
         </div>
       </div>
@@ -629,375 +209,458 @@ const TowerHPBars = React.memo(({ towerConfig }: { towerConfig: TowerConfig }) =
   );
 });
 
-const ChatOverlay = React.memo(({ messages, onClose }: { messages: any[], onClose: () => void }) => (
-  <div className="absolute top-14 right-2 bottom-20 w-[240px] md:w-72 pointer-events-auto select-none animate-fade-in-scale scale-90 md:scale-100 origin-top-right">
-    <div className="hud-glass rounded-2xl h-full flex flex-col overflow-hidden">
-      <div className="flex items-center justify-between p-3 border-b border-white/5">
-        <div className="flex items-center gap-2">
-          <MessageCircle className="w-3.5 h-3.5 text-pink-400 animate-pulse" />
-          <span className="text-[10px] font-black uppercase tracking-widest text-white/80">Live Chat</span>
-        </div>
-        <button onClick={onClose} className="p-1 hover:bg-white/10 rounded-md transition-colors">
-          <X className="w-3 h-3 text-white/40" />
-        </button>
-      </div>
-      <div className="flex-1 overflow-y-auto p-2 scroll-smooth flex flex-col justify-end">
-        <div className="space-y-1.5 flex flex-col">
-          {messages.length === 0 ? (
-            <div className="h-full flex items-center justify-center py-20">
-              <p className="text-[9px] text-zinc-600 font-bold italic">Waiting for messages...</p>
-            </div>
-          ) : (
-            messages.slice(-15).map((msg) => (
-              <div key={msg.id} className="bg-black/80 p-2 rounded-lg flex gap-2 animate-slide-up border border-white/5">
-                <div className="w-5 h-5 rounded-full bg-zinc-800 flex-shrink-0 flex items-center justify-center overflow-hidden border border-white/10">
-                  {msg.profileImage ? (
-                    <img src={msg.profileImage} alt="" className="w-full h-full object-cover" />
-                  ) : (
-                    <span className="text-[7px] font-bold text-zinc-600">{msg.username[0].toUpperCase()}</span>
-                  )}
-                </div>
-                <div className="min-w-0 flex-1 text-left">
-                  <p className="text-[8px] font-black text-indigo-400 uppercase truncate">{msg.username}</p>
-                  <p className={`text-[10px] font-medium break-words leading-tight ${msg.type === 'gift' ? 'text-pink-400 font-black' : 'text-zinc-300'}`}>
-                    {msg.comment}
-                  </p>
-                </div>
-              </div>
-            ))
-          )}
-          <div className="h-0" />
-        </div>
-      </div>
-    </div>
-  </div>
-));
-
-export const UIOverlay = React.memo(({
-  towerConfig, setTowerConfig,
-  onStart, onConnect,
-  connected, loading, error,
-  onRestart, isCinematic, onToggleCinematic,
-  showChat, onToggleChat,
-  mvpData, testingMode, onToggleTesting,
-  displayMessages,
+export const UIOverlay = ({
+  towerConfig,
+  setTowerConfig,
+  onStart,
+  onConnect,
+  connected,
+  loading,
+  error,
+  onRestart,
+  isCinematic,
+  onToggleCinematic,
+  showChat,
+  onToggleChat,
+  mvpData,
+  testingMode,
+  onToggleTesting,
+  isFullscreen,
+  onToggleFullscreen,
+  standalone,
 }: UIOverlayProps) => {
-
   const gameState = useStore(s => s.gameState);
+  const killEvents = useStore(s => s.killEvents);
+  const liveStats = useStore(s => s.liveStats);
   const isSettingsOpen = useStore(s => s.isSettingsOpen);
   const setIsSettingsOpen = useStore(s => s.setIsSettingsOpen);
   const settings = useStore(s => s.settings);
-  // const weather = useStore(s => s.weather);
+  const weather = useStore(s => s.weather);
+  const combatMode = useStore(s => s.combatMode);
   const [step, setStep] = useState(1);
   const [username, setUsername] = useState("");
 
-  const nextStep = () => setStep(s => Math.min(s + 1, 3));
+  const nextStep = () => setStep(s => Math.min(s + 1, 4));
   const prevStep = () => setStep(s => Math.max(s - 1, 1));
+  const toggleFullscreen = () => {
+    const container = document.getElementById('game-canvas-container');
+    if (!container) return;
+
+    // Use Virtual Fullscreen AND Native for maximum compatibility
+    onToggleFullscreen();
+
+    const doc = document as any;
+    const element = container as any;
+
+    if (!doc.fullscreenElement && !doc.webkitFullscreenElement) {
+      if (element.requestFullscreen) {
+        element.requestFullscreen().catch(() => {});
+      } else if (element.webkitRequestFullscreen) {
+        element.webkitRequestFullscreen();
+      }
+    } else {
+      if (doc.exitFullscreen) {
+        doc.exitFullscreen();
+      } else if (doc.webkitExitFullscreen) {
+        doc.webkitExitFullscreen();
+      }
+    }
+  };
 
   return (
-    <>
-      {/* ======== SETUP WIZARD (Modal over canvas) ======== */}
-      {gameState === "SETUP" && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 p-4 pointer-events-auto">
-          {/* Autocomplete Datalist for Setup Screen */}
-          <datalist id="gift-suggestions">
-            {Object.keys(GIFT_DICTIONARY).map((giftName) => (
-              <option key={giftName} value={giftName} />
-            ))}
-          </datalist>
-          <div className="w-full max-w-lg hud-glass rounded-2xl md:rounded-3xl p-4 md:p-10 shadow-[0_0_80px_-20px_rgba(99,102,241,0.25)] relative overflow-hidden animate-fade-in-scale max-h-[95vh] overflow-y-auto">
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-72 h-72 bg-indigo-600/8 blur-[100px] rounded-full -z-10" />
+    <div className={`${standalone ? 'relative w-full' : 'absolute inset-0 pointer-events-none'} flex flex-col justify-between z-[1000] select-none touch-none ${isFullscreen ? 'p-0' : 'p-3 md:p-6'}`}>
 
-            <div className="flex flex-col items-center text-center gap-3 mb-6">
-              <div className="p-4 bg-indigo-900/80 rounded-2xl text-indigo-400 ring-1 ring-white/10 shadow-xl animate-pulse-slow">
-                <Settings2 className="w-7 h-7" />
+      {/* Fullscreen & Camera Controls - Top Right - HIDDEN DURING SETUP */}
+      {gameState !== 'SETUP' && (
+        <div className="absolute top-3 md:top-6 right-3 md:right-6 flex flex-wrap justify-end gap-1.5 md:gap-2 pointer-events-auto z-[1000]">
+          <button 
+            onClick={onToggleTesting}
+            className={`p-2 md:p-3 rounded-lg md:rounded-xl border border-white/10 transition-all ${testingMode ? 'bg-amber-500 text-white shadow-[0_0_15px_rgba(245,158,11,0.5)]' : 'bg-zinc-900/80 text-white/50 hover:text-white'}`}
+            title="Testing Mode (Auto-Spawn)"
+          >
+            <Zap className={`w-4 md:w-5 h-4 md:h-5 ${testingMode ? 'animate-pulse' : ''}`} />
+          </button>
+          <button 
+            onClick={onToggleChat}
+            className={`p-2 md:p-3 rounded-lg md:rounded-xl border border-white/10 transition-all ${showChat ? 'bg-pink-500 text-white shadow-[0_0_15px_rgba(236,72,153,0.5)]' : 'bg-zinc-900/80 text-white/50 hover:text-white'}`}
+            title={showChat ? "Hide Comments" : "Show Comments"}
+          >
+            <MessageSquare className="w-4 md:w-5 h-4 md:h-5" />
+          </button>
+          <button 
+            onClick={onToggleCinematic}
+            className={`p-2 md:p-3 rounded-lg md:rounded-xl border border-white/10 transition-all ${isCinematic ? 'bg-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.5)]' : 'bg-zinc-900/80 text-white/50 hover:text-white'}`}
+            title="Film Mode"
+          >
+            <Camera className="w-4 md:w-5 h-4 md:h-5" />
+          </button>
+          <button 
+            onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+            className={`p-2 md:p-3 rounded-lg md:rounded-xl border border-white/10 transition-all shadow-xl ${isSettingsOpen ? 'bg-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.5)]' : 'bg-zinc-900/80 text-white/50 hover:text-white'}`}
+            title="Update Configuration"
+          >
+            <Settings2 className="w-4 md:w-5 h-4 md:h-5" />
+          </button>
+          <Link
+            href="/training"
+            className="p-2 md:p-3 bg-rose-500/10 hover:bg-rose-500/20 rounded-lg md:rounded-xl border border-rose-500/20 text-rose-500 transition-all shadow-xl group"
+            title="Dedicated Training Arena"
+          >
+            <Target className="w-4 md:w-5 h-4 md:h-5 group-hover:scale-110 transition-transform" />
+          </Link>
+          <button 
+            onClick={toggleFullscreen}
+            className={`p-2 md:p-3 rounded-lg md:rounded-xl border border-white/10 transition-all ${isFullscreen ? 'bg-zinc-100 text-zinc-950' : 'bg-zinc-950/80 text-white/50 hover:text-white'}`}
+            title="Fullscreen Canvas"
+          >
+            {isFullscreen ? <Minimize2 className="w-4 md:w-5 h-4 md:h-5" /> : <Maximize2 className="w-4 md:w-5 h-4 md:h-5" />}
+          </button>
+        </div>
+      )}
+
+
+      {/* Setup Modal Wizard - SUPREME Z-INDEX */}
+      {gameState === "SETUP" && (
+        <div className={`${standalone ? 'relative w-full p-0 flex flex-col items-center justify-center' : 'fixed inset-0 z-[2000] flex items-center justify-center p-3 md:p-12 bg-zinc-950/98 animate-in fade-in duration-500'} pointer-events-auto select-none touch-none`}>
+          <div className={`w-full max-w-2xl bg-zinc-900 border border-white/10 rounded-3xl md:rounded-[40px] p-6 md:p-16 shadow-[0_0_100px_-20px_rgba(79,70,229,0.3)] space-y-6 md:space-y-10 relative overflow-hidden ${standalone ? 'm-0' : ''}`}>
+            {/* Background Glow */}
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-96 h-96 bg-indigo-600/10 blur-[120px] rounded-full -z-10" />
+
+            {/* Wizard Header */}
+            <div className="flex flex-col items-center text-center gap-4">
+              <div className="p-4 bg-indigo-500/20 rounded-3xl text-indigo-400 ring-8 ring-indigo-500/5">
+                <Settings2 className="w-8 h-8" />
               </div>
               <div className="space-y-1">
-                <h2 className="text-3xl md:text-4xl font-black uppercase tracking-tighter text-white italic drop-shadow-lg">
-                  Setup <span className="text-indigo-500">Battle</span>
-                </h2>
-                <p className="text-zinc-400 text-[10px] uppercase font-black tracking-[0.3em]">Step {step} of 3</p>
+                <h2 className="text-3xl font-black uppercase tracking-tighter text-white italic">Setup Battle</h2>
+                <p className="text-zinc-500 text-xs uppercase font-bold tracking-[0.2em]">Step {step} of 3 • Configuration</p>
               </div>
               <div className="flex gap-2 w-full max-w-[200px] mt-2">
                 {[1, 2, 3].map(i => (
-                  <div key={i} className={`flex-1 h-1.5 rounded-full transition-all duration-700 ${step >= i ? 'bg-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.6)]' : 'bg-white/5'}`} />
+                  <div key={i} className={`flex-1 h-1.5 rounded-full transition-all duration-500 ${step >= i ? 'bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]' : 'bg-zinc-800'}`} />
                 ))}
               </div>
             </div>
 
             {/* Step 1: TikTok Connection */}
             {step === 1 && (
-              <div className="space-y-5 animate-slide-up">
-                <div className="space-y-3">
-                  <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest flex items-center justify-center gap-1.5">
-                    <Users className="w-3 h-3" /> Live Interface Sync
+              <div className="space-y-8 animate-in slide-in-from-bottom-8 duration-500">
+                <div className="space-y-4">
+                  <label className="text-sm font-black text-zinc-400 uppercase tracking-widest flex items-center justify-center gap-2">
+                    <Users className="w-4 h-4" /> Live Interface Sync
                   </label>
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <div className="relative flex-1">
-                      <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-zinc-600">
-                        <span className="text-sm font-black italic">@</span>
+                  <div className="flex flex-col md:flex-row gap-3">
+                    <div className="relative flex-1 group">
+                      <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-zinc-600 group-focus-within:text-indigo-400 transition-colors">
+                        <span className="text-lg font-black italic">@</span>
                       </div>
-                      <input
-                        type="text" value={username}
+                      <input 
+                        type="text" 
+                        value={username}
                         onChange={(e) => setUsername(e.target.value)}
-                        className={`w-full bg-black/40 border rounded-xl px-9 py-3.5 text-sm font-bold focus:outline-none transition-all placeholder:text-zinc-800 ${!username ? 'border-amber-500/20' : 'border-white/5 focus:border-indigo-500/40'}`}
-                        placeholder="tiktok_username"
+                        className={`w-full bg-zinc-950 border-2 rounded-2xl px-12 py-5 text-lg font-bold focus:outline-none transition-all placeholder:text-zinc-800 ${!username ? 'border-amber-500/20' : 'border-white/5 focus:border-indigo-500/50'}`}
+                        placeholder="your_tiktok_username"
                       />
+                      {!username && (
+                        <div className="absolute -bottom-6 left-2 flex items-center gap-1 text-[9px] font-black text-amber-500/60 uppercase tracking-widest animate-pulse">
+                          <AlertTriangle className="w-3 h-3" /> Please enter username
+                        </div>
+                      )}
                     </div>
-                    <button
-                      onClick={() => onConnect(username)} disabled={loading}
-                      className={`px-6 py-3.5 rounded-xl font-black uppercase tracking-widest text-[9px] transition-all active:scale-95 ${connected ? 'bg-green-500/15 text-green-400 border border-green-500/20' : 'bg-indigo-600 text-white hover:bg-indigo-500'}`}
+                    <button 
+                      onClick={() => onConnect(username)}
+                      disabled={loading}
+                      className={`px-8 rounded-2xl font-black uppercase tracking-widest text-xs transition-all active:scale-95 flex items-center justify-center min-w-[140px] ${connected ? 'bg-green-500/20 text-green-400 border border-green-500/20' : 'bg-indigo-600 text-white hover:bg-indigo-500 shadow-xl shadow-indigo-600/20'}`}
                     >
-                      {loading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : connected ? <CheckCircle2 className="w-5 h-5 mx-auto" /> : "Sync"}
+                      {loading ? (
+                        <div className="flex items-center gap-2">
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                          <span>SYNCING...</span>
+                        </div>
+                      ) : (
+                        connected ? <CheckCircle2 className="w-6 h-6 mx-auto" /> : "Connect Sync"
+                      )}
                     </button>
                   </div>
-
-                  <div className={`flex items-center justify-center gap-2 p-2.5 rounded-xl border transition-all ${connected ? 'bg-green-500/8 border-green-500/15' : error ? 'bg-rose-500/8 border-rose-500/15' : 'bg-black/20 border-white/5'}`}>
-                    <div className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-green-500 animate-pulse shadow-[0_0_6px_rgba(34,197,94,0.8)]' : error ? 'bg-rose-500' : 'bg-zinc-800'}`} />
-                    <span className={`text-[8px] uppercase font-black tracking-widest ${connected ? 'text-green-400' : error ? 'text-rose-400' : 'text-zinc-600'}`}>
-                      {loading ? "Connecting..." : connected ? "Live Sync Active" : "Offline"}
-                    </span>
-                  </div>
-                  {error && <p className="text-[8px] font-bold text-rose-500/70 uppercase tracking-widest text-center">{error}</p>}
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <label className="text-[8px] font-black text-zinc-500 uppercase tracking-widest">Base HP</label>
-                    <input
-                      type="number" value={towerConfig.baseHp}
-                      onChange={(e) => setTowerConfig(prev => ({ ...prev, baseHp: parseInt(e.target.value) || 1000 }))}
-                      className="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2.5 text-xs font-bold focus:outline-none focus:border-indigo-500/30"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[8px] font-black text-zinc-500 uppercase tracking-widest">Max Units</label>
-                    <input
-                      type="number" value={towerConfig.maxUnits}
-                      onChange={(e) => setTowerConfig(prev => ({ ...prev, maxUnits: parseInt(e.target.value) || 20 }))}
-                      className="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2.5 text-xs font-bold focus:outline-none focus:border-indigo-500/30"
-                    />
+                  <div className={`flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border transition-all ${connected ? 'bg-green-500/10 border-green-500/20 shadow-[0_0_20px_rgba(34,197,94,0.1)]' : error ? 'bg-rose-500/10 border-rose-500/20' : 'bg-zinc-950/50 border-white/5'}`}>
+                    <div className="flex items-center gap-3">
+                      <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500 animate-pulse shadow-[0_0_10px_rgba(34,197,94,0.8)]' : error ? 'bg-rose-500' : 'bg-zinc-800'}`} />
+                      <span className={`text-[10px] uppercase font-black tracking-[0.2em] ${connected ? 'text-green-400' : error ? 'text-rose-400' : 'text-zinc-500'}`}>
+                        {loading ? "Establishing connection to TikTok..." : connected ? "Status: Live Sync Active" : "Status: Offline - Connection Optional"}
+                      </span>
+                    </div>
+                    {error && (
+                      <div className="text-[9px] font-bold text-rose-500/80 uppercase tracking-widest animate-bounce mt-1">
+                        Error: {error}
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                <button
-                  onClick={nextStep} disabled={!username}
-                  className={`w-full py-4 font-black uppercase tracking-widest text-xs rounded-xl transition-all flex items-center justify-center gap-2 active:scale-[0.98] ${!username ? 'bg-zinc-800/50 text-zinc-600 cursor-not-allowed' : 'bg-white text-zinc-950 hover:bg-zinc-200'}`}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-4 text-center md:text-left">
+                    <label className="text-sm font-black text-zinc-400 uppercase tracking-widest flex items-center justify-center md:justify-start gap-2">
+                      <Zap className="w-4 h-4" /> Global Tower Stats
+                    </label>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Base Health Points (HP)</label>
+                      <input 
+                        type="number" 
+                        value={towerConfig.baseHp}
+                        onChange={(e) => setTowerConfig(prev => ({ ...prev, baseHp: parseInt(e.target.value) || 1000 }))}
+                        className="w-full bg-zinc-950 border-2 border-white/5 rounded-2xl px-5 py-4 text-sm font-bold focus:outline-none focus:border-indigo-500/30"
+                        placeholder="Default: 1000"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-4 text-center md:text-left">
+                    <label className="text-sm font-black text-zinc-400 uppercase tracking-widest flex items-center justify-center md:justify-start gap-2">
+                      <Users className="w-4 h-4 shadow-lg" /> Battle Density
+                    </label>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Max Units Per Team</label>
+                      <input 
+                        type="number" 
+                        value={towerConfig.maxUnits}
+                        onChange={(e) => setTowerConfig(prev => ({ ...prev, maxUnits: parseInt(e.target.value) || 25 }))}
+                        className="w-full bg-zinc-950 border-2 border-white/5 rounded-2xl px-5 py-4 text-sm font-bold focus:outline-none focus:border-indigo-500/30"
+                        placeholder="Default: 25"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <button 
+                  onClick={nextStep}
+                  disabled={!username}
+                  className={`w-full py-6 font-black uppercase tracking-widest rounded-2xl transition-all shadow-2xl flex items-center justify-center gap-3 active:scale-[0.98] ${!username ? 'bg-zinc-800 text-zinc-600 cursor-not-allowed grayscale' : 'bg-white text-zinc-950 hover:bg-zinc-200'}`}
                 >
-                  Configure Team A <Sword className="w-4 h-4" />
+                  Configure Team A <Sword className="w-5 h-5" />
                 </button>
 
-                <Link
-                  href="/training"
-                  className="w-full py-3 bg-black/30 hover:bg-black/50 rounded-xl flex items-center justify-between px-4 transition-all group border border-white/5"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="p-1.5 bg-rose-500/15 rounded-lg text-rose-500"><Target className="w-3 h-3" /></div>
-                    <span className="text-[9px] font-black text-white/60 uppercase tracking-wider">Training Arena</span>
-                  </div>
-                  <ChevronRight className="w-3 h-3 text-zinc-700 group-hover:text-white/50 group-hover:translate-x-0.5 transition-all" />
-                </Link>
+                <div className="pt-4 border-t border-white/5">
+                   <Link 
+                     href="/training"
+                     className="w-full py-4 bg-zinc-800/50 hover:bg-zinc-800 rounded-2xl flex items-center justify-between px-6 group transition-all"
+                   >
+                     <div className="flex items-center gap-4">
+                        <div className="p-2 bg-rose-500/20 rounded-xl text-rose-500">
+                           <Target className="w-4 h-4" />
+                        </div>
+                        <div className="text-left">
+                           <span className="block text-[8px] font-black text-rose-500/60 uppercase tracking-widest">Solo Analysis</span>
+                           <h4 className="text-xs font-black text-white uppercase tracking-tight">Enter Dedicated Training Arena</h4>
+                        </div>
+                     </div>
+                     <ChevronRight className="w-4 h-4 text-zinc-600 group-hover:text-white group-hover:translate-x-1 transition-all" />
+                   </Link>
+                </div>
               </div>
             )}
 
             {/* Step 2: Team A Config */}
             {step === 2 && (
-              <div className="space-y-5 animate-slide-up">
-                <div className="p-4 md:p-5 bg-blue-500/5 rounded-2xl border border-blue-500/10 space-y-4">
+              <div className="space-y-8 animate-in slide-in-from-bottom-8 duration-500">
+                <div className="p-8 bg-blue-500/5 rounded-[32px] border border-blue-500/10 space-y-6">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-black text-blue-400 uppercase tracking-tighter italic flex items-center gap-2">
-                      <Shield className="w-4 h-4" /> Pihak A
+                    <h3 className="text-lg font-black text-blue-400 uppercase tracking-tighter italic flex items-center gap-3">
+                      <Palette className="w-5 h-5 shadow-lg" /> Pihak A Configuration
                     </h3>
-                    <button
+                    <button 
                       onClick={() => setTowerConfig(prev => ({ ...prev, player: { ...prev.player, active: !prev.player.active } }))}
-                      className={`px-3 py-1 rounded-full text-[8px] font-black tracking-widest transition-all ${towerConfig.player.active ? 'bg-green-500/15 text-green-400' : 'bg-zinc-800 text-zinc-500'}`}
+                      className={`px-4 py-1.5 rounded-full text-xs font-black tracking-widest transition-all ${towerConfig.player.active ? 'bg-green-500/20 text-green-400' : 'bg-zinc-800 text-zinc-500'}`}
                     >
-                      {towerConfig.player.active ? "ACTIVE" : "OFF"}
+                      {towerConfig.player.active ? "ACTIVE" : "DISABLED"}
                     </button>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <label className="text-[8px] font-black text-zinc-500 uppercase tracking-widest">Team Name</label>
-                      <input type="text" value={towerConfig.player.name}
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Team Label</label>
+                      <input 
+                        type="text" 
+                        value={towerConfig.player.name}
                         onChange={(e) => setTowerConfig(prev => ({ ...prev, player: { ...prev.player, name: e.target.value } }))}
-                        className="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2.5 text-xs font-bold focus:outline-none focus:border-blue-500/30" />
+                        className="w-full bg-zinc-950 border-2 border-white/5 rounded-2xl px-5 py-4 text-sm font-bold focus:outline-none focus:border-blue-500/30"
+                      />
                     </div>
-                    <div className="space-y-1">
-                      <label className="text-[8px] font-black text-zinc-500 uppercase tracking-widest">Color</label>
-                      <div className="flex gap-2 items-center bg-black/40 border border-white/5 rounded-xl px-2 py-1">
-                        <input type="color" value={towerConfig.player.color}
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Theme Color</label>
+                      <div className="flex gap-3 items-center bg-zinc-950 border-2 border-white/5 rounded-2xl px-3 py-2">
+                        <input 
+                          type="color" 
+                          value={towerConfig.player.color}
                           onChange={(e) => setTowerConfig(prev => ({ ...prev, player: { ...prev.player, color: e.target.value } }))}
-                          className="w-full h-8 bg-transparent cursor-pointer rounded" />
-                        <span className="text-[8px] font-mono text-zinc-600">{towerConfig.player.color.toUpperCase()}</span>
+                          className="w-full h-10 bg-transparent cursor-pointer rounded-lg"
+                        />
+                        <span className="text-xs font-mono text-zinc-500">{towerConfig.player.color.toUpperCase()}</span>
                       </div>
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <label className="text-[8px] font-black text-zinc-500 uppercase tracking-widest flex items-center gap-1"><MessageSquare className="w-2.5 h-2.5" /> Comment Keyword</label>
-                      <input type="text" value={towerConfig.player.commentKeyword}
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest flex items-center gap-1">
+                        <MessageSquare className="w-3 h-3" /> Chat Keyword
+                      </label>
+                      <input 
+                        type="text" 
+                        value={towerConfig.player.commentKeyword}
                         onChange={(e) => setTowerConfig(prev => ({ ...prev, player: { ...prev.player, commentKeyword: e.target.value } }))}
-                        className="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2.5 text-xs font-bold focus:outline-none focus:border-blue-500/30" placeholder="indo" />
+                        className="w-full bg-zinc-950 border-2 border-white/5 rounded-2xl px-5 py-4 text-sm font-bold focus:outline-none focus:border-blue-500/30"
+                        placeholder="e.g. indo"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest flex items-center gap-1">
+                        <Gift className="w-3 h-3" /> Gift Keyword
+                      </label>
+                      <input 
+                        type="text" 
+                        value={towerConfig.player.giftKeyword}
+                        onChange={(e) => setTowerConfig(prev => ({ ...prev, player: { ...prev.player, giftKeyword: e.target.value } }))}
+                        className="w-full bg-zinc-950 border-2 border-white/5 rounded-2xl px-5 py-4 text-sm font-bold focus:outline-none focus:border-blue-500/30"
+                        placeholder="e.g. rose"
+                      />
                     </div>
                   </div>
 
-                  {/* DYNAMIC GIFT RULES - TEAM A */}
-                  <div className="space-y-2 mt-3 bg-black/20 p-2.5 rounded-xl border border-white/5">
-                    <div className="flex items-center justify-between mb-2">
-                      <label className="text-[8px] font-black text-zinc-400 uppercase tracking-widest flex items-center gap-1"><Gift className="w-3 h-3 text-pink-400" /> Gift Rules</label>
-                      <button
-                        onClick={() => setTowerConfig(prev => ({ ...prev, player: { ...prev.player, giftBindings: [...(prev.player.giftBindings || []), { keyword: '', formationId: Object.keys(GIFT_FORMATIONS)[0] }] } }))}
-                        className="px-2.5 py-1 bg-blue-500/20 text-blue-400 hover:bg-blue-500/40 rounded-md text-[8px] font-black uppercase transition-colors"
-                      >+ Add</button>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest flex items-center gap-1">
+                        <Zap className="w-3 h-3" /> Gift Multiplier
+                      </label>
+                      <input 
+                        type="number" 
+                        min="0.5"
+                        max="10"
+                        step="0.5"
+                        value={towerConfig.player.giftMultiplier || 1}
+                        onChange={(e) => setTowerConfig(prev => ({ ...prev, player: { ...prev.player, giftMultiplier: parseFloat(e.target.value) } }))}
+                        className="w-full bg-zinc-950 border-2 border-white/5 rounded-2xl px-5 py-4 text-sm font-bold focus:outline-none focus:border-blue-500/30"
+                        placeholder="e.g. 1"
+                      />
+                      <p className="text-[9px] text-zinc-500">Multiplier for units spawned from gifts</p>
                     </div>
-                    <div className="space-y-1.5 max-h-[220px] overflow-y-auto pr-1 custom-scrollbar">
-                      {(towerConfig.player.giftBindings || []).map((binding, idx) => (
-                        <div key={idx} className="flex gap-1.5 items-center bg-black/40 p-1.5 rounded-lg border border-white/5">
-                          <input type="text" value={binding.keyword} placeholder="gift name"
-                            list="gift-suggestions"
-                            onChange={(e) => {
-                              const newBindings = [...towerConfig.player.giftBindings];
-                              newBindings[idx].keyword = e.target.value;
-                              setTowerConfig(prev => ({ ...prev, player: { ...prev.player, giftBindings: newBindings } }));
-                            }}
-                            className="w-[35%] bg-transparent border-b border-white/10 text-[10px] text-white focus:outline-none focus:border-blue-500/50 px-1 placeholder:text-zinc-600" />
-                          <span className="text-[8px] text-zinc-500">➔</span>
-                          <select value={binding.formationId}
-                            onChange={(e) => {
-                              const newBindings = [...towerConfig.player.giftBindings];
-                              newBindings[idx].formationId = e.target.value;
-                              setTowerConfig(prev => ({ ...prev, player: { ...prev.player, giftBindings: newBindings } }));
-                            }}
-                            className="flex-1 bg-transparent text-[10px] text-white focus:outline-none border-b border-white/10 focus:border-blue-500/50 appearance-none px-1">
-                            {Object.entries(GIFT_FORMATIONS).map(([key, form]) => (
-                              <option key={key} value={key} className="bg-zinc-900 text-white">{form.name}</option>
-                            ))}
-                          </select>
-                          <button onClick={() => {
-                            const newBindings = [...towerConfig.player.giftBindings];
-                            newBindings.splice(idx, 1);
-                            setTowerConfig(prev => ({ ...prev, player: { ...prev.player, giftBindings: newBindings } }));
-                          }} className="text-zinc-500 hover:text-rose-500 transition-colors p-1"><X className="w-3.5 h-3.5" /></button>
-                        </div>
-                      ))}
-                      {(!towerConfig.player.giftBindings || towerConfig.player.giftBindings.length === 0) && (
-                        <p className="text-[8px] text-zinc-500 italic text-center py-2">No gift rules configured.</p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[8px] font-black text-zinc-500 uppercase tracking-widest flex items-center gap-1"><Camera className="w-2.5 h-2.5" /> Flag Image URL</label>
-                    <input type="text" value={towerConfig.player.flagUrl || ''}
-                      onChange={(e) => setTowerConfig(prev => ({ ...prev, player: { ...prev.player, flagUrl: e.target.value } }))}
-                      className="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2.5 text-[10px] font-bold focus:outline-none focus:border-blue-500/30" placeholder="https://..." />
                   </div>
                 </div>
-                <div className="flex gap-3">
-                  <button onClick={prevStep} className="flex-1 py-3.5 bg-zinc-800/60 text-white font-black uppercase tracking-widest text-[9px] rounded-xl hover:bg-zinc-700/60 transition-all active:scale-[0.98]">Back</button>
-                  <button onClick={nextStep} className="flex-[2] py-3.5 bg-white text-zinc-950 font-black uppercase tracking-widest text-[9px] rounded-xl hover:bg-zinc-200 transition-all active:scale-[0.98]">Continue to B</button>
+
+                <div className="flex gap-4">
+                  <button onClick={prevStep} className="flex-1 py-5 bg-zinc-800 text-white font-black uppercase tracking-widest rounded-2xl hover:bg-zinc-700 transition-all active:scale-[0.98]">Back</button>
+                  <button onClick={nextStep} className="flex-[2] py-5 bg-white text-zinc-950 font-black uppercase tracking-widest rounded-2xl hover:bg-zinc-200 transition-all shadow-xl active:scale-[0.98]">Continue to B</button>
                 </div>
               </div>
             )}
 
             {/* Step 3: Team B Config */}
             {step === 3 && (
-              <div className="space-y-5 animate-slide-up">
-                <div className="p-4 md:p-5 bg-red-500/5 rounded-2xl border border-red-500/10 space-y-4">
+              <div className="space-y-8 animate-in slide-in-from-bottom-8 duration-500">
+                <div className="p-8 bg-red-500/5 rounded-[32px] border border-red-500/10 space-y-6">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-black text-red-400 uppercase tracking-tighter italic flex items-center gap-2">
-                      <Shield className="w-4 h-4" /> Pihak B
+                    <h3 className="text-lg font-black text-red-400 uppercase tracking-tighter italic flex items-center gap-3">
+                      <Palette className="w-5 h-5 shadow-lg" /> Pihak B Configuration
                     </h3>
-                    <button
+                    <button 
                       onClick={() => setTowerConfig(prev => ({ ...prev, enemy: { ...prev.enemy, active: !prev.enemy.active } }))}
-                      className={`px-3 py-1 rounded-full text-[8px] font-black tracking-widest transition-all ${towerConfig.enemy.active ? 'bg-green-500/15 text-green-400' : 'bg-zinc-800 text-zinc-500'}`}
+                      className={`px-4 py-1.5 rounded-full text-xs font-black tracking-widest transition-all ${towerConfig.enemy.active ? 'bg-green-500/20 text-green-400' : 'bg-zinc-800 text-zinc-500'}`}
                     >
-                      {towerConfig.enemy.active ? "ACTIVE" : "OFF"}
+                      {towerConfig.enemy.active ? "ACTIVE" : "DISABLED"}
                     </button>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <label className="text-[8px] font-black text-zinc-500 uppercase tracking-widest">Team Name</label>
-                      <input type="text" value={towerConfig.enemy.name}
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Team Label</label>
+                      <input 
+                        type="text" 
+                        value={towerConfig.enemy.name}
                         onChange={(e) => setTowerConfig(prev => ({ ...prev, enemy: { ...prev.enemy, name: e.target.value } }))}
-                        className="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2.5 text-xs font-bold focus:outline-none focus:border-red-500/30" />
+                        className="w-full bg-zinc-950 border-2 border-white/5 rounded-2xl px-5 py-4 text-sm font-bold focus:outline-none focus:border-red-500/30"
+                      />
                     </div>
-                    <div className="space-y-1">
-                      <label className="text-[8px] font-black text-zinc-500 uppercase tracking-widest">Color</label>
-                      <div className="flex gap-2 items-center bg-black/40 border border-white/5 rounded-xl px-2 py-1">
-                        <input type="color" value={towerConfig.enemy.color}
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Theme Color</label>
+                      <div className="flex gap-3 items-center bg-zinc-950 border-2 border-white/5 rounded-2xl px-3 py-2">
+                        <input 
+                          type="color" 
+                          value={towerConfig.enemy.color}
                           onChange={(e) => setTowerConfig(prev => ({ ...prev, enemy: { ...prev.enemy, color: e.target.value } }))}
-                          className="w-full h-8 bg-transparent cursor-pointer rounded" />
-                        <span className="text-[8px] font-mono text-zinc-600">{towerConfig.enemy.color.toUpperCase()}</span>
+                          className="w-full h-10 bg-transparent cursor-pointer rounded-lg"
+                        />
+                        <span className="text-xs font-mono text-zinc-500">{towerConfig.enemy.color.toUpperCase()}</span>
                       </div>
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <label className="text-[8px] font-black text-zinc-500 uppercase tracking-widest flex items-center gap-1"><MessageSquare className="w-2.5 h-2.5" /> Comment Keyword</label>
-                      <input type="text" value={towerConfig.enemy.commentKeyword}
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest flex items-center gap-1">
+                        <MessageSquare className="w-3 h-3" /> Chat Keyword
+                      </label>
+                      <input 
+                        type="text" 
+                        value={towerConfig.enemy.commentKeyword}
                         onChange={(e) => setTowerConfig(prev => ({ ...prev, enemy: { ...prev.enemy, commentKeyword: e.target.value } }))}
-                        className="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2.5 text-xs font-bold focus:outline-none focus:border-red-500/30" placeholder="malay" />
+                        className="w-full bg-zinc-950 border-2 border-white/5 rounded-2xl px-5 py-4 text-sm font-bold focus:outline-none focus:border-red-500/30"
+                        placeholder="e.g. malay"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest flex items-center gap-1">
+                        <Gift className="w-3 h-3" /> Gift Keyword
+                      </label>
+                      <input 
+                        type="text" 
+                        value={towerConfig.enemy.giftKeyword}
+                        onChange={(e) => setTowerConfig(prev => ({ ...prev, enemy: { ...prev.enemy, giftKeyword: e.target.value } }))}
+                        className="w-full bg-zinc-950 border-2 border-white/5 rounded-2xl px-5 py-4 text-sm font-bold focus:outline-none focus:border-red-500/30"
+                        placeholder="e.g. coffee"
+                      />
                     </div>
                   </div>
 
-                  {/* DYNAMIC GIFT RULES - TEAM B */}
-                  <div className="space-y-2 mt-3 bg-black/20 p-2.5 rounded-xl border border-white/5">
-                    <div className="flex items-center justify-between mb-2">
-                      <label className="text-[8px] font-black text-zinc-400 uppercase tracking-widest flex items-center gap-1"><Gift className="w-3 h-3 text-pink-400" /> Gift Rules</label>
-                      <button
-                        onClick={() => setTowerConfig(prev => ({ ...prev, enemy: { ...prev.enemy, giftBindings: [...(prev.enemy.giftBindings || []), { keyword: '', formationId: Object.keys(GIFT_FORMATIONS)[0] }] } }))}
-                        className="px-2.5 py-1 bg-red-500/20 text-red-400 hover:bg-red-500/40 rounded-md text-[8px] font-black uppercase transition-colors"
-                      >+ Add</button>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest flex items-center gap-1">
+                        <Zap className="w-3 h-3" /> Gift Multiplier
+                      </label>
+                      <input 
+                        type="number" 
+                        min="0.5"
+                        max="10"
+                        step="0.5"
+                        value={towerConfig.enemy.giftMultiplier || 1}
+                        onChange={(e) => setTowerConfig(prev => ({ ...prev, enemy: { ...prev.enemy, giftMultiplier: parseFloat(e.target.value) } }))}
+                        className="w-full bg-zinc-950 border-2 border-white/5 rounded-2xl px-5 py-4 text-sm font-bold focus:outline-none focus:border-red-500/30"
+                        placeholder="e.g. 1"
+                      />
+                      <p className="text-[9px] text-zinc-500">Multiplier for units spawned from gifts</p>
                     </div>
-                    <div className="space-y-1.5 max-h-[220px] overflow-y-auto pr-1 custom-scrollbar">
-                      {(towerConfig.enemy.giftBindings || []).map((binding, idx) => (
-                        <div key={idx} className="flex gap-1.5 items-center bg-black/40 p-1.5 rounded-lg border border-white/5">
-                          <input type="text" value={binding.keyword} placeholder="gift name"
-                            list="gift-suggestions"
-                            onChange={(e) => {
-                              const newBindings = [...towerConfig.enemy.giftBindings];
-                              newBindings[idx].keyword = e.target.value;
-                              setTowerConfig(prev => ({ ...prev, enemy: { ...prev.enemy, giftBindings: newBindings } }));
-                            }}
-                            className="w-[35%] bg-transparent border-b border-white/10 text-[10px] text-white focus:outline-none focus:border-red-500/50 px-1 placeholder:text-zinc-600" />
-                          <span className="text-[8px] text-zinc-500">➔</span>
-                          <select value={binding.formationId}
-                            onChange={(e) => {
-                              const newBindings = [...towerConfig.enemy.giftBindings];
-                              newBindings[idx].formationId = e.target.value;
-                              setTowerConfig(prev => ({ ...prev, enemy: { ...prev.enemy, giftBindings: newBindings } }));
-                            }}
-                            className="flex-1 bg-transparent text-[10px] text-white focus:outline-none border-b border-white/10 focus:border-red-500/50 appearance-none px-1">
-                            {Object.entries(GIFT_FORMATIONS).map(([key, form]) => (
-                              <option key={key} value={key} className="bg-zinc-900 text-white">{form.name}</option>
-                            ))}
-                          </select>
-                          <button onClick={() => {
-                            const newBindings = [...towerConfig.enemy.giftBindings];
-                            newBindings.splice(idx, 1);
-                            setTowerConfig(prev => ({ ...prev, enemy: { ...prev.enemy, giftBindings: newBindings } }));
-                          }} className="text-zinc-500 hover:text-rose-500 transition-colors p-1"><X className="w-3.5 h-3.5" /></button>
-                        </div>
-                      ))}
-                      {(!towerConfig.enemy.giftBindings || towerConfig.enemy.giftBindings.length === 0) && (
-                        <p className="text-[8px] text-zinc-500 italic text-center py-2">No gift rules configured.</p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[8px] font-black text-zinc-500 uppercase tracking-widest flex items-center gap-1"><Camera className="w-2.5 h-2.5" /> Flag Image URL</label>
-                    <input type="text" value={towerConfig.enemy.flagUrl || ''}
-                      onChange={(e) => setTowerConfig(prev => ({ ...prev, enemy: { ...prev.enemy, flagUrl: e.target.value } }))}
-                      className="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2.5 text-[10px] font-bold focus:outline-none focus:border-red-500/30" placeholder="https://..." />
                   </div>
                 </div>
-                <div className="flex gap-3">
-                  <button onClick={prevStep} className="flex-1 py-3.5 bg-zinc-800/60 text-white font-black uppercase tracking-widest text-[9px] rounded-xl hover:bg-zinc-700/60 transition-all active:scale-[0.98]">Back</button>
-                  <button
-                    onClick={onStart} disabled={loading}
-                    className={`flex-[2] py-3.5 font-black uppercase tracking-widest text-xs rounded-xl transition-all flex items-center justify-center gap-2 active:scale-[0.98] ${loading ? 'bg-zinc-800 text-zinc-500' : 'bg-indigo-600 text-white hover:bg-indigo-500 shadow-xl shadow-indigo-600/20'}`}
+
+                <div className="flex gap-4">
+                  <button onClick={prevStep} className="flex-1 py-5 bg-zinc-800 text-white font-black uppercase tracking-widest rounded-2xl hover:bg-zinc-700 transition-all active:scale-[0.98]">Back</button>
+                  <button 
+                    onClick={() => {
+                      onStart();
+
+                    }} 
+                    disabled={loading}
+                    className={`flex-[2] py-5 font-black uppercase tracking-widest rounded-2xl transition-all shadow-2xl text-lg active:scale-[0.98] flex items-center justify-center gap-3 ${loading ? 'bg-zinc-800 text-zinc-500' : 'bg-indigo-600 text-white hover:bg-indigo-500 shadow-indigo-600/30'}`}
                   >
-                    {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> WAITING...</> : <>{!connected && <AlertTriangle className="w-3 h-3 text-amber-500" />} Launch Battle <Sword className="w-4 h-4" /></>}
+                    {loading ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        WAITING FOR SYNC...
+                      </>
+                    ) : (
+                      <>
+                        {!connected && <AlertTriangle className="w-4 h-4 text-amber-500" />}
+                        Launch Battle <Sword className="w-5 h-5" />
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
@@ -1006,103 +669,81 @@ export const UIOverlay = React.memo(({
         </div>
       )}
 
-      {/* ======== IN-GAME HUD ======== */}
       {gameState !== "SETUP" && (
-        <>
-          {/* Action Buttons — Top Right */}
-          <div className="absolute top-3 right-3 flex flex-wrap justify-end gap-1.5 pointer-events-auto z-20">
-            <button onClick={onToggleTesting}
-              className={`p-2 rounded-lg hud-glass transition-all ${testingMode ? 'bg-amber-500/30 text-white shadow-[0_0_10px_rgba(245,158,11,0.4)]' : 'text-white/40 hover:text-white'}`}
-              title="Testing Mode">
-              <Zap className={`w-4 h-4 ${testingMode ? 'animate-pulse' : ''}`} />
-            </button>
-            <button onClick={onToggleChat}
-              className={`p-2 rounded-lg hud-glass transition-all ${showChat ? 'bg-pink-500/30 text-white shadow-[0_0_10px_rgba(236,72,153,0.4)]' : 'text-white/40 hover:text-white'}`}
-              title="Toggle Chat">
-              <MessageSquare className="w-4 h-4" />
-            </button>
-            <button onClick={onToggleCinematic}
-              className={`p-2 rounded-lg hud-glass transition-all ${isCinematic ? 'bg-indigo-500/30 text-white' : 'text-white/40 hover:text-white'}`}
-              title="Film Mode">
-              <Camera className="w-4 h-4" />
-            </button>
-            <button onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-              className={`p-2 rounded-lg hud-glass transition-all ${isSettingsOpen ? 'bg-indigo-500/30 text-white' : 'text-white/40 hover:text-white'}`}
-              title="Settings">
-              <Settings2 className="w-4 h-4" />
-            </button>
-          </div>
+        <div className="mt-auto pointer-events-auto">
+          <div className="flex-1 flex flex-col gap-4">
+            {/* Modern Tower HP Bars */}
+            <TowerHPBars towerConfig={towerConfig} />
 
-
-          {/* Fever Time Overlay */}
-          <FeverTimeOverlay />
-
-          {/* Orbital Lightning Overlay */}
-          <OrbitalLightningOverlay />
-
-          {/* Medical Supply Overlay */}
-          <MedicalSupplyOverlay />
-
-          {/* Roulette Overlay */}
-          <RouletteOverlay />
-
-          {/* TOP SCOREBOARD (Persistent) */}
-          <div className="absolute top-8 left-1/2 -translate-x-1/2 z-50 pointer-events-none w-full max-w-2xl px-4">
-            <Scoreboard towerConfig={towerConfig} />
-          </div>
-
-          {/* Weather Indicator Disabled */}
-          {/* {gameState === 'PLAYING' && (
-            <div className="absolute top-16 md:top-20 left-1/2 -translate-x-1/2 z-10 pointer-events-none animate-fade-in-scale scale-75 md:scale-100 origin-top">
-              <div className="hud-glass rounded-xl px-2 py-1 flex items-center gap-1.5 border border-white/5">
-                {weather === 'CLEAR' && <Sun className="w-3 h-3 text-yellow-400" />}
-                {weather === 'RAIN' && <CloudRain className="w-3 h-3 text-blue-400" />}
-                {weather === 'STORM' && <Wind className="w-3 h-3 text-slate-400" />}
-                {weather === 'THUNDER' && <CloudLightning className="w-3 h-3 text-purple-400" />}
-                <div>
-                  <span className="text-[7px] font-black uppercase tracking-widest text-white block leading-none">
-                    {(WEATHER_CONFIG as any)[weather].name}
-                  </span>
-                  <span className="text-[6px] font-bold text-white/40 uppercase tracking-tight block leading-none">
-                    {(WEATHER_CONFIG as any)[weather].boostText}
-                  </span>
+            {/* --- TOP-LEVEL HUD (Outside Canvas Layer) --- */}
+            {gameState === 'PLAYING' && (
+              <div className="absolute inset-x-0 top-0 h-full pointer-events-none p-8 flex flex-col items-center">
+                
+                {/* 1. TOP CENTER: Centered HUD Region */}
+                <div className="absolute top-6 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 pointer-events-auto z-[1200]">
+                  {/* Combat Mode Toggle */}
+                  <div className="flex bg-zinc-950/90 rounded-2xl border border-white/5 p-1 mb-2 animate-in slide-in-from-top-4 duration-500 shadow-xl overflow-hidden">
+                     <button
+                        onClick={() => useStore.getState().setCombatMode('SINGLE')}
+                        className={`px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                           combatMode === 'SINGLE' ? 'bg-indigo-500 text-white shadow-lg' : 'text-zinc-500 hover:text-white hover:bg-white/5'
+                        }`}
+                     >
+                        Single Target
+                     </button>
+                     <button
+                        onClick={() => useStore.getState().setCombatMode('AOE')}
+                        className={`px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                           combatMode === 'AOE' ? 'bg-indigo-500 text-white shadow-lg' : 'text-zinc-500 hover:text-white hover:bg-white/5'
+                        }`}
+                     >
+                        AOE Mode
+                     </button>
+                  </div>
+                  {/* Weather Indicator (Kill Counter hidden for now) */}
+                  <div className="mt-3 flex flex-col items-center animate-in slide-in-from-top-4 duration-1000">
+                    <div className="bg-zinc-950/90 px-4 py-1.5 rounded-2xl border border-white/5 flex items-center gap-3">
+                       {weather === 'CLEAR' && <Sun className="w-4 h-4 text-yellow-400" />}
+                       {weather === 'RAIN' && <CloudRain className="w-4 h-4 text-blue-400" />}
+                       {weather === 'STORM' && <Wind className="w-4 h-4 text-slate-400" />}
+                       {weather === 'THUNDER' && <CloudLightning className="w-4 h-4 text-purple-400" />}
+                       
+                       <div className="flex flex-col">
+                          <span className="text-[10px] font-black uppercase tracking-widest text-white">
+                             Cuaca: {(WEATHER_CONFIG as any)[weather].name}
+                          </span>
+                          <span className="text-[8px] font-bold text-white/50 uppercase tracking-tight">
+                             {(WEATHER_CONFIG as any)[weather].boostText}
+                          </span>
+                       </div>
+                    </div>
+                  </div>
                 </div>
+
+                {/* 2. TOP LEFT: Compact Kill Feed */}
+                <MemoizedKillFeed killEvents={killEvents} towerConfig={towerConfig} />
+
+                 {/* 2. LEFT & RIGHT: Leaderboards (Hidden in Potato Mode) */}
+                {!settings.potatoMode && (
+                  <>
+                    <MemoizedLeaderboard stats={liveStats} team="player" color={towerConfig.player.color} name={towerConfig.player.name} />
+                    <MemoizedLeaderboard stats={liveStats} team="enemy" color={towerConfig.enemy.color} name={towerConfig.enemy.name} />
+                  </>
+                )}
               </div>
-            </div>
-          )} */}
+            )}
 
-          {/* Status Indicators — Top Left Corner */}
-          <StatusIndicators connected={connected} />
-
-          {/* Kill Feed — Top Left */}
-          <KillFeed towerConfig={towerConfig} />
-
-          {/* Unit Info Panel — right side, above leaderboard */}
-          {gameState === 'PLAYING' && <UnitInfoPanel towerConfig={towerConfig} />}
-
-          {/* Leaderboards — Sides */}
-          {gameState === 'PLAYING' && !settings.potatoMode && (
-            <>
-              <Leaderboard team="player" color={towerConfig.player.color} name={towerConfig.player.name} />
-              <Leaderboard team="enemy" color={towerConfig.enemy.color} name={towerConfig.enemy.name} />
-            </>
-          )}
-
-          {/* HP Bars — Bottom */}
-          <TowerHPBars towerConfig={towerConfig} />
-
-          {/* Chat Overlay — Right Side */}
-          {showChat && <ChatOverlay messages={displayMessages} onClose={onToggleChat} />}
-
-          {/* Victory/Defeat Screen */}
-          {(gameState === "WON" || gameState === "LOST") && (
-            <>
-              <VictoryWipe state={gameState} />
-              <MVPScreen data={mvpData} onRestart={onRestart} isVictory={gameState === "WON"} />
-            </>
-          )}
-        </>
+            {/* Victory/Defeat Indicator Overlay - Centered in middle of HUD/Canvas area */}
+            {(gameState === "WON" || gameState === "LOST") && (
+              <MVPScreen 
+                data={mvpData} 
+                onRestart={onRestart} 
+                isVictory={gameState === "WON"} 
+              />
+            )}
+          </div>
+        </div>
       )}
-    </>
+    </div>
   );
-});
+};
