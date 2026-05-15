@@ -143,6 +143,40 @@ const SceneAnalyzer = () => {
   return null;
 };
 
+/**
+ * EnemyRespawnManager
+ * Monitors the battlefield and spawns new enemies if the population drops.
+ */
+const EnemyRespawnManager = ({ spawnUnit, unitRegistry, envReady }: any) => {
+  const lastCheck = useRef(0);
+  
+  useFrame((state) => {
+    const now = state.clock.elapsedTime;
+    if (now - lastCheck.current < 5) return; // Check every 5 seconds
+    lastCheck.current = now;
+    
+    if (!envReady || !spawnUnit || !unitRegistry.current) return;
+    
+    const activeEnemies = unitRegistry.current.filter((u: any) => u.isActive && u.type === 'enemy' && !u.isDying);
+    
+    // Maintain a minimum of 10 enemies for constant action
+    if (activeEnemies.length < 10) {
+       const classes = ['tank', 'fighter', 'mage', 'marksman', 'assassin'];
+       const randomClass = classes[Math.floor(Math.random() * classes.length)];
+       
+       // Spawn in a wide arc around the player or at fixed spawn points
+       const angle = Math.random() * Math.PI * 2;
+       const dist = 30 + Math.random() * 30;
+       const rx = Math.cos(angle) * dist;
+       const rz = Math.sin(angle) * dist;
+       
+       spawnUnit(10, "Reinforcement", "enemy", false, randomClass, undefined, undefined, [rx, -0.4, rz]);
+    }
+  });
+  
+  return null;
+};
+
 
 interface GameCanvasProps {
   towerConfig: TowerConfig;
@@ -407,6 +441,7 @@ export const GameCanvas = React.memo(({
         className="select-none touch-none "
       >
         <SceneAnalyzer />
+        <EnemyRespawnManager spawnUnit={spawnUnit} unitRegistry={unitRegistry} envReady={envReady} />
         <StatsGl className="!absolute !top-24 !left-2 !right-auto !bottom-auto !z-[2000]" />
         <PerformanceMonitor onIncline={() => setDpr(Math.min(dpr + 0.05, 0.9))} onDecline={() => setDpr(Math.max(dpr - 0.05, 0.6))} />
 
@@ -496,6 +531,8 @@ export const GameCanvas = React.memo(({
               paused={!envReady}
               unitRegistry={unitRegistry}
               dealPlayerDamage={dealPlayerDamage}
+              mmSpellsRef={mmSpellsRef}
+              simTimeRef={simTimeRef}
             />
             
 

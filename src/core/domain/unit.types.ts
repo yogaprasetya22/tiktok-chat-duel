@@ -216,6 +216,7 @@ export interface UnitRuntimeData {
     patrolTarget?: [number, number, number];
     isAggroed: boolean;
     patrolWaitUntil?: number;
+    patrolStartTime?: number;
 }
 
 export interface SimulationSettings {

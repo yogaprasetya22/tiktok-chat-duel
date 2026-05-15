@@ -19,7 +19,7 @@ import { useFrame } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
 import { MeshoptDecoder } from 'meshoptimizer';
 import { SkeletonUtils } from 'three-stdlib';
-import { UnitRuntimeData, TowerConfig, SimulationSettings } from '@/src/core/domain/unit.types';
+import { UnitRuntimeData, TowerConfig, SimulationSettings, WORLD_UNIT_POOL_SIZE } from '@/src/core/domain/unit.types';
 import { ARMY_POOL_SIZE, ANIM_CULL_DIST_SQ, CLASS_CONFIG } from '@/src/core/logic/combat/constants';
 import { applyPainterlyStyle } from '../effects/PainterlyMaterials';
 
@@ -73,14 +73,7 @@ const CLASS_COLORABLE_KW: Record<ClassKey, string[]> = {
   assassin: ['cloth', 'mask', 'hood', 'wrap', 'ribbon', 'robe', 'cloak', 'cape', 'primary', 'team'],
 };
 
-// HUD slot base index per class (must match instanced mesh allocation of 1500 total)
-const CLASS_HUD_BASE: Record<ClassKey, number> = {
-  fighter: 0,
-  tank: 200,
-  mage: 400,
-  marksman: 600,
-  assassin: 800,
-};
+
 
 function resolveAttackAnim(classKey: ClassKey, actions: Record<string, THREE.AnimationAction>): string {
   const keys = Object.keys(actions);
@@ -145,7 +138,7 @@ const getCachedMaterial = (
   rarity: string,
   team: 'player' | 'enemy',
   towerConfig: TowerConfig,
-  gltfByClass: any
+  assets: any[]
 ): THREE.MeshStandardMaterial => {
   const teamIdx = team === 'player' ? 0 : 1;
   const teamColor = teamIdx === 0 ? towerConfig.player.color : towerConfig.enemy.color;
@@ -158,7 +151,6 @@ const getCachedMaterial = (
 
   if (_materialCache.has(key)) return _materialCache.get(key)!;
 
-  const assets = gltfByClass[classKey];
   const sourceMesh = assets[0].scene.getObjectByProperty('isMesh', true) as THREE.Mesh;
   const mat = (sourceMesh.material as THREE.MeshStandardMaterial).clone();
 
@@ -197,22 +189,32 @@ const ECSArmyRendererInner = ({
   const n1 = useGLTF('/assets-model/Ninja_Female.glb', true, true, (l: any) => l.setMeshoptDecoder(MeshoptDecoder)) as any;
   const n2 = useGLTF('/assets-model/Ninja_Male.glb', true, true, (l: any) => l.setMeshoptDecoder(MeshoptDecoder)) as any;
 
+  // Monsters for enemies
+  const gob1 = useGLTF('/assets-model/Goblin_Male.glb', true, true, (l: any) => l.setMeshoptDecoder(MeshoptDecoder)) as any;
+  const gob2 = useGLTF('/assets-model/Goblin_Female.glb', true, true, (l: any) => l.setMeshoptDecoder(MeshoptDecoder)) as any;
+  const zom1 = useGLTF('/assets-model/Zombie_Male.glb', true, true, (l: any) => l.setMeshoptDecoder(MeshoptDecoder)) as any;
+  const zom2 = useGLTF('/assets-model/Zombie_Female.glb', true, true, (l: any) => l.setMeshoptDecoder(MeshoptDecoder)) as any;
+
   // Map classKey → array of GLTF assets to pick from randomly
-  const gltfByClass = useMemo<Record<ClassKey, any[]>>(() => ({
-    fighter: [f1, f2, f3],
-    tank: [t1, t2],
+  const gltfByPool = useMemo<Record<string, any[]>>(() => ({
+    fighter_player: [f1, f2, f3],
+    fighter_enemy: [gob1, gob2],
+    tank_player: [t1, t2],
+    tank_enemy: [zom1, zom2],
     mage: [g1, g2],
     marksman: [m1],
     assassin: [n1, n2],
-  }), [f1, f2, f3, t1, t2, g1, g2, m1, n1, n2]);
+  }), [f1, f2, f3, gob1, gob2, t1, t2, zom1, zom2, g1, g2, m1, n1, n2]);
 
   // Scene group — all lazy-cloned models are added imperatively here
   const groupRef = useRef<THREE.Group>(null!);
 
-  // ── Lazy Pools (one per class) ──
-  const pools = useRef<Record<ClassKey, ClassPool>>({
-    fighter: { items: [], available: [], assigned: new Map(), activeSet: new Set() },
-    tank: { items: [], available: [], assigned: new Map(), activeSet: new Set() },
+  // ── Lazy Pools (one per class-team variant) ──
+  const pools = useRef<Record<string, ClassPool>>({
+    fighter_player: { items: [], available: [], assigned: new Map(), activeSet: new Set() },
+    fighter_enemy: { items: [], available: [], assigned: new Map(), activeSet: new Set() },
+    tank_player: { items: [], available: [], assigned: new Map(), activeSet: new Set() },
+    tank_enemy: { items: [], available: [], assigned: new Map(), activeSet: new Set() },
     mage: { items: [], available: [], assigned: new Map(), activeSet: new Set() },
     marksman: { items: [], available: [], assigned: new Map(), activeSet: new Set() },
     assassin: { items: [], available: [], assigned: new Map(), activeSet: new Set() },
@@ -222,7 +224,7 @@ const ECSArmyRendererInner = ({
   useEffect(() => {
     return () => {
       const allPools = pools.current;
-      (Object.keys(allPools) as ClassKey[]).forEach(key => {
+      (Object.keys(allPools)).forEach(key => {
         allPools[key].items.forEach(item => {
           item.group.traverse((child: any) => {
             if (child.isMesh) {
@@ -242,12 +244,14 @@ const ECSArmyRendererInner = ({
   }, []);
 
   // ── Lazily create a new pool item for classKey ──
-  const createPoolItem = (classKey: ClassKey): number | null => {
-    const pool = pools.current[classKey];
+  const createPoolItem = (poolKey: string): number | null => {
+    const pool = pools.current[poolKey];
     if (pool.items.length >= ARMY_POOL_SIZE) return null;
 
-    const assets = gltfByClass[classKey];
+    const assets = gltfByPool[poolKey];
     if (!assets || assets.some(a => !a.scene)) return null;
+
+    const classKey = (poolKey.includes('_') ? poolKey.split('_')[0] : poolKey) as ClassKey;
 
     const selected = assets[Math.floor(Math.random() * assets.length)];
     const clone = SkeletonUtils.clone(selected.scene);
@@ -267,7 +271,6 @@ const ECSArmyRendererInner = ({
         child.frustumCulled = true;
         const nm = child.name.toLowerCase();
         if (colorKws.some(kw => nm.includes(kw))) {
-          // REMOVED: Material cloning per slot. Will be assigned from cache.
           colorable.push(child);
         }
       }
@@ -290,7 +293,6 @@ const ECSArmyRendererInner = ({
       const uid = item.group.userData.unitId;
       if (!uid || !unitRegistry.current) return;
       
-      // Find unit by ID and aggro it
       for (let i = 0; i < unitRegistry.current.length; i++) {
         const u = unitRegistry.current[i];
         if (u && u.isActive && u.id === uid) {
@@ -302,30 +304,6 @@ const ECSArmyRendererInner = ({
 
     pool.items.push(item);
     return pool.items.length - 1;
-  };
-
-  // ── Get pool slot for unit (lazy-create if needed) ──
-  const acquirePoolSlot = (classKey: ClassKey, id: string, teamColor: string): number | null => {
-    const pool = pools.current[classKey];
-    if (pool.assigned.has(id)) return pool.assigned.get(id)!;
-
-    let slotIdx: number | null = null;
-    if (pool.available.length > 0) {
-      slotIdx = pool.available.pop()!;
-    } else if (pool.items.length < ARMY_POOL_SIZE) {
-      slotIdx = createPoolItem(classKey);
-    }
-    if (slotIdx === null) return null;
-
-    // Re-apply team color when reusing a slot
-    const item = pool.items[slotIdx];
-    item.colorable.forEach(mesh => {
-      (mesh.material as THREE.MeshStandardMaterial).color.set(teamColor);
-    });
-    item.initialized = false;
-    item.group.userData.unitId = id;
-    pool.assigned.set(id, slotIdx);
-    return slotIdx;
   };
 
   // ── HUD helper: hide a slot's HUD ──
@@ -346,15 +324,14 @@ const ECSArmyRendererInner = ({
     }
   };
 
-  // ─── Constants ──────────────────────────────────────────────────────────────
-  const CLASS_KEYS: ClassKey[] = ['fighter', 'tank', 'mage', 'marksman', 'assassin'];
-
   // ── Main render loop ──────────────────────────────────────────────────────
   useFrame((state, delta) => {
     const rawMap = unitRegistry.current;
     if (!rawMap) return;
 
     if (!activeIndicesRef) return;
+    if (renderedIdsRef.current) renderedIdsRef.current.clear();
+
     const indices = activeIndicesRef.current;
     if (!indices) return;
 
@@ -365,303 +342,275 @@ const ECSArmyRendererInner = ({
     if (!settings) return;
     const frustum = (state as any).battleFrustum;
 
-
-
     _ecsFrame++;
     const isPotato = settings.potatoMode;
 
-    // Clear all active sets
+    // Clear all active sets for ALL dynamic pools
     const p = pools.current;
-    p.fighter.activeSet.clear();
-    p.tank.activeSet.clear();
-    p.mage.activeSet.clear();
-    p.marksman.activeSet.clear();
-    p.assassin.activeSet.clear();
-
-    // ─── Sort Throttling ───
-    // (Logic moved to BattleArmy centralized sorter)
+    Object.keys(p).forEach(key => {
+      p[key].activeSet.clear();
+    });
 
     if (isPotato) {
-      // Potato mode: hide everything immediately
-      (Object.keys(p) as ClassKey[]).forEach(key => {
-        p[key].assigned.forEach((slotIdx, _uid2) => {
-          const item = p[key].items[slotIdx];
+      Object.keys(p).forEach(poolKey => {
+        const pool = p[poolKey];
+        pool.assigned.forEach((slotIdx, _uid2) => {
+          const item = pool.items[slotIdx];
           if (item) item.group.visible = false;
-          const hIdx = CLASS_HUD_BASE[key] + slotIdx;
-          hideHUD(hIdx);
-          p[key].available.push(slotIdx);
+          pool.available.push(slotIdx);
         });
-        p[key].assigned.clear();
+        pool.assigned.clear();
       });
+      // Hide all HUD
+      for (let i = 0; i < WORLD_UNIT_POOL_SIZE; i++) {
+        hideHUD(i);
+      }
       return;
     }
 
-    // ── Pre-optimized sorted unit buckets from parent ──
-    const buckets = (state as any).unitBuckets as Record<ClassKey, UnitRuntimeData[]>;
-    if (!buckets) return;
+    const healthAttr = healthBarRef.current?.geometry.getAttribute('aHealthInfo') as THREE.InstancedBufferAttribute | undefined;
+    const cooldownAttr = cooldownRef.current?.geometry.getAttribute('aProgress') as THREE.InstancedBufferAttribute | undefined;
+    const lerpFactor = 1.0 - Math.exp(-45 * delta);
+    const rotLerpFactor = 1.0 - Math.exp(-15 * delta);
 
-    // Use zero-allocation for-loops instead of forEach for hot logic
-    for (let ck = 0; ck < CLASS_KEYS.length; ck++) {
-      const classKey = CLASS_KEYS[ck];
-      const bucket = buckets[classKey];
-      const visibleUnitsCount = Math.min(bucket.length, ARMY_POOL_SIZE);
-      const pool = p[classKey];
-      const hudBase = CLASS_HUD_BASE[classKey];
-      const healthAttr = healthBarRef.current?.geometry.getAttribute('aHealthInfo') as THREE.InstancedBufferAttribute | undefined;
-      const cooldownAttr = cooldownRef.current?.geometry.getAttribute('aProgress') as THREE.InstancedBufferAttribute | undefined;
+    // ── Process all active units directly from the registry ──
+    for (let k = 0; k < indices.length; k++) {
+      const idx = indices[k];
+      const uData = rawMap[idx];
+      if (!uData || !uData.isActive || uData.position[1] < -10) continue;
 
-      const lerpFactor = 1.0 - Math.exp(-45 * delta);
-      const rotLerpFactor = 1.0 - Math.exp(-15 * delta);
+      const classKey = uData.unitClass as ClassKey;
+      const team = uData.type as 'player' | 'enemy';
+      const poolKey = (classKey === 'fighter' || classKey === 'tank') 
+          ? `${classKey}_${team}` 
+          : classKey;
+      
+      const pool = p[poolKey];
+      if (!pool) continue;
 
-      for (let vi = 0; vi < visibleUnitsCount; vi++) {
-        const uData = bucket[vi];
-        // Only skip if totally inactive or sunk. Dying units MUST render to prevent impostor 'ghosts'.
-        if (!uData.isActive || uData.position[1] < -10) continue;
-        const id = uData.id;
-        const pIdx = uData.poolIdx;
-        const team = uData.type;
-        const teamColor = team === 'player' ? towerConfig.player.color : towerConfig.enemy.color;
+      const id = uData.id;
+      
+      pool.activeSet.add(id);
 
-        const slotIdx = acquirePoolSlot(classKey, id, teamColor);
-        if (slotIdx === null) continue;
-
-        pool.activeSet.add(id);
-        renderedIdsRef.current?.add(pIdx);
-
+      let slotIdx: number | undefined = pool.assigned.get(id);
+      if (slotIdx === undefined) {
+        let newSlot: number | null = null;
+        if (pool.available.length > 0) {
+          newSlot = pool.available.pop()!;
+        } else {
+          newSlot = createPoolItem(poolKey);
+        }
+        
+        if (newSlot === null) continue;
+        slotIdx = newSlot;
+        pool.assigned.set(id, slotIdx);
+        
         const item = pool.items[slotIdx];
         item.group.visible = true;
+        item.group.position.set(uData.position[0], uData.position[1], uData.position[2]);
+        item.group.rotation.y = uData.rotation?.[1] || 0;
+        item.initialized = false;
+        item.group.userData.unitId = id;
+      }
 
-        const baseScale = getBaseScale(classKey, uData.level || 1, uData.isBoss);
-        const rarity = uData.rarity || 'common';
-        const rScale = uData.isBoss ? 1.0 : (rarity === 'legendary' ? 1.4 : (rarity === 'epic' ? 1.3 : (rarity === 'elite' ? 1.15 : 1.0)));
+      if (renderedIdsRef.current) renderedIdsRef.current.add(uData.poolIdx);
 
-        // NEW: Proximity Scaling — Make units larger when attacking/near the target tower
-        const baseDist = towerConfig.baseDistance || 40;
-        const targetTowerZ = team === 'player' ? -baseDist : baseDist;
-        const distToTower = Math.abs(uData.position[2] - targetTowerZ);
-        const proximityScale = distToTower < 5 ? 1.35 : 1.0;
+      const item = pool.items[slotIdx];
+      if (!item) continue;
 
-        // UNIQUE VARIATION: Subtle height variation based on ID for an 'Organic Army' feel
-        const idNum = uData.poolIdx;
-        const hVar = 1.0 + ((idNum % 7) - 3) * 0.015; // +/- 4.5% height variation
-        item.group.scale.set(
-          baseScale * settings.unitScale * rScale * proximityScale,
-          baseScale * settings.unitScale * rScale * hVar * proximityScale,
-          baseScale * settings.unitScale * rScale * proximityScale
-        );
+      const baseScale = getBaseScale(classKey, uData.level || 1, uData.isBoss);
+      const rarity = uData.rarity || 'common';
+      const rScale = uData.isBoss ? 1.0 : (rarity === 'legendary' ? 1.4 : (rarity === 'epic' ? 1.3 : (rarity === 'elite' ? 1.15 : 1.0)));
 
-        // ASSIGN SHARED MATERIAL FROM CACHED MASTER
-        // This eliminates 90% of shader work and memory usage
-        const sharedMat = getCachedMaterial(classKey, rarity, team, towerConfig, gltfByClass);
-        for (let m = 0; m < item.colorable.length; m++) {
-          if (item.colorable[m].material !== sharedMat) {
-            item.colorable[m].material = sharedMat;
-          }
-        }
+      const baseDist = towerConfig.baseDistance || 40;
+      const targetTowerZ = team === 'player' ? -baseDist : baseDist;
+      const distToTower = Math.abs(uData.position[2] - targetTowerZ);
+      const proximityScale = distToTower < 5 ? 1.35 : 1.0;
 
-        // ── Animation ──────────────────────────────────────────────────────
-        let targetAnim = 'Idle';
-        if (uData.isDying) {
-          targetAnim = item.deathAnim;
-        } else if (uData.status === 'marching' || uData.status === 'chasing') {
-          targetAnim = item.runAnim;
-        } else if (uData.status === 'idling') {
-          targetAnim = item.walkAnim;
-        } else if (uData.status === 'attacking') {
-          const timeSinceAtk = (simTimeRef.current || 0) - (uData.lastAttackTime || 0);
-          targetAnim = timeSinceAtk < 650 ? item.attackAnim : 'Idle';
-        }
-        if (!item.actions[targetAnim]) targetAnim = 'Idle';
+      const idNum = uData.poolIdx;
+      const hVar = 1.0 + ((idNum % 7) - 3) * 0.015; 
+      item.group.scale.set(
+        baseScale * settings.unitScale * rScale * proximityScale,
+        baseScale * settings.unitScale * rScale * hVar * proximityScale,
+        baseScale * settings.unitScale * rScale * proximityScale
+      );
 
-        if (item.currentAnim !== targetAnim) {
-          const prev = item.actions[item.currentAnim];
-          const next = item.actions[targetAnim];
-          if (next) {
-            if (prev) prev.fadeOut(0.2);
-            next.setLoop(targetAnim === item.deathAnim ? THREE.LoopOnce : THREE.LoopRepeat, Infinity);
-            if (targetAnim === item.deathAnim) next.clampWhenFinished = true;
-            next.reset().fadeIn(0.2).play();
-            item.currentAnim = targetAnim;
-          }
-        }
-
-        // ── Position Lerp ──────────────────────────────────────────────────
-        const tp = uData.position;
-        const cp = item.group.position;
-        const distSq = (tp[0] - cp.x) ** 2 + (tp[2] - cp.z) ** 2;
-
-        if (!item.initialized || distSq > 25) {
-          cp.set(tp[0], tp[1], tp[2]);
-          item.rotation = uData.rotation[1];
-          item.group.rotation.y = item.rotation;
-          item.initialized = true;
-        } else {
-          cp.x = THREE.MathUtils.lerp(cp.x, tp[0], lerpFactor);
-          cp.y = THREE.MathUtils.lerp(cp.y, tp[1], lerpFactor);
-          cp.z = THREE.MathUtils.lerp(cp.z, tp[2], lerpFactor);
-
-          let diff = uData.rotation[1] - item.rotation;
-          while (diff < -Math.PI) diff += Math.PI * 2;
-          while (diff > Math.PI) diff -= Math.PI * 2;
-          item.rotation += diff * rotLerpFactor;
-          item.group.rotation.y = item.rotation;
-        }
-
-        // ── Shared Uniform Update (Moved outside unit loop for O(1) instead of O(N)) ──
-
-        // ── HUD Sync ───────────────────────────────────────────────────────
-        item.group.updateMatrix();
-        const hIdx = hudBase + slotIdx;
-
-        if (shadowRef.current && healthBarRef.current) {
-          const totalVisualScale = baseScale * settings.unitScale * rScale;
-
-          // Expand frustum sphere to properly cover the tall Epic/Legendary labels
-          // Centers the sphere higher up and scales radius dynamically so it doesn't vanish in cinematic mode
-          _frustumSphere.center.set(item.group.position.x, item.group.position.y + 4 * totalVisualScale, item.group.position.z);
-          _frustumSphere.radius = 8 * Math.max(1, totalVisualScale);
-
-          // Increase HUD detail radius to 200m so labels don't disappear when camera moves back
-          // HUD visible radius at 200m
-          const HUD_DETAIL_DIST_SQ = 22500; // 150m range (Increased for cinematic wide shots)
-          
-          const isVisible = frustum ? frustum.intersectsSphere(_frustumSphere) : true;
-          const showDetail = isVisible && (uData.isBoss || (uData.dSq || 0) < HUD_DETAIL_DIST_SQ);
-
-          if (showDetail) {
-            const vPos = item.group.position;
-            const by = (uData.isBoss ? 3.6 : 4.0) * totalVisualScale;
-            const bs = (uData.isBoss ? 0.7 : 0.8) * totalVisualScale;
-            const ss = 1.1 * totalVisualScale;
-
-            _hudTemp.position.set(vPos.x, -0.45, vPos.z);
-            _hudTemp.quaternion.identity();
-            _hudTemp.scale.set(ss, ss, 1);
-            _hudTemp.updateMatrix();
-            shadowRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
-
-            // ── Cooldown Radial Sync ──
-            if (cooldownRef.current && cooldownAttr && uData.hp > 0) {
-              const skillCfg = CLASS_CONFIG[classKey];
-              const cdTime = (skillCfg.skill_cooldown || 1000) * (1.0 - ((uData as any).cooldownReduction || 0));
-              const timeSinceSkill = (simTimeRef.current || 0) - (uData.lastSkillTime || 0);
-              const progress = Math.min(1.0, timeSinceSkill / cdTime);
-
-              _hudTemp.position.set(vPos.x, -0.44, vPos.z);
-              _hudTemp.quaternion.identity(); 
-              _hudTemp.scale.set(ss * 1.5, ss * 1.5, 1);
-              _hudTemp.updateMatrix();
-              cooldownRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
-              cooldownAttr.setX(hIdx, progress);
-
-              _healthColor.set(teamColor);
-              cooldownRef.current.setColorAt(hIdx, _healthColor);
-            } else {
-              _hudTemp.scale.set(0.001, 0.001, 0.001);
-              _hudTemp.updateMatrix();
-              cooldownRef.current?.setMatrixAt(hIdx, _hudTemp.matrix);
-            }
-
-            _healthColor.set(teamColor);
-            shadowRef.current.setColorAt(hIdx, _healthColor);
-
-            // ── Health Bar ──
-            _hudTemp.position.set(vPos.x, vPos.y + by, vPos.z);
-            _hudTemp.quaternion.copy(camQ);
-            _hudTemp.scale.set(bs * 1.8, bs * 0.45, 1); 
-            _hudTemp.updateMatrix();
-            healthBarRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
-            
-            if (healthAttr) {
-              healthAttr.setXY(hIdx, uData.hp, uData.maxHp || 100);
-            }
-
-            _healthColor.set(teamColor);
-            const flash = (simTimeRef.current || 0) - (uData.lastDamageTime || 0);
-            if (flash < 100) _healthColor.lerp(_whiteColor, 1.0 - flash / 100);
-            healthBarRef.current.setColorAt(hIdx, _healthColor);
-
-            // ── Label Sync: Username & Profile (Grouped with Health for Perfect Lock) ──
-            const slot = namePoolMap?.current?.get(id);
-            if (slot !== undefined && nameGroupRefs?.current) {
-              const labelGroup = nameGroupRefs.current[slot];
-              if (labelGroup) {
-                // Scale the vertical gap as well so it doesn't get buried in the head
-                const labelYOffset = 0.8 * totalVisualScale;
-                labelGroup.position.set(vPos.x, vPos.y + by + labelYOffset, vPos.z);
-                labelGroup.quaternion.copy(camQ);
-                
-                // Scale the HUD slightly based on unit scale, but clamp it for readability
-                const labelScale = 1.0 + (totalVisualScale - 1.0) * 0.5;
-                labelGroup.scale.set(labelScale, labelScale, 1);
-                
-                labelGroup.visible = true;
-              }
-            }
-          } else {
-            // Far or out of camera: shadow only, hide labels
-            _hudTemp.position.set(cp.x, -0.45, cp.z);
-            _hudTemp.quaternion.identity(); // Pre-rotated geo
-            _hudTemp.scale.set(uData.isBoss ? 4.5 : 1.6, uData.isBoss ? 4.5 : 1.6, 1);
-            _hudTemp.updateMatrix();
-            shadowRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
-
-            _hudTemp.scale.set(0.001, 0.001, 0.001);
-            _hudTemp.updateMatrix();
-            healthBarRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
-            cooldownRef.current?.setMatrixAt(hIdx, _hudTemp.matrix);
-
-            // KEY FIX: Hide the label when unit is out of camera view!
-            const slot = namePoolMap?.current?.get(id);
-            if (slot !== undefined && nameGroupRefs?.current) {
-              const labelGroup = nameGroupRefs.current[slot];
-              if (labelGroup) labelGroup.visible = false;
-            }
-          }
-        }
-
-        // ── Animation Mixer Update ──────────────────────────────────────────
-        // KEY FIX: Do NOT use frustum to gate animations.
-        // In cinematic mode the camera is at the side, so many units are
-        // "outside" the frustum even though they are visible on screen.
-        // Instead: always animate if within ANIM_CULL_DIST_SQ from camera.
-        // Use a gentler skip-frame that doesn't freeze units that are
-        // close to the battle center (they look bad if they freeze).
-        const tooFar = (uData.dSq || 0) > ANIM_CULL_DIST_SQ;
-        // Distance from world center — units at frontline always get full update
-        const distFromCenterSq = uData.position[0] * uData.position[0] + uData.position[2] * uData.position[2];
-        const isNearCenter = distFromCenterSq < 60 * 60; // 60u from origin
-        // Skip frame: near center always full rate; far from camera slow down
-        // FIX: Bosses now use 30 FPS animations (sf=2) instead of 60 FPS (sf=1).
-        // This eliminates the final GPU hotspot during Boss encounters.
-        const sf = isNearCenter ? 2                             // frontline: 30 FPS (smooth enough)
-          : (uData.dSq || 0) > 10000 ? 4                      // far: 15 FPS
-          : 2;                                                  // close: 30 FPS
-
-        if (!tooFar && time - item.lastUpdate >= 0.016 * sf) {
-          item.mixer.update(delta * sf);
-          item.lastUpdate = time;
+      const sharedMat = getCachedMaterial(classKey, rarity, team, towerConfig, gltfByPool[poolKey]);
+      for (let m = 0; m < item.colorable.length; m++) {
+        if (item.colorable[m].material !== sharedMat) {
+          item.colorable[m].material = sharedMat;
         }
       }
 
-      // ── Return inactive slots to pool (Optimized: collect-then-delete to avoid iterator invalidation) ──
+      let targetAnim = 'Idle';
+      if (uData.isDying) {
+        targetAnim = item.deathAnim;
+      } else if (uData.status === 'marching' || uData.status === 'chasing') {
+        targetAnim = item.runAnim;
+      } else if (uData.status === 'idling') {
+        targetAnim = item.walkAnim;
+      } else if (uData.status === 'attacking') {
+        const timeSinceAtk = (simTimeRef.current || 0) - (uData.lastAttackTime || 0);
+        targetAnim = timeSinceAtk < 650 ? item.attackAnim : 'Idle';
+      }
+      if (!item.actions[targetAnim]) targetAnim = 'Idle';
+
+      if (item.currentAnim !== targetAnim) {
+        const prev = item.actions[item.currentAnim];
+        const next = item.actions[targetAnim];
+        if (next) {
+          if (prev) prev.fadeOut(0.2);
+          next.setLoop(targetAnim === item.deathAnim ? THREE.LoopOnce : THREE.LoopRepeat, Infinity);
+          if (targetAnim === item.deathAnim) next.clampWhenFinished = true;
+          next.reset().fadeIn(0.2).play();
+          item.currentAnim = targetAnim;
+        }
+      }
+
+      const tp = uData.position;
+      const cp = item.group.position;
+      const distSq = (tp[0] - cp.x) ** 2 + (tp[2] - cp.z) ** 2;
+
+      if (!item.initialized || distSq > 25) {
+        cp.set(tp[0], tp[1], tp[2]);
+        item.rotation = uData.rotation?.[1] || 0;
+        item.group.rotation.y = item.rotation;
+        item.initialized = true;
+      } else {
+        cp.x = THREE.MathUtils.lerp(cp.x, tp[0], lerpFactor);
+        cp.y = THREE.MathUtils.lerp(cp.y, tp[1], lerpFactor);
+        cp.z = THREE.MathUtils.lerp(cp.z, tp[2], lerpFactor);
+
+        let diff = (uData.rotation?.[1] || 0) - item.rotation;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+        item.rotation += diff * rotLerpFactor;
+        item.group.rotation.y = item.rotation;
+      }
+
+      item.group.updateMatrix();
+      const hIdx = uData.poolIdx;
+
+      if (shadowRef.current && healthBarRef.current) {
+        const totalVisualScale = baseScale * settings.unitScale * rScale;
+        _frustumSphere.center.set(item.group.position.x, item.group.position.y + 4 * totalVisualScale, item.group.position.z);
+        _frustumSphere.radius = 8 * Math.max(1, totalVisualScale);
+
+        const HUD_DETAIL_DIST_SQ = 22500; 
+        const isVisible = frustum ? frustum.intersectsSphere(_frustumSphere) : true;
+        const showDetail = isVisible && (uData.isBoss || (uData.dSq || 0) < HUD_DETAIL_DIST_SQ);
+
+        if (showDetail) {
+          const vPos = item.group.position;
+          const by = (uData.isBoss ? 3.6 : 4.0) * totalVisualScale;
+          const bs = (uData.isBoss ? 0.7 : 0.8) * totalVisualScale;
+          const ss = 1.1 * totalVisualScale;
+
+          _hudTemp.position.set(vPos.x, -0.45, vPos.z);
+          _hudTemp.quaternion.identity();
+          _hudTemp.scale.set(ss, ss, 1);
+          _hudTemp.updateMatrix();
+          shadowRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
+
+          if (cooldownRef.current && cooldownAttr && uData.hp > 0) {
+            const skillCfg = CLASS_CONFIG[classKey];
+            const cdTime = (skillCfg.skill_cooldown || 1000) * (1.0 - ((uData as any).cooldownReduction || 0));
+            const timeSinceSkill = (simTimeRef.current || 0) - (uData.lastSkillTime || 0);
+            const progress = Math.min(1.0, timeSinceSkill / cdTime);
+
+            _hudTemp.position.set(vPos.x, -0.44, vPos.z);
+            _hudTemp.quaternion.identity(); 
+            _hudTemp.scale.set(ss * 1.5, ss * 1.5, 1);
+            _hudTemp.updateMatrix();
+            cooldownRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
+            cooldownAttr.setX(hIdx, progress);
+
+            _healthColor.set(team === 'player' ? towerConfig.player.color : towerConfig.enemy.color);
+            cooldownRef.current.setColorAt(hIdx, _healthColor);
+          } else {
+            _hudTemp.scale.set(0.001, 0.001, 0.001);
+            _hudTemp.updateMatrix();
+            cooldownRef.current?.setMatrixAt(hIdx, _hudTemp.matrix);
+          }
+
+          _healthColor.set(team === 'player' ? towerConfig.player.color : towerConfig.enemy.color);
+          shadowRef.current.setColorAt(hIdx, _healthColor);
+
+          _hudTemp.position.set(vPos.x, vPos.y + by, vPos.z);
+          _hudTemp.quaternion.copy(camQ);
+          _hudTemp.scale.set(bs * 1.8, bs * 0.45, 1); 
+          _hudTemp.updateMatrix();
+          healthBarRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
+          
+          if (healthAttr) {
+            healthAttr.setXY(hIdx, uData.hp, uData.maxHp || 100);
+          }
+
+          _healthColor.set(team === 'enemy' ? '#ff0000' : (team === 'player' ? towerConfig.player.color : towerConfig.enemy.color));
+          const flash = (simTimeRef.current || 0) - (uData.lastDamageTime || 0);
+          if (flash < 100) _healthColor.lerp(_whiteColor, 1.0 - flash / 100);
+          healthBarRef.current.setColorAt(hIdx, _healthColor);
+
+          const slot = namePoolMap?.current?.get(id);
+          if (slot !== undefined && nameGroupRefs?.current) {
+            const labelGroup = nameGroupRefs.current[slot];
+            if (labelGroup) {
+              const labelYOffset = 0.8 * totalVisualScale;
+              labelGroup.position.set(vPos.x, vPos.y + by + labelYOffset, vPos.z);
+              labelGroup.quaternion.copy(camQ);
+              const labelScale = 1.0 + (totalVisualScale - 1.0) * 0.5;
+              labelGroup.scale.set(labelScale, labelScale, 1);
+              labelGroup.visible = true;
+            }
+          }
+        } else {
+          _hudTemp.position.set(cp.x, -0.45, cp.z);
+          _hudTemp.quaternion.identity(); 
+          _hudTemp.scale.set(uData.isBoss ? 4.5 : 1.6, uData.isBoss ? 4.5 : 1.6, 1);
+          _hudTemp.updateMatrix();
+          shadowRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
+
+          _hudTemp.scale.set(0.001, 0.001, 0.001);
+          _hudTemp.updateMatrix();
+          healthBarRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
+          cooldownRef.current?.setMatrixAt(hIdx, _hudTemp.matrix);
+
+          const slot = namePoolMap?.current?.get(id);
+          if (slot !== undefined && nameGroupRefs?.current) {
+            const labelGroup = nameGroupRefs.current[slot];
+            if (labelGroup) labelGroup.visible = false;
+          }
+        }
+      }
+
+      const tooFar = (uData.dSq || 0) > ANIM_CULL_DIST_SQ;
+      const sf = (uData.dSq || 0) > 10000 ? 2 : 1; // 30 FPS far, 60 FPS close
+
+      if (!tooFar && time - item.lastUpdate >= 0.016 * sf) {
+        item.mixer.update(delta * sf);
+        item.lastUpdate = time;
+      }
+    } 
+
+    Object.keys(p).forEach(poolKey => {
+      const pool = p[poolKey];
       const toRelease: string[] = [];
-      for (const [_uid, slotIdx] of pool.assigned) {
-        if (!pool.activeSet.has(_uid)) {
+      for (const [uid, slotIdx] of pool.assigned) {
+        if (!pool.activeSet.has(uid)) {
           const item = pool.items[slotIdx];
           if (item) item.group.visible = false;
-          const hIdx = hudBase + slotIdx;
-          hideHUD(hIdx, _uid);
+          // Parse poolIdx from uid (format "unit-IDX")
+          const hIdx = parseInt(uid.split('-')[1]);
+          if (!isNaN(hIdx)) hideHUD(hIdx, uid);
           pool.available.push(slotIdx);
-          toRelease.push(_uid);
+          toRelease.push(uid);
         }
       }
       for (let r = 0; r < toRelease.length; r++) {
         pool.assigned.delete(toRelease[r]);
       }
-    } // closes classKey loop
+    });
 
-    // ── O(1) Global Shader Update — throttled to every 6 frames ──
     if (_ecsFrame % 6 === 0) {
       const globalTime = (simTimeRef.current || 0) * 0.001;
       for (const [_, mat] of _materialCache.entries()) {
@@ -670,8 +619,7 @@ const ECSArmyRendererInner = ({
         }
       }
     }
-
-  }); // closes useFrame
+  }); 
 
   return <group ref={groupRef} />;
 };
@@ -690,3 +638,7 @@ _preload('/assets-model/Wizard.glb');
 _preload('/assets-model/Cowboy_Female.glb');
 _preload('/assets-model/Ninja_Female.glb');
 _preload('/assets-model/Ninja_Male.glb');
+_preload('/assets-model/Goblin_Male.glb');
+_preload('/assets-model/Goblin_Female.glb');
+_preload('/assets-model/Zombie_Male.glb');
+_preload('/assets-model/Zombie_Female.glb');

@@ -4,7 +4,7 @@ import { useMemo, useEffect } from 'react';
 import React from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import { Sky } from '@react-three/drei';
+import { Environment } from '@react-three/drei';
 import { StaticCollider } from 'bvhecctrl';
 import { getTerrainElevation } from "@/src/core/utils/terrainHeight";
 import {
@@ -74,13 +74,17 @@ export const WhimsicalDiorama = ({ baseDistance = 24, settingsRef, debug = false
     return (
         <group>
             {/* 1. SKYBOX & SUNLIGHT (High Noon / 12 PM) */}
-            <Sky sunPosition={[5, 100, 5]} />
+            <Environment 
+                files="/qwantani_sunset_1k.exr" 
+                background 
+                blur={0}
+            />
 
-            <ambientLight intensity={2.0} color="#ffffff" />
+            <ambientLight intensity={3.5} color="#ffffff" />
 
             <directionalLight
-                position={[5, 100, 5]}
-                intensity={12.0}
+                position={[10, 100, 10]}
+                intensity={15.0}
 
                 color="#ffffff"
                 castShadow

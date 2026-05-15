@@ -19,6 +19,7 @@ export const PlayerInput = {
   action1:  new Int8Array(1),
   mouseX:   new Float32Array(1),  // accumulated delta since last frame
   mouseY:   new Float32Array(1),
+  playerPosition: new Float32Array(3), // [x, y, z] Zero-GC tracking
 };
 
 export const PlayerCamera = {

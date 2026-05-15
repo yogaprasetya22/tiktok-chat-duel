@@ -1,24 +1,9 @@
-'use client';
-
-/**
- * BattleArmy v10 — ECS Unified Architecture
- *
- * This component unifies all class-specific rendering (Fighter, Tank, Mage, MM, Assassin)
- * into a single high-performance loop via ECSArmyRenderer.
- *
- * Optimization Strategy:
- * - Bucketizing: Units are split into class-specific buckets once per frame.
- * - ECS: Unit positions/rotations/animations are read directly from Bitecs-backed buffers.
- * - Single Draw Call HUD: Shadows, Health Bars, and Cooldowns use InstancedMesh.
- * - O(1) Visibility: Frustum culling and distance-based LOD are handled in the ECS loop.
- */
-
 import * as THREE from 'three';
 import React, { useRef, useMemo, useEffect } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { Text } from '@react-three/drei';
 
-import { UnitRuntimeData, TowerConfig, SimulationSettings } from '@/src/core/domain/unit.types';
+import { UnitRuntimeData, TowerConfig, SimulationSettings, WORLD_UNIT_POOL_SIZE } from '@/src/core/domain/unit.types';
 import { ECSArmyRenderer } from './armies/ECSArmyRenderer';
 import { InstancedImpostorRenderer } from './armies/InstancedImpostorRenderer';
 import { MageSpellEffect } from './effects/MageSpellEffect';
@@ -42,13 +27,24 @@ interface BattleArmyProps {
   compBuffers?: any;
 }
 
-const MAX_UNITS = 300;
-const NAME_POOL_SIZE = 120;
+const MAX_UNITS = WORLD_UNIT_POOL_SIZE; // Matches world capacity exactly
+const NAME_POOL_SIZE = 150;
 
 // ─── SHADERS ─────────────────────────────────────────────────────────────────
 
+/**
+ * Luxurious Ragnarok-Style Health Bar Shader
+ * Features: 
+ * - Segmented HP ticks
+ * - Color interpolation (Green -> Yellow -> Red)
+ * - Glassmorphism border effect
+ * - Glossy overlay
+ */
 const MLHealthBarShader = {
-  uniforms: { time: { value: 0 } },
+  uniforms: { 
+    time: { value: 0 },
+    isEnemy: { value: 0 } // 1.0 for enemy, 0.0 for player
+  },
   vertexShader: `
     attribute vec2 aHealthInfo; // x=hp, y=maxHp
     varying vec2 vUv;
@@ -62,21 +58,50 @@ const MLHealthBarShader = {
   fragmentShader: `
     varying vec2 vUv;
     varying vec2 vHealth;
+    
     void main() {
-      float pct = vHealth.x / vHealth.y;
+      float hp = vHealth.x;
+      float maxHp = vHealth.y;
+      float pct = clamp(hp / maxHp, 0.0, 1.0);
       
-      // Segment ticks every 1000 HP
-      float segments = vHealth.y / 1000.0;
+      // Ragnarok Colors
+      // Player/Ally: Light Blue/Green
+      // Enemy: Red/Orange
+      vec3 color;
+      if (pct > 0.5) {
+        color = mix(vec3(1.0, 0.8, 0.0), vec3(0.0, 1.0, 0.4), (pct - 0.5) * 2.0);
+      } else {
+        color = mix(vec3(1.0, 0.0, 0.0), vec3(1.0, 0.8, 0.0), pct * 2.0);
+      }
+
+      // Border and Background
+      float border = 0.03;
+      bool isBorder = vUv.x < border || vUv.x > (1.0 - border) || vUv.y < border * 4.0 || vUv.y > (1.0 - border * 4.0);
+      
+      if (isBorder) {
+        gl_FragColor = vec4(0.0, 0.0, 0.0, 0.9);
+        return;
+      }
+
+      // Segment Ticks (Every 500 HP for detailed feel)
+      float tickSpacing = 500.0;
+      float segments = maxHp / tickSpacing;
+      float tickWidth = 0.015;
       float tick = mod(vUv.x * segments, 1.0);
-      bool isTick = tick < 0.04 && vHealth.y > 500.0;
+      bool isTick = tick < tickWidth && maxHp > tickSpacing;
 
       if (vUv.x > pct) {
-        // Background (empty health)
-        gl_FragColor = vec4(0.1, 0.1, 0.1, 0.8);
+        // Background (Dark semi-transparent)
+        gl_FragColor = vec4(0.15, 0.05, 0.05, 0.7);
       } else {
-        // Foreground (active health)
-        if (isTick) gl_FragColor = vec4(0.0, 0.0, 0.0, 0.4);
-        else gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0); // Tainted by instanceColor
+        // Foreground
+        if (isTick) {
+          gl_FragColor = vec4(0.0, 0.0, 0.0, 0.3);
+        } else {
+          // Glossy top shine
+          float shine = smoothstep(0.4, 0.45, vUv.y) * 0.25;
+          gl_FragColor = vec4(color + shine, 1.0);
+        }
       }
     }
   `
@@ -132,7 +157,7 @@ const BattleArmyComponent = ({
   const nameGroupRefs    = useRef<(THREE.Group | null)[]>([]);
 
   // ── Geometry/Materials ──
-  const healthGeo   = useMemo(() => new THREE.PlaneGeometry(0.8, 0.12), []);
+  const healthGeo   = useMemo(() => new THREE.PlaneGeometry(1.2, 0.16), []);
   const shadowGeo   = useMemo(() => {
     const geo = new THREE.PlaneGeometry(1, 1);
     geo.rotateX(-Math.PI / 2); // Flat on ground

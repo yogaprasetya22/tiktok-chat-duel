@@ -20,6 +20,7 @@ import { useVFX } from './systems/VFXManager';
 import ProjectilePool, { ProjectilePoolHandle } from './systems/ProjectilePool';
 import { useStore } from '@/src/state/useStore';
 import { UnitRuntimeData } from '@/src/core/domain/unit.types';
+import { PlayerInput } from './systems/PlayerECS';
 
 // ─── ANIMATION MAPS ──────────────────────────────────────────────────────────
 const animationSet = {
@@ -58,16 +59,10 @@ const _camTarget  = new THREE.Vector3();
 const _camDir     = new THREE.Vector3();
 const _originVec  = new THREE.Vector3();
 const _fwdVec     = new THREE.Vector3();
-const _toEnemy    = new THREE.Vector3();
 const _targetVec  = new THREE.Vector3();
 
 // ─── ECS BUFFERS (TypedArrays — same-frame, no GC) ───────────────────────────
 // Camera state
-const PlayerInput = {
-  mouseX:   new Float32Array(1),
-  mouseY:   new Float32Array(1),
-  playerPosition: new Float32Array(3), // [x, y, z] Zero-GC tracking
-};
 const camYaw        = new Float32Array(1);   // radians
 const camPitch      = new Float32Array([0.3]);
 const camZoom       = new Float32Array([5.0]);
@@ -107,17 +102,22 @@ export const PlayerController = ({
   paused = false,
   unitRegistry,
   dealPlayerDamage,
+  mmSpellsRef,
+  simTimeRef,
 }: {
   damageQueue?: React.RefObject<any[]>;
   settingsRef: React.RefObject<any>;
   paused?: boolean;
   unitRegistry?: React.RefObject<UnitRuntimeData[]>;
   dealPlayerDamage?: (targetId: string, damage: number, isCrit?: boolean) => void;
+  mmSpellsRef?: React.RefObject<any[]>;
+  simTimeRef?: React.RefObject<number>;
 }) => {
   const poolRef      = useRef<ProjectilePoolHandle>(null);
   const ecctrlRef    = useRef<any>(null);
   const characterRef = useRef<THREE.Group>(null!);
   const { camera }   = useThree();
+  const mmSpellPtr   = useRef(0);
 
   // ─── ASSET LOADING ────────────────────────────────────────────────────────
   const { scene, animations } = useGLTF('/assets-model/Chef_Male.glb');
@@ -252,9 +252,8 @@ export const PlayerController = ({
     _lookAt.set(lookAtX[0], lookAtY[0], lookAtZ[0]);
     camera.lookAt(_lookAt);
 
-    // === AUTO-AIM COMBAT SYSTEM ===
     const now = performance.now();
-    const registry = unitRegistry?.current;
+  const registry = unitRegistry?.current;
 
     // ── Find Nearest Enemy Unit ──
     hasTarget[0] = 0;
@@ -341,7 +340,7 @@ export const PlayerController = ({
       // ── Find best hit target with AOE fallback ──
       const combatMode = useStore.getState().combatMode;
       const LOCK_RSQ = AUTO_AIM_RSQ;
-      const AOE_RSQ  = 5.0 * 5.0;
+
 
       let nearestTarget: UnitRuntimeData | null = null;
       let minDSq = LOCK_RSQ;
@@ -363,31 +362,13 @@ export const PlayerController = ({
       if (nearestTarget) {
         _camTarget.set(nearestTarget.position[0], nearestTarget.position[1] + 1, nearestTarget.position[2]);
 
-        if (combatMode === 'SINGLE' && (nearestTarget as any).onHit) {
-          (nearestTarget as any).onHit?.();
-        }
-
-        const damage = 100 + Math.random() * 400;
-        const isCrit = Math.random() > 0.8;
-        
-        if (dealPlayerDamage) {
-          dealPlayerDamage(nearestTarget.id, damage, isCrit);
-        } else {
-          // Fallback visual damage if dealPlayerDamage is not provided
-          damageQueue?.current?.push({
-            value: damage,
-            position: [_camTarget.x, _camTarget.y + 1, _camTarget.z],
-            isCrit: isCrit,
-            isMagic: false,
-            color: '#ffaa00',
-          });
-        }
         spawnVFX([_camTarget.x, _camTarget.y + 1, _camTarget.z], 'spark', '#ff0000');
 
         if (combatMode === 'AOE' && registry) {
           const nx = _camTarget.x;
           const ny = _camTarget.y;
           const nz = _camTarget.z;
+          const AOE_RSQ = 16.0; // 4m radius
           for (let i = 0; i < registry.length; i++) {
             const u = registry[i];
             if (!u.isActive || u.isDying || u.type !== 'enemy') continue;
@@ -400,27 +381,46 @@ export const PlayerController = ({
             
             if (dealPlayerDamage) {
               dealPlayerDamage(u.id, damage, isCrit);
-            } else {
-              damageQueue?.current?.push({
-                value: damage,
-                position: [u.position[0], u.position[1] + 1, u.position[2]],
-                isCrit: isCrit,
-                isMagic: false,
-                color: '#ffaa00',
-              });
             }
             spawnVFX([u.position[0], u.position[1] + 1, u.position[2]], 'spark', '#ff4400');
           }
         }
 
-        // Aim direction for projectile
-        _toEnemy.set(
-          nearestTarget.position[0] - _charPos.x,
-          (nearestTarget.position[1] + 1.2) - (_charPos.y + 1.35),
-          nearestTarget.position[2] - _charPos.z,
-        ).normalize();
+        // ── Fire MM-Style Targeted Projectile (Perfect Accuracy + Sniper VFX) ──
+        if (mmSpellsRef?.current) {
+          const pool = mmSpellsRef.current;
+          const s = pool[mmSpellPtr.current];
+          
+          s.active = true;
+          s.isBullet = true;
+          s.fromX = _originVec.x;
+          s.fromY = _originVec.y;
+          s.fromZ = _originVec.z;
+          
+          // Set initial target position
+          s.toX = nearestTarget.position[0];
+          s.toY = nearestTarget.position[1] + 1.2;
+          s.toZ = nearestTarget.position[2];
+          
+          s.startTime = simTimeRef?.current || 0;
+          s.color = "#00d4ff"; // Player's signature neon cyan
+          s.targetId = nearestTarget.id;
+          (s as any).targetPoolIdx = nearestTarget.poolIdx;
+          
+          // Enable the "Sniper" visual style (core + trail)
+          (s as any).isSniper = true;
+          (s as any).isFinisher = false;
+          (s as any).bulletSpeed = 135.0; // Blazing fast targeted shot
+          
+          mmSpellPtr.current = (mmSpellPtr.current + 1) % pool.length;
 
-        poolRef.current?.fire(_originVec, _toEnemy);
+          // ── Apply Damage Instantly (Responsive Combat) ──
+          if (dealPlayerDamage) {
+            const damage = 2500 + Math.random() * 1500; // Premium damage scaling
+            const isCrit = Math.random() > 0.85;
+            dealPlayerDamage(nearestTarget.id, damage, isCrit);
+          }
+        }
       }
     }
 
@@ -441,7 +441,11 @@ export const PlayerController = ({
   // ─── RENDER ──────────────────────────────────────────────────────────────
   return (
     <>
-      <ProjectilePool ref={poolRef} damageQueue={damageQueue} />
+      <ProjectilePool 
+        ref={poolRef} 
+        damageQueue={damageQueue} 
+        dealPlayerDamage={dealPlayerDamage}
+      />
 
       <BVHEcctrl
         ref={ecctrlRef}

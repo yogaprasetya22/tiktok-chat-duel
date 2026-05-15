@@ -4,7 +4,7 @@
 
 import { useRef, useMemo, useEffect } from "react";
 import { useFrame } from "@react-three/fiber";
-import { Sky } from "@react-three/drei";
+import { Environment } from "@react-three/drei";
 import { computeBoundsTree, disposeBoundsTree, acceleratedRaycast } from "three-mesh-bvh";
 import * as BufferGeometryUtils from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { StaticCollider, characterStatus } from "bvhecctrl";
@@ -308,61 +308,7 @@ const StaticGrass = ({ potatoMode, baseDistance = 24 }: { potatoMode?: boolean, 
   );
 };
 
-const RAIN_COUNT   = 600;
-const RainMaterial = new THREE.ShaderMaterial({
-  uniforms: { time: { value: 0 } },
-  vertexShader: `
-    uniform float time;
-    void main() {
-      vec4 w = instanceMatrix * vec4(position, 1.0);
-      w.y -= mod(time * 80.0 + w.y, 80.0);
-      w.x += mod(time * 4.0, 6.0);
-      w.z -= mod(time * 4.0, 6.0);
-      gl_Position = projectionMatrix * viewMatrix * w;
-    }
-  `,
-  fragmentShader: `void main() { gl_FragColor = vec4(0.48, 0.54, 0.66, 0.5); }`,
-  transparent: true,
-});
 
-const Rain = () => {
-  const meshRef = useRef<THREE.InstancedMesh>(null!);
-  const dummy   = useMemo(() => new THREE.Object3D(), []);
-
-  useEffect(() => {
-    for (let i = 0; i < RAIN_COUNT; i++) {
-      dummy.position.set((Math.random() - 0.5) * 300, Math.random() * 80, (Math.random() - 0.5) * 300);
-      dummy.rotation.set(0.1, 0, -0.08);
-      dummy.updateMatrix();
-      meshRef.current.setMatrixAt(i, dummy.matrix);
-    }
-    meshRef.current.instanceMatrix.needsUpdate = true;
-  }, [dummy]);
-
-  useFrame(s => (RainMaterial.uniforms.time.value = s.clock.elapsedTime));
-
-  return (
-    <instancedMesh ref={meshRef} args={[undefined, undefined, RAIN_COUNT]}>
-      <cylinderGeometry args={[0.012, 0.012, 1.2, 3]} />
-      <primitive object={RainMaterial} attach="material" />
-    </instancedMesh>
-  );
-};
-
-const Lightning = () => {
-  const lightRef = useRef<THREE.PointLight>(null!);
-  useEffect(() => {
-    const trigger = () => {
-      if (!lightRef.current) return;
-      lightRef.current.intensity = 200 + Math.random() * 300;
-      setTimeout(() => { if (lightRef.current) lightRef.current.intensity = 0; }, 50);
-      setTimeout(trigger, 4000 + Math.random() * 8000);
-    };
-    const t = setTimeout(trigger, 3000);
-    return () => clearTimeout(t);
-  }, []);
-  return <pointLight ref={lightRef} position={[0, 60, -20]} distance={500} color="#cce6ff" intensity={0} />;
-};
 
 export const StormEnvironment = ({ baseDistance = 24, potatoMode = false, debug = false, onReady }: {
   baseDistance?: number;
@@ -371,7 +317,6 @@ export const StormEnvironment = ({ baseDistance = 24, potatoMode = false, debug 
   onReady?: () => void;
 }) => {
   const weather    = useStore(s => s.weather);
-  const setWeather = useStore(s => s.setWeather);
   const gameState  = useStore(s => s.gameState);
   const isSetup    = gameState === "SETUP";
   const { spawnVFX } = useVFX();
@@ -391,6 +336,8 @@ export const StormEnvironment = ({ baseDistance = 24, potatoMode = false, debug 
     }
   });
 
+  // DISABLED: Weather rotation hidden to maintain permanent daytime
+  /*
   useEffect(() => {
     if (isSetup) return;
     const cycle = () => {
@@ -401,6 +348,9 @@ export const StormEnvironment = ({ baseDistance = 24, potatoMode = false, debug 
     const t = setTimeout(cycle, 60000);
     return () => clearTimeout(t);
   }, [setWeather, isSetup]);
+  */
+
+
 
   if (potatoMode) {
     return (
@@ -413,26 +363,23 @@ export const StormEnvironment = ({ baseDistance = 24, potatoMode = false, debug 
     );
   }
 
-  const fogNear = weather === "CLEAR" ? 120 : 60;
-  const fogFar  = weather === "CLEAR" ? 1200 : 400;
-  const fogColor = weather === "CLEAR" ? "#c8dff0" : "#1a1a1a";
+  const fogNear = 120;
+  const fogFar  = 1200;
+  const fogColor = "#c8dff0";
 
   return (
     <group>
-      <Sky
-        sunPosition={weather === "CLEAR" ? [10, 100, 10] : [0, -10, 0]}
-
-        turbidity={weather === "CLEAR" ? 2 : 12}
-        rayleigh={weather === "CLEAR" ? 0.8 : 3}
-        mieCoefficient={0.005}
-        mieDirectionalG={0.8}
+      <Environment 
+        files="/qwantani_sunset_1k.exr"
+        background
+        blur={0}
       />
-      <hemisphereLight intensity={weather === "CLEAR" ? 1.2 : 0.6} color={weather === "THUNDER" ? "#cfe2ff" : "#ffffff"} groundColor="#445544" />
-      <ambientLight intensity={1.2} />
+      <hemisphereLight intensity={2.5} color="#ffffff" groundColor="#445544" />
+      <ambientLight intensity={3.0} />
 
       <directionalLight
         position={[10, 100, 10]}
-        intensity={weather === "CLEAR" ? 8.0 : 1.2}
+        intensity={8.0}
 
         castShadow={!isSetup}
         shadow-mapSize={[512, 512]}
@@ -462,8 +409,7 @@ export const StormEnvironment = ({ baseDistance = 24, potatoMode = false, debug 
       
       <StaticGrass potatoMode={potatoMode} baseDistance={baseDistance} />
       <InstancedTrees mode="STORM" baseDistance={baseDistance} />
-      {(weather === "RAIN" || weather === "THUNDER") && <Rain />}
-      {weather === "THUNDER" && <Lightning />}
+      {/* Rain and Lightning disabled for permanent daytime */}
       <fog attach="fog" args={[fogColor, fogNear, fogFar]} />
     </group>
   );

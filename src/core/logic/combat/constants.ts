@@ -30,11 +30,11 @@ export let CLASS_CONFIG: ClassConfig = {
         attack_speed_mult: 1.2,
         crit_chance: 0.2,
         crit_damage: 2.2,
-        range: 3.5,
+        range: 4.5,
         tenacity: 0.25,
         cooldown_reduction: 0.1,
         skill_cooldown: 6000,
-        skill_range: 5.0,
+        skill_range: 4.0,
         skill_duration: 2500,
         ai_behavior: {
             separation: 1.0,
@@ -58,7 +58,7 @@ export let CLASS_CONFIG: ClassConfig = {
         attack_speed_mult: 0.85,
         crit_chance: 0.05,
         crit_damage: 1.5,
-        range: 3.0,
+        range: 4.0,
         tenacity: 0.6,
         cooldown_reduction: 0.2,
         skill_cooldown: 25000,
@@ -86,11 +86,11 @@ export let CLASS_CONFIG: ClassConfig = {
         attack_speed_mult: 0.45,
         crit_chance: 0.1,
         crit_damage: 2.0,
-        range: 11.5,
+        range: 15.0,
         tenacity: 0.0,
         cooldown_reduction: 0.15,
         skill_cooldown: 7500,
-        skill_range: 15.0,
+        skill_range: 12.0,
         skill_duration: 3000,
         ai_behavior: {
             separation: 2.5,
@@ -114,11 +114,11 @@ export let CLASS_CONFIG: ClassConfig = {
         attack_speed_mult: 1.6,
         crit_chance: 0.45,
         crit_damage: 2.8,
-        range: 8.5,
+        range: 12.0,
         tenacity: 0.0,
         cooldown_reduction: 0.1,
         skill_cooldown: 22000,
-        skill_range: 14.0,
+        skill_range: 10.0,
         skill_duration: 4500,
         ai_behavior: {
             separation: 2.8,
@@ -142,7 +142,7 @@ export let CLASS_CONFIG: ClassConfig = {
         attack_speed_mult: 1.4,
         crit_chance: 0.4,
         crit_damage: 4.0,
-        range: 2.5,
+        range: 4.0,
         tenacity: 0.15,
         cooldown_reduction: 0.25,
         skill_cooldown: 1200,
@@ -162,7 +162,7 @@ export let CLASS_CONFIG: ClassConfig = {
 export let INITIAL_SETTINGS: SimulationSettings = {
     // Military & Stats
     globalHpMultiplier: 1.0,
-    globalSpeedMultiplier: 1.1,
+    globalSpeedMultiplier: 1.3,
     globalDamageMultiplier: 2.4,
     globalAttackCooldown: 800,
     critChance: 0.55,
@@ -215,7 +215,7 @@ export let INITIAL_SETTINGS: SimulationSettings = {
 
 // --- MAGE PROJECTILE SYNC ---
 export const MAGE_PROJECTILE_TIME_MS = 520;
-export const CORPSE_DESPAWN_MS = 0; // Time in ms before a corpse is removed from the field
+export const CORPSE_DESPAWN_MS = 2500; // Time in ms before a corpse is removed from the field
 
 // --- LOD IMPOSTOR SYSTEM ---
 
@@ -224,7 +224,7 @@ export const LOD_IMPOSTOR_SCALE = 1.8;
 export const LOD_IMPOSTOR_BOSS_SCALE = 5.0;
 
 // --- CENTRALIZED PERFORMANCE CONFIG ---
-export const ARMY_POOL_SIZE = 30; // Number of high-detail 3D models per class
+export const ARMY_POOL_SIZE = 80; // Number of high-detail 3D models per class
 export const ANIM_CULL_DIST_SQ = 450 * 450; // Distance where bone animations stop (150m)
 
 // --- WEATHER SYSTEM CONFIG ---

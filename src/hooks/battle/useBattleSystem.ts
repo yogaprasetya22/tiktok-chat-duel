@@ -58,6 +58,8 @@ import {
   pickWeightedRandom,
 } from "@/src/core/logic/combat/battleUtils";
 
+import { PlayerInput } from "@/src/components/game/systems/PlayerECS";
+
 import { WORLD_UNIT_POOL_SIZE } from "@/src/core/domain/unit.types";
 import { battleGrid } from "@/src/core/logic/combat/spatialGrid";
 
@@ -356,7 +358,8 @@ export const useBattleSystem = () => {
   }, []);
 
   const accumulateDamage = useCallback(
-    (targetId: string, value: number, position: number[], color: string, now: number) => {
+    (targetId: string | undefined, value: number, position: number[], color: string, now: number) => {
+      if (!targetId) return;
       const existing = damageBufferRef.current.get(targetId);
       if (existing) {
         existing.total += value;
@@ -1053,9 +1056,12 @@ export const useBattleSystem = () => {
         : userName.trim().substring(0, 16);
       const unitClass =
         forcedClass ||
-        pickWeightedRandom(
-          ["fighter", "tank", "assassin", "marksman", "mage"],
-          [35, 35, 7, 11, 12],
+        (type === "enemy" 
+          ? pickWeightedRandom(["fighter", "tank"], [60, 40])
+          : pickWeightedRandom(
+              ["fighter", "tank", "assassin", "marksman", "mage"],
+              [35, 35, 7, 11, 12],
+            )
         ); // --- MODULAR GACHA SYSTEM ---
 
       const rarity = forcedRarity || (pickWeightedRandom(
@@ -1243,8 +1249,10 @@ export const useBattleSystem = () => {
       const weatherCfg = (WEATHER_CONFIG as any)[weather] || {};
       const weatherMults = weatherCfg.multipliers || {};
 
-      // --- PLAYER CHARACTER POSITION (from store, updated by PlayerController) ---
-      const playerCharPos = state.playerPosition; // [x, y, z]
+      // --- PLAYER CHARACTER POSITION (Direct Buffer - ZERO LAG) ---
+      // Reading from PlayerInput.playerPosition directly bypasses Zustand state delay
+      const playerCharPos = PlayerInput.playerPosition; 
+
 
       // --- QUEUED SPAWN PROCESSING ---
       // FIX: Use head pointer instead of shift() to avoid O(N) array mutation every frame.
@@ -1406,16 +1414,10 @@ export const useBattleSystem = () => {
           let bestScore = -1;
           let bestTargetId: string | undefined = undefined;
 
-          const dist = towerConfigRef.current.baseDistance ?? 34;
-          const targetBaseZ = u.type === "player" ? -dist : dist;
-          const dxB = uData.position[0];
-          const dzB = uData.position[2] - targetBaseZ;
-          const distToBaseSq = dxB * dxB + dzB * dzB;
 
-          const towerWeight = 0.005; // Lowered: player char is a much better target
-          bestScore = towerWeight / (distToBaseSq + 0.1);
-          const targetedBaseId = u.type === "player" ? "enemy-base" : "player-base";
-          const myBaseId = u.type === "player" ? "player-base" : "enemy-base";
+
+
+          // Removed base targeting - units now only target other units or player
 
           // ━━━ PLAYER CHARACTER TARGETING (Enemy units only) ━━━
           // Enemy units treat the player character as a high-priority target.
@@ -1483,9 +1485,7 @@ export const useBattleSystem = () => {
             if (potential.targetId === "player-character") {
               weight *= 30.0;
             }
-            if (potential.targetId === myBaseId) {
-              weight *= 10.0;
-            }
+
 
             const score = weight / (dSq + 0.1);
             
@@ -1509,8 +1509,8 @@ export const useBattleSystem = () => {
               u.targetId = undefined;
               uData.status = "idling";
             } else {
-              u.targetId = targetedBaseId;
-              uData.status = "marching";
+              u.targetId = undefined;
+              uData.status = "idling";
             }
           }
         }
@@ -1540,7 +1540,7 @@ export const useBattleSystem = () => {
         const dist = towerConfigRef.current.baseDistance ?? 24;
         const targetBaseZ = u.type === "player" ? -dist : dist;
         const isBaseTarget =
-          u.targetId === "player-base" || u.targetId === "enemy-base";
+          false; // Never targeting base anymore
         const isPlayerCharTarget = u.targetId === "player-character";
 
         const isRanged = u.unitClass === "mage" || u.unitClass === "marksman"; // --- Skill/Buff Range Adjustment ---
@@ -1550,18 +1550,16 @@ export const useBattleSystem = () => {
         const effectiveRange = skillRange * rangeMult;
         const rangeSq = effectiveRange * effectiveRange;
 
-        const dxB = _px[i];
-        const dzB = _pz[i] - targetBaseZ;
-        const distToBaseSq = dxB * dxB + dzB * dzB;
-        const baseInRange = distToBaseSq < rangeSq;
+        const baseInRange = false; // Bases are removed
 
         // --- PLAYER CHARACTER RANGE CHECK ---
         let playerCharInRange = false;
         if (isPlayerCharTarget && playerCharPos) {
           const pcDx = _px[i] - playerCharPos[0];
           const pcDz = _pz[i] - playerCharPos[2];
-          // Give a slight range boost (1.5x) against the player to account for character collider radius
-          const pcRangeSq = rangeSq * 1.5;
+          // Optimization Point #2: 1.15x Range Boost specifically against the player
+          // This ensures the monster swings its weapon just before touching the player's hitbox.
+          const pcRangeSq = rangeSq * 1.15;
           playerCharInRange = (pcDx * pcDx + pcDz * pcDz) < pcRangeSq;
         }
 
@@ -1944,9 +1942,14 @@ export const useBattleSystem = () => {
         if (isPlayerCharTarget && playerCharPos && playerCharInRange) {
           uData.status = "attacking";
           v.maxSpeed = 0;
-          // Faster attack rate against player to feel more like an action MMORPG
+          
+          // Optimization Point #4: 30% faster attack rate against player
           const currentCooldown = (u.attackCooldown * 0.7) * feverCooldownMult;
-          if (simNow - (uData.lastAttackTime || 0) > currentCooldown) {
+
+          // Optimization Point #3: Instant First Strike
+          // If the enemy just reached the player, we ignore the initial cooldown delay
+          const isFirstStrike = !uData.lastAttackTime;
+          if (isFirstStrike || (simNow - (uData.lastAttackTime || 0) > currentCooldown)) {
             // Deal damage to player HP (stored in store as playerBaseHp for now)
             const dmg = u.attack * 0.5; // 50% damage to player character (balanced)
             playerBaseHpRef.current = Math.max(0, playerBaseHpRef.current - dmg);
@@ -2470,7 +2473,7 @@ export const useBattleSystem = () => {
               }
             }
             accumulateDamage(
-              u.type === "player" ? "enemy-base" : "player-base",
+              undefined,
               dmg,
               [0, 2, targetBaseZ],
               u.type === "player"
@@ -2541,7 +2544,7 @@ export const useBattleSystem = () => {
                     s.toY = tPos[1] + 2.0;
                     s.toZ = tPos[2];
                     s.targetId =
-                      u.type === "player" ? "enemy-base" : "player-base";
+                      undefined;
                     s.startTime = simNow;
                     s.color = teamColor;
                     s.active = true;
@@ -2564,7 +2567,7 @@ export const useBattleSystem = () => {
                   s.toY = tPos[1] + 2.0;
                   s.toZ = tPos[2];
                   s.targetId =
-                    u.type === "player" ? "enemy-base" : "player-base";
+                    undefined;
                   s.startTime = simNow;
                   s.color = teamColor;
                   s.active = true;
@@ -2617,36 +2620,57 @@ export const useBattleSystem = () => {
           if (uData.status === "attacking") {
             v.maxSpeed = 0;
           } else {
-            v.maxSpeed = baseSpeed * (uData.isRolling ? 4.0 : (isPatrolling ? 0.5 : 1.0)) * feverSpeedMult;
+            v.maxSpeed = baseSpeed * (uData.isRolling ? 4.0 : (isPatrolling ? 0.4 : 1.0)) * feverSpeedMult;
             // Boost speed slightly when chasing the player to make it more threatening
             if (uData.status === "chasing" && u.targetId === "player-character") {
               v.maxSpeed *= 1.25; 
+            }
+          }
+
+          // --- DE-AGGRO LOGIC ---
+          if (uData.isAggroed && u.targetId === "player-character" && playerCharPos) {
+            const dx = _px[i] - playerCharPos[0];
+            const dz = _pz[i] - playerCharPos[2];
+            const distSq = dx * dx + dz * dz;
+            const CHASE_LIMIT_SQ = 45 * 45; 
+            if (distSq > CHASE_LIMIT_SQ) {
+              uData.isAggroed = false;
+              u.targetId = undefined;
+              uData.status = "marching";
+              uData.patrolTarget = undefined;
+              uData.patrolWaitUntil = simNow + 2000; 
             }
           }
           
           const seek = v.steering.behaviors[0] as any;
           if (seek?.target) {
             if (isPatrolling) {
-              // PATROL LOGIC: Pick a random point within 100m of home
+              // PATROL LOGIC: Pick a random point within 25m of home
               if (uData.patrolWaitUntil && simNow < uData.patrolWaitUntil) {
                 v.maxSpeed = 0;
+                uData.status = "idling";
               } else {
+                if (uData.status === "idling") uData.status = "marching";
+                
                 if (!uData.patrolTarget) {
                   const angle = Math.random() * Math.PI * 2;
-                  const dist = 2 + Math.random() * 18; // Between 2m and 20m
-                  uData.patrolTarget = [
-                    uData.homePosition[0] + Math.cos(angle) * dist,
-                    uData.homePosition[1],
-                    uData.homePosition[2] + Math.sin(angle) * dist
-                  ];
+                  const dist = 4 + Math.random() * 24; 
+                  const tx = Math.max(-45, Math.min(45, uData.homePosition[0] + Math.cos(angle) * dist));
+                  const tz = Math.max(-45, Math.min(45, uData.homePosition[2] + Math.sin(angle) * dist));
+                  
+                  uData.patrolTarget = [tx, uData.homePosition[1], tz];
+                  uData.patrolStartTime = simNow;
                 }
 
-                // Check if reached patrol target
+                // Check if reached patrol target OR timed out (stuck protection)
                 const dxP = _px[i] - uData.patrolTarget[0];
                 const dzP = _pz[i] - uData.patrolTarget[2];
-                if (dxP * dxP + dzP * dzP < 4.0) { // Reach radius: 2m
+                const timeInPatrol = simNow - (uData.patrolStartTime || 0);
+                
+                if (dxP * dxP + dzP * dzP < 6.0 || timeInPatrol > 12000) { 
                   uData.patrolTarget = undefined; 
-                  uData.patrolWaitUntil = simNow + 2000 + Math.random() * 3000; // Wait 2-5 seconds
+                  uData.patrolWaitUntil = simNow + 2000 + Math.random() * 3500; 
+                  uData.status = "idling";
                 } else {
                   seek.target.set(uData.patrolTarget[0], 0, uData.patrolTarget[2]);
                 }

@@ -29,6 +29,7 @@ export default function SealMPage() {
     clearVFXCache,
     compBuffers,
     spawnUnit,
+    dealPlayerDamage,
   } = useBattleSystem();
 
 
@@ -124,6 +125,7 @@ export default function SealMPage() {
           downloadPerfLogs={downloadPerfLogs}
           clearVFXCache={clearVFXCache}
           compBuffers={compBuffers}
+          dealPlayerDamage={dealPlayerDamage}
         />
 
         {/* In-game HUD */}

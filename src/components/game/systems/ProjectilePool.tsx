@@ -4,8 +4,8 @@ import * as THREE from 'three';
 import { useVFX } from './VFXManager';
 
 const MAX_BULLETS = 100;
-const BULLET_SPEED = 1.8;
-const BULLET_LIFETIME = 2.0;
+const BULLET_SPEED = 2.2; // Increased speed for better feel
+const BULLET_LIFETIME = 2.5;
 
 export interface ProjectilePoolHandle {
   fire: (origin: THREE.Vector3, direction: THREE.Vector3) => void;
@@ -13,6 +13,7 @@ export interface ProjectilePoolHandle {
 
 interface ProjectilePoolProps {
   damageQueue?: React.RefObject<any[]>;
+  dealPlayerDamage?: (targetId: string, damage: number, isCrit?: boolean) => void;
 }
 
 const ProjectilePool = forwardRef<ProjectilePoolHandle, ProjectilePoolProps>((props, ref) => {
@@ -63,38 +64,50 @@ const ProjectilePool = forwardRef<ProjectilePoolHandle, ProjectilePoolProps>((pr
       _vMove.copy(b.direction).multiplyScalar(BULLET_SPEED);
       
       // 2. High-Precision Raycast Hit Detection (via BVH)
-      // We cast from current position to next position to prevent tunneling
       raycaster.set(b.position, b.direction);
-      raycaster.far = _vMove.length();
+      raycaster.far = _vMove.length() * 1.5; // Slightly more for safety
       
-      // In BVH-enabled scenes, this intersect call is extremely fast
       const intersects = raycaster.intersectObjects(scene.children, true);
       
       if (intersects.length > 0) {
-        // HIT DETECTED!
         const hit = intersects[0];
         
-        // 1. Trigger VFX Spark at hit position
-        spawnVFX([hit.point.x, hit.point.y, hit.point.z], 'spark', '#ffffff');
-
-        // 2. Trigger hit event if defined in userData
-        if (hit.object.userData?.onHit) {
-          hit.object.userData.onHit();
+        // Find onHit in the hierarchy (traverse up)
+        let targetId: string | null = null;
+        let curr: THREE.Object3D | null = hit.object;
+        while (curr) {
+          if (curr.userData?.onHit && curr.userData?.unitId) {
+            targetId = curr.userData.unitId;
+            curr.userData.onHit(); // Triggers aggro
+            break;
+          }
+          curr = curr.parent;
         }
 
-        // 3. Trigger Damage HUD Popup
-        if (props.damageQueue?.current) {
-            const isCrit = Math.random() > 0.8;
+        if (targetId) {
+          spawnVFX([hit.point.x, hit.point.y, hit.point.z], 'spark', '#ff0000');
+          
+          const damage = 1200 + Math.random() * 2500;
+          const isCrit = Math.random() > 0.8;
+          
+          if (props.dealPlayerDamage) {
+            props.dealPlayerDamage(targetId, damage, isCrit);
+          } else if (props.damageQueue?.current) {
             props.damageQueue.current.push({
-                value: 100 + Math.random() * 400,
+                value: damage,
                 position: [hit.point.x, hit.point.y, hit.point.z],
                 isCrit,
                 isMagic: false,
-                color: isCrit ? '#ffaa00' : '#ffffff'
+                color: isCrit ? '#ff4400' : '#ffaa00'
             });
+          }
+          b.active = false;
+        } else {
+          // Hit world or something else
+          b.position.add(_vMove);
+          b.life -= delta;
+          if (b.life <= 0) b.active = false;
         }
-        
-        b.active = false;
       } else {
         // 3. Update Position & Life
         b.position.add(_vMove);
@@ -114,12 +127,11 @@ const ProjectilePool = forwardRef<ProjectilePoolHandle, ProjectilePoolProps>((pr
 
   return (
     <instancedMesh ref={meshRef} args={[undefined, undefined, MAX_BULLETS]} frustumCulled={false}>
-      {/* Optimized simple geometry for projectiles */}
-      <boxGeometry args={[0.06, 0.06, 0.4]} />
+      <boxGeometry args={[0.08, 0.08, 0.6]} />
       <meshStandardMaterial 
         color="#00f3ff" 
         emissive="#00f3ff" 
-        emissiveIntensity={10} 
+        emissiveIntensity={15} 
         toneMapped={false} 
       />
     </instancedMesh>
