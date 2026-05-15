@@ -121,6 +121,8 @@ export interface ActiveUnit extends UnitStats {
     rarity?: UnitRarity;
     spawnTime?: number;
     profileImage?: string;
+    homePosition: [number, number, number];
+    patrolTarget?: [number, number, number];
 }
 
 export interface MapObstacle {
@@ -210,6 +212,10 @@ export interface UnitRuntimeData {
     spawnTime?: number;
     rarity?: UnitRarity;
     lastSkillTime?: number;
+    homePosition: [number, number, number];
+    patrolTarget?: [number, number, number];
+    isAggroed: boolean;
+    patrolWaitUntil?: number;
 }
 
 export interface SimulationSettings {

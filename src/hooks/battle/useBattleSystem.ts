@@ -47,7 +47,10 @@ import {
   CLASS_CONFIG,
   CORPSE_DESPAWN_MS,
   WEATHER_CONFIG,
+  SEAL_M_ENEMIES,
 } from "@/src/core/logic/combat/constants";
+import { getTerrainElevation } from "@/src/core/utils/terrainHeight";
+import { getGroundHeight } from "@/src/core/utils/globalRaycaster";
 
 import {
   getUnitStats,
@@ -239,7 +242,7 @@ export const useBattleSystem = () => {
   const _vType = Status.type;
   const _vState = Status.state; // --- ZERO-ALLOCATION OBJECT POOL ---
 
-  const spawnQueueRef = useRef<{level: number, userName: string, type: "player" | "enemy", isBoss: boolean, forcedClass?: any, profileImage?: string, forcedRarity?: UnitRarity}[]>([]);
+  const spawnQueueRef = useRef<{level: number, userName: string, type: "player" | "enemy", isBoss: boolean, forcedClass?: any, profileImage?: string, forcedRarity?: UnitRarity, customPos?: [number, number, number]}[]>([]);
   const spawnQueueHeadRef = useRef(0); // O(1) queue head pointer — avoids O(N) shift()
 
   const unitPoolRef = useRef<ActiveUnit[]>([]);
@@ -378,7 +381,7 @@ export const useBattleSystem = () => {
 
   const [towerConfig, setTowerConfig] = useState<TowerConfig>({
       player: {
-          name: "Boy [B]",
+          name: "Humans (Travelers)",
           color: "#0066FF",
           active: true,
           commentKeyword: "B",
@@ -620,7 +623,7 @@ export const useBattleSystem = () => {
 
       },
       enemy: {
-          name: "Girl [G]",
+          name: "Seven Sages (Monsters)",
           color: "#FF0033",
           active: true,
           commentKeyword: "G",
@@ -1019,6 +1022,7 @@ export const useBattleSystem = () => {
       forcedClass?: any,
       profileImage?: string,
       forcedRarity?: UnitRarity,
+      customPos?: [number, number, number],
     ) => {
       // --- 1. CAPACITY CHECK (Sync with UI Settings) ---
       const maxUnitsPerSide =
@@ -1044,7 +1048,9 @@ export const useBattleSystem = () => {
       }
       if (poolIdx === -1) return;
 
-      const name = userName.trim().substring(0, 16);
+      const name = (userName === "Guest" && type === "enemy") 
+        ? pickRandom(SEAL_M_ENEMIES) 
+        : userName.trim().substring(0, 16);
       const unitClass =
         forcedClass ||
         pickWeightedRandom(
@@ -1119,11 +1125,15 @@ export const useBattleSystem = () => {
       const laneOffset = (isBoss || isUnderAttack) ? 0 : pickRandom(LANE_OFFSETS);
       const spread = isUnderAttack ? 1.5 : 4.0;
 
-      v.position.set(
-        laneOffset + (Math.random() - 0.5) * spread,
-        -0.4,
-        spawnZ + (Math.random() - 0.5) * spread,
-      );
+      if (customPos) {
+        v.position.set(customPos[0], customPos[1], customPos[2]);
+      } else {
+        v.position.set(
+          laneOffset + (Math.random() - 0.5) * spread,
+          -0.4,
+          spawnZ + (Math.random() - 0.5) * spread,
+        );
+      }
       v.maxSpeed = u.speed;
       v.maxForce = unitClass === "assassin" ? 50 : 30; // Increased to improve responsiveness
       v.velocity.set(0, 0, 0);
@@ -1146,6 +1156,9 @@ export const useBattleSystem = () => {
       uData.hp = u.hp;
       uData.maxHp = u.maxHp;
       uData.position = [v.position.x, -0.4, v.position.z];
+      uData.homePosition = [v.position.x, -0.4, v.position.z];
+      uData.patrolTarget = undefined;
+      uData.isAggroed = false;
       uData.rotation = [0, 0, 0];
       uData.unitClass = unitClass;
       uData.isBoss = isBoss;
@@ -1242,7 +1255,7 @@ export const useBattleSystem = () => {
         const req = queue[qHead];
         spawnQueueHeadRef.current = qHead + 1;
         if (req) {
-          _executeSpawn(req.level, req.userName, req.type, req.isBoss, req.forcedClass, req.profileImage, req.forcedRarity);
+          _executeSpawn(req.level, req.userName, req.type, req.isBoss, req.forcedClass, req.profileImage, req.forcedRarity, req.customPos);
         }
         // Compact: reclaim memory when head gets far ahead
         if (spawnQueueHeadRef.current > 32) {
@@ -1365,6 +1378,7 @@ export const useBattleSystem = () => {
           // Deal 15% of max HP damage - not too painful, but noticeable
           const damage = _vmh[i] * 0.15;
           _vh[i] = Math.max(0, _vh[i] - damage);
+          uData.isAggroed = true;
           
           // Add damage to queue for visual feedback
           accumulateDamage(u.id, damage, uData.position, "#93c5fd", simNow);
@@ -1378,11 +1392,12 @@ export const useBattleSystem = () => {
               ? 60
               : 180;
         const phaseOffset = i % 24;
-        const frameCheck = (Math.floor(simNow / 16) + phaseOffset) % 24 === 0;
+        const isAggroed = uData.isAggroed;
+        const frameCheck = isAggroed ? true : ((Math.floor(simNow / 16) + phaseOffset) % 24 === 0);
 
         if (
-          frameCheck &&
-          (!u.lastThinkTime || simNow - u.lastThinkTime > thinkThrottle)
+          (frameCheck || isAggroed) &&
+          (!u.lastThinkTime || simNow - u.lastThinkTime > (isAggroed ? 16 : thinkThrottle))
         ) {
           u.lastThinkTime = simNow;
           const isFighter = u.unitClass === "fighter";
@@ -1404,21 +1419,34 @@ export const useBattleSystem = () => {
 
           // ━━━ PLAYER CHARACTER TARGETING (Enemy units only) ━━━
           // Enemy units treat the player character as a high-priority target.
+          // CRITICAL: Only target if ALREADY AGGROED or if player is super close
           if (u.type === "enemy" && playerCharPos) {
             const pcDx = _px[i] - playerCharPos[0];
             const pcDz = _pz[i] - playerCharPos[2];
             const pcDistSq = pcDx * pcDx + pcDz * pcDz;
-            const PLAYER_DETECT_RADIUS_SQ = 35 * 35; // 35 units detection range
-            if (pcDistSq < PLAYER_DETECT_RADIUS_SQ) {
+            // If enemy is not aggroed, it only attacks if player is within 8 units (self-defense)
+            // If aggroed, it can detect player from much further (map-wide: 300 units)
+            const detectRangeSq = uData.isAggroed ? (500 * 500) : (8 * 8);
+
+            if (uData.isAggroed || pcDistSq < detectRangeSq) {
               // Player character is a VERY high priority target for all enemy types
-              const playerCharWeight = isAssassin ? 50.0 : isFighter ? 20.0 : 15.0;
-              const pcScore = playerCharWeight / (pcDistSq + 0.1);
-              if (pcScore > bestScore) {
-                bestScore = pcScore;
+              // If aggroed, hard-lock to player character to emulate MMORPG behavior
+              if (uData.isAggroed) {
+                bestScore = Infinity;
                 bestTargetId = "player-character";
+              } else {
+                const playerCharWeight = isAssassin ? 50.0 : isFighter ? 20.0 : 15.0;
+                const pcScore = playerCharWeight / (pcDistSq + 0.1);
+                if (pcScore > bestScore) {
+                  bestScore = pcScore;
+                  bestTargetId = "player-character";
+                }
               }
             }
           }
+
+          // If hard-locked onto the player, skip looking for other targets
+          if (bestTargetId !== "player-character" || !uData.isAggroed) {
 
           const neighbors = battleGrid.queryRadius(
             uData.position[0],
@@ -1460,18 +1488,30 @@ export const useBattleSystem = () => {
             }
 
             const score = weight / (dSq + 0.1);
+            
+            // If not aggroed, don't target other units unless they are attacking me
+            if (!uData.isAggroed && potential.targetId !== u.id) continue;
+
             if (score > bestScore) {
               bestScore = score;
               bestTargetId = potential.id;
             }
           }
+          } // End of skip-if-hard-locked block
 
           if (bestTargetId !== undefined) {
             u.targetId = bestTargetId;
             uData.status = "chasing";
           } else {
-            u.targetId = targetedBaseId;
-            uData.status = "marching";
+            // For enemies, if no target is found, don't default to base.
+            // This will trigger the patrol behavior in the movement loop.
+            if (u.type === "enemy") {
+              u.targetId = undefined;
+              uData.status = "idling";
+            } else {
+              u.targetId = targetedBaseId;
+              uData.status = "marching";
+            }
           }
         }
 
@@ -1520,7 +1560,9 @@ export const useBattleSystem = () => {
         if (isPlayerCharTarget && playerCharPos) {
           const pcDx = _px[i] - playerCharPos[0];
           const pcDz = _pz[i] - playerCharPos[2];
-          playerCharInRange = (pcDx * pcDx + pcDz * pcDz) < rangeSq;
+          // Give a slight range boost (1.5x) against the player to account for character collider radius
+          const pcRangeSq = rangeSq * 1.5;
+          playerCharInRange = (pcDx * pcDx + pcDz * pcDz) < pcRangeSq;
         }
 
         let currentTarget: ActiveUnit | undefined =
@@ -1615,7 +1657,7 @@ export const useBattleSystem = () => {
                 s.fromZ = tz + (Math.random() - 0.5) * 10; // Precise landing with slight spread
 
                 s.toX = tx + (Math.random() - 0.5) * 7;
-                s.toY = 0;
+                s.toY = currentTarget ? tData!.position[1] : 0;
                 s.toZ = tz + (Math.random() - 0.5) * 7; // Team-Based Icy Colors
 
                 const teamBaseCol =
@@ -1902,7 +1944,8 @@ export const useBattleSystem = () => {
         if (isPlayerCharTarget && playerCharPos && playerCharInRange) {
           uData.status = "attacking";
           v.maxSpeed = 0;
-          const currentCooldown = u.attackCooldown * feverCooldownMult;
+          // Faster attack rate against player to feel more like an action MMORPG
+          const currentCooldown = (u.attackCooldown * 0.7) * feverCooldownMult;
           if (simNow - (uData.lastAttackTime || 0) > currentCooldown) {
             // Deal damage to player HP (stored in store as playerBaseHp for now)
             const dmg = u.attack * 0.5; // 50% damage to player character (balanced)
@@ -1990,6 +2033,7 @@ export const useBattleSystem = () => {
                 let hits = 0;
                 _vh[tIdx] -= dmg;
                 tData.hp = _vh[tIdx];
+                tData.isAggroed = true;
                 currentTarget.hp = _vh[tIdx];
                 if (_vh[tIdx] <= 0) {
                   addKillEvent(
@@ -2070,6 +2114,7 @@ export const useBattleSystem = () => {
                 const cleavePerc = u.rarity === "legendary" ? 0.45 : 0.25;
                 _vh[tIdx] -= dmg;
                 tData.hp = _vh[tIdx];
+                tData.isAggroed = true;
                 currentTarget.hp = _vh[tIdx];
                 if (_vh[tIdx] <= 0) {
                   addKillEvent(
@@ -2144,6 +2189,7 @@ export const useBattleSystem = () => {
               } else {
                 _vh[tIdx] -= dmg;
                 tData.hp = _vh[tIdx];
+                tData.isAggroed = true;
                 currentTarget.hp = _vh[tIdx];
                 if (_vh[tIdx] <= 0) {
                   addKillEvent(
@@ -2293,7 +2339,8 @@ export const useBattleSystem = () => {
                     if (tVeh && tVeh.velocity.squaredLength() > 0.05) {
                       const dist = Math.sqrt(
                         (uData.position[0] - txP) ** 2 +
-                          (uData.position[2] - tzP) ** 2,
+                        (uData.position[1] - tData.position[1]) ** 2 +
+                        (uData.position[2] - tzP) ** 2,
                       );
                       const tHit = dist / bSpeed;
                       txP += tVeh.velocity.x * tHit;
@@ -2388,15 +2435,14 @@ export const useBattleSystem = () => {
                 } else {
                   seek.target.set(tData.position[0], 0, tData.position[2]);
                 }
-              } else {
-                const offsetX = (((i * 127) % 7) - 3) * 0.25;
-                const offsetZ = (((i * 53) % 7) - 3) * 0.25;
-                seek.target.set(
-                  tData.position[0] + offsetX,
-                  0,
-                  tData.position[2] + offsetZ,
-                );
               }
+            } else if (isPlayerCharTarget && playerCharPos) {
+               uData.status = "chasing";
+               v.maxSpeed = u.speed * classWeatherMult * feverSpeedMult;
+               const seek = v.steering.behaviors[0] as any;
+               if (seek?.target) {
+                 seek.target.set(playerCharPos[0], 0, playerCharPos[2]);
+               }
             }
           }
         } else if (baseInRange) {
@@ -2450,7 +2496,7 @@ export const useBattleSystem = () => {
                 if (pool) {
                   const s = pool[fighterSpellPtr.current];
                   s.x = uData.position[0] + fwdX * 0.8;
-                  s.y = 1.2;
+                  s.y = launchY;
                   s.z = uData.position[2] + fwdZ * 0.8;
                   s.targetX = tPos[0];
                   s.targetZ = tPos[2];
@@ -2471,7 +2517,7 @@ export const useBattleSystem = () => {
                 if (pool) {
                   const s = pool[tankSpellPtr.current];
                   s.x = tPos[0];
-                  s.y = 0.2;
+                  s.y = tPos[1] + 0.2;
                   s.z = tPos[2];
                   s.startTime = simNow;
                   s.color = teamColor;
@@ -2549,8 +2595,16 @@ export const useBattleSystem = () => {
             }
           }
         } else {
-          if (!(uData.isBuffed && u.unitClass === "marksman"))
-            uData.status = "marching";
+          const isPatrolling = u.type === "enemy" && !u.targetId;
+          
+          if (!(uData.isBuffed && u.unitClass === "marksman")) {
+            if (isPatrolling) {
+              uData.status = "idling";
+            } else if (uData.status !== "chasing" && uData.status !== "attacking") {
+              uData.status = "marching";
+            }
+          }
+
           const classWeatherMult =
             weatherMults[u.unitClass]?.move_speed_mult || 1.0;
           const globalWeatherMult = weatherMults.globalSpeedMultiplier || 1.0;
@@ -2560,13 +2614,65 @@ export const useBattleSystem = () => {
             classWeatherMult *
             globalWeatherMult;
 
-          v.maxSpeed = baseSpeed * (uData.isRolling ? 4.0 : 1.0) * feverSpeedMult;
+          if (uData.status === "attacking") {
+            v.maxSpeed = 0;
+          } else {
+            v.maxSpeed = baseSpeed * (uData.isRolling ? 4.0 : (isPatrolling ? 0.5 : 1.0)) * feverSpeedMult;
+            // Boost speed slightly when chasing the player to make it more threatening
+            if (uData.status === "chasing" && u.targetId === "player-character") {
+              v.maxSpeed *= 1.25; 
+            }
+          }
+          
           const seek = v.steering.behaviors[0] as any;
           if (seek?.target) {
-            const swagger =
-              Math.sin(i * 8.0 + (uData.jitterOffset || 0)) *
-              (uData.laneSwaggerAmp || 1.5);
-            seek.target.set(swagger, 0, targetBaseZ);
+            if (isPatrolling) {
+              // PATROL LOGIC: Pick a random point within 100m of home
+              if (uData.patrolWaitUntil && simNow < uData.patrolWaitUntil) {
+                v.maxSpeed = 0;
+              } else {
+                if (!uData.patrolTarget) {
+                  const angle = Math.random() * Math.PI * 2;
+                  const dist = 2 + Math.random() * 18; // Between 2m and 20m
+                  uData.patrolTarget = [
+                    uData.homePosition[0] + Math.cos(angle) * dist,
+                    uData.homePosition[1],
+                    uData.homePosition[2] + Math.sin(angle) * dist
+                  ];
+                }
+
+                // Check if reached patrol target
+                const dxP = _px[i] - uData.patrolTarget[0];
+                const dzP = _pz[i] - uData.patrolTarget[2];
+                if (dxP * dxP + dzP * dzP < 4.0) { // Reach radius: 2m
+                  uData.patrolTarget = undefined; 
+                  uData.patrolWaitUntil = simNow + 2000 + Math.random() * 3000; // Wait 2-5 seconds
+                } else {
+                  seek.target.set(uData.patrolTarget[0], 0, uData.patrolTarget[2]);
+                }
+              }
+            } else {
+              // If chasing a specific target (like the player), use their position
+              if (u.targetId === "player-character" && playerCharPos) {
+                seek.target.set(playerCharPos[0], 0, playerCharPos[2]);
+              } else if (u.targetId && u.targetId !== "player-base" && u.targetId !== "enemy-base") {
+                const targetUnit = unitIndexRef.current.get(u.targetId);
+                if (targetUnit) {
+                  const tData = unitDataPoolRef.current[targetUnit.poolIdx];
+                  seek.target.set(tData.position[0], 0, tData.position[2]);
+                } else {
+                  // Fallback to marching
+                  const swagger = Math.sin(i * 8.0 + (uData.jitterOffset || 0)) * (uData.laneSwaggerAmp || 1.5);
+                  seek.target.set(swagger, 0, targetBaseZ);
+                }
+              } else {
+                // Marching behavior
+                const swagger =
+                  Math.sin(i * 8.0 + (uData.jitterOffset || 0)) *
+                  (uData.laneSwaggerAmp || 1.5);
+                seek.target.set(swagger, 0, targetBaseZ);
+              }
+            }
           }
         }
 
@@ -2574,36 +2680,52 @@ export const useBattleSystem = () => {
           const rotSmooth = settings.rotationSmoothing || 0.12;
           const velSq = v.velocity.x ** 2 + v.velocity.z ** 2;
           if (
-            (uData.status === "marching" || uData.status === "chasing") &&
-            velSq > 0.05
+            (uData.status === "marching" || uData.status === "chasing" || uData.status === "idling" || uData.status === "attacking")
           ) {
-            const targetRot = Math.atan2(v.velocity.x, v.velocity.z);
-            let diff = targetRot - uData.rotation[1];
-            while (diff < -Math.PI) diff += Math.PI * 2;
-            while (diff > Math.PI) diff -= Math.PI * 2;
-            uData.rotation[1] += diff * Math.min(rotSmooth * 2, 1.0);
-          } else if (uData.status === "attacking") {
-            const tIdx2 = currentTarget ? currentTarget.poolIdx : -1;
-            const td2 = tIdx2 !== -1 ? uiPool[tIdx2] : null;
-            const isPlayerChar = u.targetId === "player-character";
-            const tx2 = isPlayerChar && playerCharPos ? playerCharPos[0] : (
-              td2 && td2.isActive && td2.id === u.targetId
-                ? td2.position[0]
-                : 0
-            );
-            const tz2 = isPlayerChar && playerCharPos ? playerCharPos[2] : (
-              td2 && td2.isActive && td2.id === u.targetId
-                ? td2.position[2]
-                : targetBaseZ
-            );
-            const targetRot = Math.atan2(tx2 - _px[i], tz2 - _pz[i]);
-            let diff = targetRot - uData.rotation[1];
-            while (diff < -Math.PI) diff += Math.PI * 2;
-            while (diff > Math.PI) diff -= Math.PI * 2;
+            let targetRot = uData.rotation[1];
+            let shouldRotate = false;
+            let finalSmooth = rotSmooth;
 
-            const isSniper = u.unitClass === "marksman" && uData.isBuffed;
-            const finalSmooth = isSniper ? 1.0 : rotSmooth;
-            uData.rotation[1] += diff * Math.min(finalSmooth, 1.0);
+            if (uData.status === "attacking") {
+              // Face the attack target (Player or Unit)
+              const isPlayerChar = u.targetId === "player-character";
+              let tx2 = 0, tz2 = 0;
+              let hasValidTargetPos = false;
+
+              if (isPlayerChar && playerCharPos) {
+                tx2 = playerCharPos[0];
+                tz2 = playerCharPos[2];
+                hasValidTargetPos = true;
+              } else if (u.targetId) {
+                const targetUnit = unitIndexRef.current.get(u.targetId);
+                if (targetUnit) {
+                  const td2 = uiPool[targetUnit.poolIdx];
+                  if (td2 && td2.isActive) {
+                    tx2 = td2.position[0];
+                    tz2 = td2.position[2];
+                    hasValidTargetPos = true;
+                  }
+                }
+              }
+
+              if (hasValidTargetPos) {
+                targetRot = Math.atan2(tx2 - _px[i], tz2 - _pz[i]);
+                shouldRotate = true;
+                if (u.unitClass === "marksman" && uData.isBuffed) {
+                  finalSmooth = 1.0; // Sniper instant turn
+                }
+              }
+            } else if (velSq > 0.05) {
+              targetRot = Math.atan2(v.velocity.x, v.velocity.z);
+              shouldRotate = true;
+            }
+
+            if (shouldRotate) {
+              let diff = targetRot - uData.rotation[1];
+              while (diff < -Math.PI) diff += Math.PI * 2;
+              while (diff > Math.PI) diff -= Math.PI * 2;
+              uData.rotation[1] += diff * Math.min(finalSmooth * 2, 1.0);
+            }
           }
         }
 
@@ -2678,6 +2800,8 @@ export const useBattleSystem = () => {
         const dz = newZ - oldZ;
         const moveDistSq = dx * dx + dz * dz;
 
+        const mathElevation = getTerrainElevation(_px[i], _pz[i], (settings as any).environment || "STORM", towerConfigRef.current.baseDistance || 24) - 0.3;
+        const targetHeight = getGroundHeight(_px[i], _pz[i], mathElevation);
         const maxStepDist = v.maxSpeed * simDelta * 1.2 + 0.02;
         const maxStepDistSq = maxStepDist * maxStepDist;
 
@@ -2685,13 +2809,15 @@ export const useBattleSystem = () => {
           const ratio = maxStepDist / Math.sqrt(moveDistSq);
           _px[i] = oldX + dx * ratio;
           _pz[i] = oldZ + dz * ratio;
-          v.position.set(_px[i], -0.4, _pz[i]);
+          v.position.set(_px[i], targetHeight, _pz[i]);
         } else {
           _px[i] = newX;
           _pz[i] = newZ;
+          v.position.y = targetHeight;
         }
 
         uData.position[0] = _px[i];
+        uData.position[1] = targetHeight;
         uData.position[2] = _pz[i];
       } // --- SPELL IMPACT LOGIC (Mage Meteors) ---
 
@@ -2724,6 +2850,7 @@ export const useBattleSystem = () => {
                 const td = unitDataPoolRef.current[tIdx];
                 if (td && tUnit) {
                   td.hp = _vh[tIdx];
+                  td.isAggroed = true;
                   tUnit.hp = _vh[tIdx]; // Visual feedback for impact
                   accumulateDamage(
                     target.id,
@@ -2846,8 +2973,8 @@ export const useBattleSystem = () => {
     [entityManager, flushDamageBuffer, accumulateDamage, addKillEvent],
   );
 
-  const spawnUnit = useCallback((level: number = 1, userName: string = "Guest", type: "player" | "enemy" = "player", isBoss: boolean = false, forcedClass?: any, profileImage?: string, forcedRarity?: UnitRarity) => {
-    spawnQueueRef.current.push({ level, userName, type, isBoss, forcedClass, profileImage, forcedRarity });
+  const spawnUnit = useCallback((level: number = 1, userName: string = "Guest", type: "player" | "enemy" = "player", isBoss: boolean = false, forcedClass?: any, profileImage?: string, forcedRarity?: UnitRarity, customPos?: [number, number, number]) => {
+    spawnQueueRef.current.push({ level, userName, type, isBoss, forcedClass, profileImage, forcedRarity, customPos });
   }, []);
 
   return {
@@ -2947,6 +3074,27 @@ export const useBattleSystem = () => {
           accumulateDamage(u.id, u.maxHp * 0.4, uiPool[i].position, "#FFFFFF", Date.now());
         }
       }
+    },
+    dealPlayerDamage: (targetId: string, damage: number, isCrit: boolean = false) => {
+      const u = unitIndexRef.current.get(targetId);
+      if (!u) return;
+      const i = u.poolIdx;
+      const uData = unitDataPoolRef.current[i];
+      if (u.isDying || u.hp <= 0) return;
+
+      const newHp = Math.max(0, _vh[i] - damage);
+      _vh[i] = newHp;
+      u.hp = newHp;
+      uData.hp = newHp;
+      
+      // INSTANT AGGRO: Target the player character directly
+      uData.isAggroed = true;
+      uData.targetId = "player-character";
+      u.targetId = "player-character";
+      uData.patrolWaitUntil = 0; // Break out of idle patrol
+      u.lastThinkTime = 0; // Force immediate re-evaluation of steering
+
+      accumulateDamage(targetId, damage, uData.position, isCrit ? "#ff0000" : "#ffaa00", simulationTimeRef.current);
     },
     updateSimulation,
     damageQueue: damageQueueRef,

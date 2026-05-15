@@ -9,27 +9,33 @@ export let PLAYER_BASE_Z = 36;
 export let ENEMY_BASE_Z = -36;
 export let LANE_OFFSETS = [-15, -7.5, 0, 7.5, 15];
 
+export const SEAL_M_ENEMIES = [
+    "Baabaa", "Moo Moo", "Piya", "Cankura", "Woody Wordy", 
+    "Silly Me", "Bear", "Pumpky", "Joe the Kick", "Mariel",
+    "Gariel", "Tiphareth", "Gehabert", "Sina", "Balie"
+];
+
 export let CLASS_CONFIG: ClassConfig = {
-    fighter: {
-        hp: 7.5,
-        hp_regen: 0.18,
-        atk: 2.2,
-        physical_defense: 50,
-        magic_defense: 40,
-        physical_pen: 12,
+    fighter: { // Warrior
+        hp: 8.5,
+        hp_regen: 0.22,
+        atk: 2.8,
+        physical_defense: 65,
+        magic_defense: 45,
+        physical_pen: 15,
         magic_pen: 0,
-        lifesteal: 0.25,
-        spell_vamp: 0.1,
-        move_speed_mult: 1.15, // Buffed from 1.05
-        attack_speed_mult: 1.1,
-        crit_chance: 0.15,
-        crit_damage: 2.0,
-        range: 3.5, // Buffed from 3.2
-        tenacity: 0.2,
+        lifesteal: 0.15,
+        spell_vamp: 0.05,
+        move_speed_mult: 1.1,
+        attack_speed_mult: 1.2,
+        crit_chance: 0.2,
+        crit_damage: 2.2,
+        range: 3.5,
+        tenacity: 0.25,
         cooldown_reduction: 0.1,
-        skill_cooldown: 7000,
-        skill_range: 4.0,
-        skill_duration: 3000,
+        skill_cooldown: 6000,
+        skill_range: 5.0,
+        skill_duration: 2500,
         ai_behavior: {
             separation: 1.0,
             encirclement: 1.2,
@@ -38,26 +44,26 @@ export let CLASS_CONFIG: ClassConfig = {
             chase_range: 10.0,
         },
     },
-    tank: {
-        hp: 10.0,
-        hp_regen: 0.35,
-        atk: 1.3,
-        physical_defense: 95,
-        magic_defense: 80,
+    tank: { // Knight
+        hp: 12.5,
+        hp_regen: 0.45,
+        atk: 1.5,
+        physical_defense: 110,
+        magic_defense: 95,
         physical_pen: 0,
         magic_pen: 0,
         lifesteal: 0.0,
         spell_vamp: 0.0,
-        move_speed_mult: 1.05, // Buffed from 0.95
-        attack_speed_mult: 0.8,
+        move_speed_mult: 1.0,
+        attack_speed_mult: 0.85,
         crit_chance: 0.05,
         crit_damage: 1.5,
         range: 3.0,
-        tenacity: 0.5,
-        cooldown_reduction: 0.15,
-        skill_cooldown: 30000,
+        tenacity: 0.6,
+        cooldown_reduction: 0.2,
+        skill_cooldown: 25000,
         skill_range: 0.0,
-        skill_duration: 3500,
+        skill_duration: 4000,
         ai_behavior: {
             separation: 1.5,
             encirclement: 1.0,
@@ -66,26 +72,26 @@ export let CLASS_CONFIG: ClassConfig = {
             chase_range: 6.0,
         },
     },
-    mage: {
-        hp: 3.2, // Nerfed from 3.5
-        hp_regen: 0.08,
-        atk: 4.5,
-        physical_defense: 12, // Nerfed from 25
-        magic_defense: 25, // Nerfed from 35
+    mage: { // Wizard
+        hp: 3.8,
+        hp_regen: 0.1,
+        atk: 5.2,
+        physical_defense: 15,
+        magic_defense: 45,
         physical_pen: 0,
-        magic_pen: 35,
+        magic_pen: 45,
         lifesteal: 0.0,
-        spell_vamp: 0.25,
-        move_speed_mult: 0.95, // Nerfed from 1.0
-        attack_speed_mult: 0.31,
-        crit_chance: 0.05,
-        crit_damage: 1.5,
-        range: 9.5, // Nerfed from 15.0
+        spell_vamp: 0.35,
+        move_speed_mult: 0.9,
+        attack_speed_mult: 0.45,
+        crit_chance: 0.1,
+        crit_damage: 2.0,
+        range: 11.5,
         tenacity: 0.0,
-        cooldown_reduction: 0.1,
-        skill_cooldown: 8500,
-        skill_range: 12.0,
-        skill_duration: 2500,
+        cooldown_reduction: 0.15,
+        skill_cooldown: 7500,
+        skill_range: 15.0,
+        skill_duration: 3000,
         ai_behavior: {
             separation: 2.5,
             encirclement: 1.5,
@@ -94,26 +100,26 @@ export let CLASS_CONFIG: ClassConfig = {
             chase_range: 18.0,
         },
     },
-    marksman: {
-        hp: 2.5, // Nerfed from 2.8
-        hp_regen: 0.05,
-        atk: 2.2,
-        physical_defense: 10, // Nerfed from 20
-        magic_defense: 10, // Nerfed from 20
-        physical_pen: 20,
+    marksman: { // Archer
+        hp: 3.2,
+        hp_regen: 0.08,
+        atk: 2.8,
+        physical_defense: 25,
+        magic_defense: 25,
+        physical_pen: 25,
         magic_pen: 0,
-        lifesteal: 0.2,
+        lifesteal: 0.25,
         spell_vamp: 0.0,
-        move_speed_mult: 1.0, // Nerfed from 1.05
-        attack_speed_mult: 1.5,
-        crit_chance: 0.35,
-        crit_damage: 2.5,
-        range: 7.2, // Nerfed from 8.5
+        move_speed_mult: 1.05,
+        attack_speed_mult: 1.6,
+        crit_chance: 0.45,
+        crit_damage: 2.8,
+        range: 8.5,
         tenacity: 0.0,
         cooldown_reduction: 0.1,
-        skill_cooldown: 25000,
-        skill_range: 12.0,
-        skill_duration: 4000,
+        skill_cooldown: 22000,
+        skill_range: 14.0,
+        skill_duration: 4500,
         ai_behavior: {
             separation: 2.8,
             encirclement: 1.0,
@@ -122,32 +128,32 @@ export let CLASS_CONFIG: ClassConfig = {
             chase_range: 12.0,
         },
     },
-    assassin: {
-        hp: 3.8,
-        hp_regen: 0.12,
-        atk: 4.5, // Buffed from 4.2
-        physical_defense: 60,
-        magic_defense: 60,
-        physical_pen: 35,
+    assassin: { // Ninja/Clown
+        hp: 4.5,
+        hp_regen: 0.15,
+        atk: 5.5,
+        physical_defense: 70,
+        magic_defense: 70,
+        physical_pen: 45,
         magic_pen: 0,
-        lifesteal: 2.15,
-        spell_vamp: 1.2,
-        move_speed_mult: 1.3, // Buffed from 1.25
-        attack_speed_mult: 1.25,
-        crit_chance: 0.3,
-        crit_damage: 3.5,
-        range: 2.2, // Buffed from 2.0
-        tenacity: 0.1,
-        cooldown_reduction: 0.2,
-        skill_cooldown: 1500,
-        skill_range: 17.0,
-        skill_duration: 600,
+        lifesteal: 2.5,
+        spell_vamp: 1.5,
+        move_speed_mult: 1.4,
+        attack_speed_mult: 1.4,
+        crit_chance: 0.4,
+        crit_damage: 4.0,
+        range: 2.5,
+        tenacity: 0.15,
+        cooldown_reduction: 0.25,
+        skill_cooldown: 1200,
+        skill_range: 20.0,
+        skill_duration: 800,
         ai_behavior: {
             separation: 1.2,
             encirclement: 2.2,
             swagger: 1.0,
-            perception_radius: 120, // Assassin searches very far for squishies
-            chase_range: 150,
+            perception_radius: 150,
+            chase_range: 180,
         },
     },
 };

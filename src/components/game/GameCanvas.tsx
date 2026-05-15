@@ -165,7 +165,8 @@ interface GameCanvasProps {
   downloadPerfLogs?: () => void;
   clearVFXCache?: () => void;
   compBuffers?: any;
-  spawnUnit?: (level?: number, userName?: string, type?: "player" | "enemy", isBoss?: boolean, forcedClass?: any, profileImage?: string, forcedRarity?: any) => void;
+  spawnUnit?: (level?: number, userName?: string, type?: "player" | "enemy", isBoss?: boolean, forcedClass?: any, profileImage?: string, forcedRarity?: any, customPos?: [number, number, number]) => void;
+  dealPlayerDamage?: (targetId: string, damage: number, isCrit?: boolean) => void;
 }
 
 
@@ -190,6 +191,7 @@ export const GameCanvas = React.memo(({
   downloadPerfLogs,
   clearVFXCache,
   compBuffers,
+  dealPlayerDamage,
 }: GameCanvasProps) => {
 
   const [dpr, setDpr] = useState(1.0);
@@ -279,9 +281,13 @@ export const GameCanvas = React.memo(({
   }, { collapsed: true }) as any;
 
   useEffect(() => {
-    if (envReady) {
-      // Spawn 1 enemy tank for testing
-      spawnUnit?.(10, "Enemy Tank", "enemy", false, "tank");
+    if (envReady && spawnUnit) {
+      // Spawn enemies at different points (Scattered across the map)
+      spawnUnit(10, "Guest", "enemy", false, "tank", undefined, undefined, [15, -0.4, -20]);
+      spawnUnit(10, "Guest", "enemy", false, "fighter", undefined, undefined, [0, -0.4, -35]);
+      spawnUnit(10, "Guest", "enemy", false, "mage", undefined, undefined, [-15, -0.4, -20]);
+      spawnUnit(10, "Guest", "enemy", false, "marksman", undefined, undefined, [25, -0.4, -10]);
+      spawnUnit(10, "Guest", "enemy", false, "assassin", undefined, undefined, [-25, -0.4, -10]);
     }
   }, [envReady, spawnUnit]);
 
@@ -489,6 +495,7 @@ export const GameCanvas = React.memo(({
               settingsRef={settingsRef}
               paused={!envReady}
               unitRegistry={unitRegistry}
+              dealPlayerDamage={dealPlayerDamage}
             />
             
 

@@ -37,6 +37,7 @@ interface PoolItem {
   attackAnim: string;
   runAnim: string;
   deathAnim: string;
+  walkAnim: string;
 }
 
 interface ClassPool {
@@ -106,7 +107,12 @@ function resolveAttackAnim(classKey: ClassKey, actions: Record<string, THREE.Ani
 
 function resolveRunAnim(actions: Record<string, THREE.AnimationAction>): string {
   const keys = Object.keys(actions);
-  return keys.find(n => n === 'Run' || n.toLowerCase().includes('run') || n.toLowerCase().includes('walk')) || 'Idle';
+  return keys.find(n => n === 'Run' || n.toLowerCase() === 'run') || 'Idle';
+}
+
+function resolveWalkAnim(actions: Record<string, THREE.AnimationAction>): string {
+  const keys = Object.keys(actions);
+  return keys.find(n => n === 'Walk' || n.toLowerCase().includes('walk')) || resolveRunAnim(actions);
 }
 
 function resolveDeathAnim(actions: Record<string, THREE.AnimationAction>): string {
@@ -277,6 +283,21 @@ const ECSArmyRendererInner = ({
       attackAnim: resolveAttackAnim(classKey, actions),
       runAnim: resolveRunAnim(actions),
       deathAnim: resolveDeathAnim(actions),
+      walkAnim: resolveWalkAnim(actions),
+    };
+
+    item.group.userData.onHit = () => {
+      const uid = item.group.userData.unitId;
+      if (!uid || !unitRegistry.current) return;
+      
+      // Find unit by ID and aggro it
+      for (let i = 0; i < unitRegistry.current.length; i++) {
+        const u = unitRegistry.current[i];
+        if (u && u.isActive && u.id === uid) {
+          u.isAggroed = true;
+          break;
+        }
+      }
     };
 
     pool.items.push(item);
@@ -302,6 +323,7 @@ const ECSArmyRendererInner = ({
       (mesh.material as THREE.MeshStandardMaterial).color.set(teamColor);
     });
     item.initialized = false;
+    item.group.userData.unitId = id;
     pool.assigned.set(id, slotIdx);
     return slotIdx;
   };
@@ -343,7 +365,7 @@ const ECSArmyRendererInner = ({
     if (!settings) return;
     const frustum = (state as any).battleFrustum;
 
-    const nowMs = Date.now();
+
 
     _ecsFrame++;
     const isPotato = settings.potatoMode;
@@ -443,6 +465,8 @@ const ECSArmyRendererInner = ({
           targetAnim = item.deathAnim;
         } else if (uData.status === 'marching' || uData.status === 'chasing') {
           targetAnim = item.runAnim;
+        } else if (uData.status === 'idling') {
+          targetAnim = item.walkAnim;
         } else if (uData.status === 'attacking') {
           const timeSinceAtk = (simTimeRef.current || 0) - (uData.lastAttackTime || 0);
           targetAnim = timeSinceAtk < 650 ? item.attackAnim : 'Idle';
@@ -523,14 +547,13 @@ const ECSArmyRendererInner = ({
               const timeSinceSkill = (simTimeRef.current || 0) - (uData.lastSkillTime || 0);
               const progress = Math.min(1.0, timeSinceSkill / cdTime);
 
-              _hudTemp.position.set(vPos.x, -0.44, vPos.z); // Slightly above shadow
-              _hudTemp.quaternion.identity(); // Geometry is already pre-rotated -PI/2
+              _hudTemp.position.set(vPos.x, -0.44, vPos.z);
+              _hudTemp.quaternion.identity(); 
               _hudTemp.scale.set(ss * 1.5, ss * 1.5, 1);
               _hudTemp.updateMatrix();
               cooldownRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
               cooldownAttr.setX(hIdx, progress);
 
-              // NEW: Sync cooldown ring color with team color
               _healthColor.set(teamColor);
               cooldownRef.current.setColorAt(hIdx, _healthColor);
             } else {
@@ -539,24 +562,22 @@ const ECSArmyRendererInner = ({
               cooldownRef.current?.setMatrixAt(hIdx, _hudTemp.matrix);
             }
 
-            // Use emissive color for shadow aura
-            _healthColor.copy(sharedMat.emissive);
+            _healthColor.set(teamColor);
             shadowRef.current.setColorAt(hIdx, _healthColor);
 
+            // ── Health Bar ──
             _hudTemp.position.set(vPos.x, vPos.y + by, vPos.z);
             _hudTemp.quaternion.copy(camQ);
-            _hudTemp.scale.set(bs, bs, 1);
+            _hudTemp.scale.set(bs * 1.8, bs * 0.45, 1); 
             _hudTemp.updateMatrix();
             healthBarRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
-
-            // Update custom shader attribute for health percentage & ticks
+            
             if (healthAttr) {
               healthAttr.setXY(hIdx, uData.hp, uData.maxHp || 100);
             }
 
-            // Fill Color + Damage Flash
             _healthColor.set(teamColor);
-            const flash = nowMs - (uData.lastDamageTime || 0);
+            const flash = (simTimeRef.current || 0) - (uData.lastDamageTime || 0);
             if (flash < 100) _healthColor.lerp(_whiteColor, 1.0 - flash / 100);
             healthBarRef.current.setColorAt(hIdx, _healthColor);
 

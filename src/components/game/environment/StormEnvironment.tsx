@@ -15,6 +15,7 @@ import { getTerrainElevation } from "@/src/core/utils/terrainHeight";
 import { useVFX } from "../systems/VFXManager";
 import { applyPainterlyStyle, PainterlyShaderUtils } from "../systems/effects/PainterlyMaterials";
 import { InstancedTrees } from "./effects/InstancedTrees";
+import { registerCollider, unregisterCollider } from "@/src/core/utils/globalRaycaster";
 
 // Add BVH support to THREE with any cast to avoid lint errors
 (THREE.BufferGeometry.prototype as any).computeBoundsTree = computeBoundsTree;
@@ -76,7 +77,7 @@ const Terrain = ({ baseDistance, potatoMode, debug, onReady }: {
   // causing the character to fall through the map.
   // We now always build at full resolution and never rebuild on game state change.
   const terrainGeo = useMemo(() => {
-    const segs = potatoMode ? 24 : 48;
+    const segs = potatoMode ? 64 : 128;
     const geo = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, segs, segs);
     const pos = geo.attributes.position;
     
@@ -97,8 +98,18 @@ const Terrain = ({ baseDistance, potatoMode, debug, onReady }: {
     return () => cancelAnimationFrame(id);
   }, [terrainGeo, onReady]);
 
+  const meshRef = useRef<THREE.Mesh>(null!);
+  
+  useEffect(() => {
+    if (meshRef.current) {
+      registerCollider(meshRef.current);
+      return () => unregisterCollider(meshRef.current);
+    }
+  }, [terrainGeo]);
+
   return (
     <mesh 
+      ref={meshRef}
       geometry={terrainGeo} 
       rotation={[-Math.PI / 2, 0, 0]} 
       position={[0, GROUND_Y, 0]} 
@@ -142,8 +153,17 @@ const DistantMountains = () => {
     return merged;
   }, []);
 
+  const meshRef = useRef<THREE.Mesh>(null!);
+  
+  useEffect(() => {
+    if (meshRef.current) {
+      registerCollider(meshRef.current);
+      return () => unregisterCollider(meshRef.current);
+    }
+  }, [mergedGeo]);
+
   return (
-    <mesh geometry={mergedGeo}>
+    <mesh ref={meshRef} geometry={mergedGeo}>
       <primitive object={MountainMaterial} attach="material" />
     </mesh>
   );

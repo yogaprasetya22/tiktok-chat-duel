@@ -64,13 +64,20 @@ const MLHealthBarShader = {
     varying vec2 vHealth;
     void main() {
       float pct = vHealth.x / vHealth.y;
-      if (vUv.x > pct) discard;
       
       // Segment ticks every 1000 HP
       float segments = vHealth.y / 1000.0;
       float tick = mod(vUv.x * segments, 1.0);
-      if (tick < 0.02 && vHealth.y > 500.0) gl_FragColor = vec4(0.0, 0.0, 0.0, 0.5);
-      else gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0); // Tainted by instanceColor
+      bool isTick = tick < 0.04 && vHealth.y > 500.0;
+
+      if (vUv.x > pct) {
+        // Background (empty health)
+        gl_FragColor = vec4(0.1, 0.1, 0.1, 0.8);
+      } else {
+        // Foreground (active health)
+        if (isTick) gl_FragColor = vec4(0.0, 0.0, 0.0, 0.4);
+        else gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0); // Tainted by instanceColor
+      }
     }
   `
 };

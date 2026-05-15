@@ -63,6 +63,11 @@ const _targetVec  = new THREE.Vector3();
 
 // ─── ECS BUFFERS (TypedArrays — same-frame, no GC) ───────────────────────────
 // Camera state
+const PlayerInput = {
+  mouseX:   new Float32Array(1),
+  mouseY:   new Float32Array(1),
+  playerPosition: new Float32Array(3), // [x, y, z] Zero-GC tracking
+};
 const camYaw        = new Float32Array(1);   // radians
 const camPitch      = new Float32Array([0.3]);
 const camZoom       = new Float32Array([5.0]);
@@ -101,11 +106,13 @@ export const PlayerController = ({
   settingsRef,
   paused = false,
   unitRegistry,
+  dealPlayerDamage,
 }: {
   damageQueue?: React.RefObject<any[]>;
   settingsRef: React.RefObject<any>;
   paused?: boolean;
   unitRegistry?: React.RefObject<UnitRuntimeData[]>;
+  dealPlayerDamage?: (targetId: string, damage: number, isCrit?: boolean) => void;
 }) => {
   const poolRef      = useRef<ProjectilePoolHandle>(null);
   const ecctrlRef    = useRef<any>(null);
@@ -201,6 +208,11 @@ export const PlayerController = ({
 
     // Update player position in store (for enemy AI targeting)
     useStore.getState().setPlayerPosition([_charPos.x, _charPos.y, _charPos.z]);
+    
+    // Sync position to PlayerECS for enemies to seek without GC pressure
+    PlayerInput.playerPosition[0] = _charPos.x;
+    PlayerInput.playerPosition[1] = _charPos.y;
+    PlayerInput.playerPosition[2] = _charPos.z;
 
     // Lerp zoom (ECS buffers → no allocation)
     camZoom[0] += (camZoomTarget[0] - camZoom[0]) * Math.min(1, ZOOM_LERP * delta);
@@ -355,13 +367,21 @@ export const PlayerController = ({
           (nearestTarget as any).onHit?.();
         }
 
-        damageQueue?.current?.push({
-          value: 100 + Math.random() * 400,
-          position: [_camTarget.x, _camTarget.y + 1, _camTarget.z],
-          isCrit: Math.random() > 0.8,
-          isMagic: false,
-          color: '#ffaa00',
-        });
+        const damage = 100 + Math.random() * 400;
+        const isCrit = Math.random() > 0.8;
+        
+        if (dealPlayerDamage) {
+          dealPlayerDamage(nearestTarget.id, damage, isCrit);
+        } else {
+          // Fallback visual damage if dealPlayerDamage is not provided
+          damageQueue?.current?.push({
+            value: damage,
+            position: [_camTarget.x, _camTarget.y + 1, _camTarget.z],
+            isCrit: isCrit,
+            isMagic: false,
+            color: '#ffaa00',
+          });
+        }
         spawnVFX([_camTarget.x, _camTarget.y + 1, _camTarget.z], 'spark', '#ff0000');
 
         if (combatMode === 'AOE' && registry) {
@@ -375,13 +395,20 @@ export const PlayerController = ({
             const dy = u.position[1] - ny;
             const dz = u.position[2] - nz;
             if (dx*dx + dy*dy + dz*dz > AOE_RSQ) continue;
-            damageQueue?.current?.push({
-              value: 80 + Math.random() * 200,
-              position: [u.position[0], u.position[1] + 1, u.position[2]],
-              isCrit: Math.random() > 0.85,
-              isMagic: false,
-              color: '#ffaa00',
-            });
+            const damage = 80 + Math.random() * 200;
+            const isCrit = Math.random() > 0.85;
+            
+            if (dealPlayerDamage) {
+              dealPlayerDamage(u.id, damage, isCrit);
+            } else {
+              damageQueue?.current?.push({
+                value: damage,
+                position: [u.position[0], u.position[1] + 1, u.position[2]],
+                isCrit: isCrit,
+                isMagic: false,
+                color: '#ffaa00',
+              });
+            }
             spawnVFX([u.position[0], u.position[1] + 1, u.position[2]], 'spark', '#ff4400');
           }
         }
@@ -389,7 +416,7 @@ export const PlayerController = ({
         // Aim direction for projectile
         _toEnemy.set(
           nearestTarget.position[0] - _charPos.x,
-          0,
+          (nearestTarget.position[1] + 1.2) - (_charPos.y + 1.35),
           nearestTarget.position[2] - _charPos.z,
         ).normalize();
 
