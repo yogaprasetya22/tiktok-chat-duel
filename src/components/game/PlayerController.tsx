@@ -93,13 +93,22 @@ const ZOOM_LERP  = 8.0;
 const EYE_HEIGHT = 1.4; // Slightly lower for better center framing
 const SHOULDER_OFFSET = 0.0; // Perfectly centered horizontally
 const AUTO_FIRE_RATE  = 250;   // ms between auto-shots
-const AUTO_AIM_RADIUS = 20.0;  // world units detection radius
+const AUTO_AIM_RADIUS = 40.0;  // world units detection radius (MM Role)
 const AUTO_AIM_RSQ    = AUTO_AIM_RADIUS * AUTO_AIM_RADIUS;
 
 // Camera Collision Check
 const _rayDir = new THREE.Vector3();
 const _rayOrigin = new THREE.Vector3();
 const _raycaster = new THREE.Raycaster();
+
+// ─── MMORPG STATE MACHINE ────────────────────────────────────────────────────
+const charState = new Uint8Array(1);     // 0=NORMAL, 1=ATTACKING, 2=CHASING
+const attackTimer = new Float64Array(1); // Time spent in attack animation
+const ATTACK_DURATION = 600;             // ms animation lock duration
+const ATTACK_RANGE_SQ = 225.0;           // 15 meters range (MM Role)
+const _chaseDir = new THREE.Vector3();
+const _camProjDir = new THREE.Vector3();
+const _camRightDir = new THREE.Vector3();
 
 
 // ─── COMPONENT ───────────────────────────────────────────────────────────────
@@ -141,9 +150,8 @@ export const PlayerController = ({
 
   const animationStatus = useAnimationStore((s) => s.animationStatus);
   useEffect(() => {
-    // Priority: If shooting, play shoot animation (handled in useFrame for better responsiveness)
-    // but we still sync base animations here.
-    if (isLeftClick[0] && hasTarget[0]) return; 
+    // If in ATTACKING state, do not apply idle/walk animations (handled in useFrame)
+    if (charState[0] === 1) return; 
 
     const animName   = ecctrlAnimationSet[animationStatus] ?? animationSet.idle;
     const nextAction = actions[animName];
@@ -306,11 +314,12 @@ export const PlayerController = ({
     camera.lookAt(_lookAt);
 
     const now = performance.now();
-  const registry = unitRegistry?.current;
 
-    // ── Find Nearest Enemy Unit (Using Spatial Grid for Precision) ──
+    // ── Find Nearest Enemy Unit ──
     hasTarget[0] = 0;
-    const grid = (window as any).battleGrid; // Access singleton
+    let nearestTarget: UnitRuntimeData | null = null;
+    const grid = (window as any).battleGrid; 
+    
     if (grid) {
       const nearby = grid.queryRadius(_charPos.x, _charPos.z, AUTO_AIM_RADIUS);
       let nearestDistSq = AUTO_AIM_RSQ;
@@ -329,167 +338,202 @@ export const PlayerController = ({
           aimTargetY[0] = u.position[1] + 1.2;
           aimTargetZ[0] = u.position[2];
           hasTarget[0] = 1;
+          nearestTarget = u;
         }
       }
     }
 
-    // ── Face Target and Handle Animation ──
-    if (hasTarget[0] && isLeftClick[0]) {
-      // Robust Local-Space Targeting: 
-      // 1. Get world target
-      _targetVec.set(aimTargetX[0], _charPos.y, aimTargetZ[0]);
-      
-      // 2. Convert to local space of the character's parent (the capsule)
-      // This automatically accounts for the parent's rotation.
-      if (characterRef.current.parent) {
-        characterRef.current.parent.worldToLocal(_targetVec);
-      }
-      
-      // 3. Calculate angle in local space. 
-      // Most models face -Z, so we use atan2(x, z) + PI or similar.
-      // We'll use the most common orientation for these assets.
-      const localTargetAngle = Math.atan2(_targetVec.x, _targetVec.z);
-
-      // Smoothly rotate the character model (inside Ecctrl) to face target
-      const rotLerpT = Math.min(1, 20 * delta);
-      
-      // Handle angle wrapping for smooth rotation
-      let diff = localTargetAngle - characterRef.current.rotation.y;
-      while (diff < -Math.PI) diff += Math.PI * 2;
-      while (diff > Math.PI) diff -= Math.PI * 2;
-      characterRef.current.rotation.y += diff * rotLerpT;
-
-      // Force Shoot Animation
-      const shootAction = actions[animationSet.shoot];
-      if (shootAction && shootAction !== activeAction.current) {
-        shootAction.reset().play();
-        if (activeAction.current) activeAction.current.crossFadeTo(shootAction, 0.1, true);
-        activeAction.current = shootAction;
-      }
-    } else {
-      // Lerp back to 0 so it aligns with capsule movement again when not shooting
-      const resetLerpT = Math.min(1, 10 * delta);
-      characterRef.current.rotation.y += (0 - characterRef.current.rotation.y) * resetLerpT;
-    }
-
-    // ── Auto-Fire at Nearest Enemy ──
     const keys = getKeys();
+    const isMovingInput = keys.forward || keys.backward || keys.leftward || keys.rightward;
+    const isAttackInput = isLeftClick[0] || keys.action1;
 
-    // Auto-fire only when left mouse is clicked and target is in range
-    if (hasTarget[0] && isLeftClick[0] && now - autoFireTimer[0] > AUTO_FIRE_RATE) {
-      autoFireTimer[0] = now;
-
-      _originVec.set(_charPos.x, _charPos.y + 1.35, _charPos.z);
-      _camDir.set(
-        aimTargetX[0] - _charPos.x,
-        aimTargetY[0] - (_charPos.y + 1.35),
-        aimTargetZ[0] - _charPos.z,
-      ).normalize();
-
-      // Offset origin slightly forward
-      _fwdVec.copy(_camDir).multiplyScalar(0.7);
-      _originVec.add(_fwdVec);
-
-      spawnVFX([_originVec.x, _originVec.y, _originVec.z], 'muzzle', '#ffaa00');
-
-      // ── Find best hit target with AOE fallback ──
-      const combatMode = useStore.getState().combatMode;
-      const LOCK_RSQ = AUTO_AIM_RSQ;
-
-
-      let nearestTarget: UnitRuntimeData | null = null;
-      let minDSq = LOCK_RSQ;
-
-      if (registry) {
-        for (let i = 0; i < registry.length; i++) {
-          const u = registry[i];
-          if (!u.isActive || u.isDying || u.type !== 'enemy') continue;
-          const dx = _charPos.x - u.position[0];
-          const dz = _charPos.z - u.position[2];
-          const dSq = dx * dx + dz * dz;
-          if (dSq < minDSq) {
-            minDSq = dSq;
-            nearestTarget = u;
-          }
-        }
-      }
-
-      if (nearestTarget) {
-        _camTarget.set(nearestTarget.position[0], nearestTarget.position[1] + 1, nearestTarget.position[2]);
-
-        spawnVFX([_camTarget.x, _camTarget.y + 1, _camTarget.z], 'spark', '#ff0000');
-
-        if (combatMode === 'AOE' && registry) {
-          const nx = _camTarget.x;
-          const ny = _camTarget.y;
-          const nz = _camTarget.z;
-          const AOE_RSQ = 16.0; // 4m radius
-          for (let i = 0; i < registry.length; i++) {
-            const u = registry[i];
-            if (!u.isActive || u.isDying || u.type !== 'enemy') continue;
-            const dx = u.position[0] - nx;
-            const dy = u.position[1] - ny;
-            const dz = u.position[2] - nz;
-            if (dx*dx + dy*dy + dz*dz > AOE_RSQ) continue;
-            const damage = 80 + Math.random() * 200;
-            const isCrit = Math.random() > 0.85;
-            
-            if (dealPlayerDamage) {
-              dealPlayerDamage(u.id, damage, isCrit);
-            }
-            spawnVFX([u.position[0], u.position[1] + 1, u.position[2]], 'spark', '#ff4400');
-          }
-        }
-
-        // ── Fire MM-Style Targeted Projectile (Perfect Accuracy + Sniper VFX) ──
-        if (mmSpellsRef?.current) {
-          const pool = mmSpellsRef.current;
-          const s = pool[mmSpellPtr.current];
-          
-          s.active = true;
-          s.isBullet = true;
-          s.fromX = _originVec.x;
-          s.fromY = _originVec.y;
-          s.fromZ = _originVec.z;
-          
-          // Set initial target position
-          s.toX = nearestTarget.position[0];
-          s.toY = nearestTarget.position[1] + 1.2;
-          s.toZ = nearestTarget.position[2];
-          
-          s.startTime = simTimeRef?.current || 0;
-          s.color = "#00d4ff"; // Player's signature neon cyan
-          s.targetId = nearestTarget.id;
-          (s as any).targetPoolIdx = nearestTarget.poolIdx;
-          
-          // Enable the "Sniper" visual style (core + trail)
-          (s as any).isSniper = true;
-          (s as any).isFinisher = false;
-          (s as any).bulletSpeed = 135.0; // Blazing fast targeted shot
-          
-          mmSpellPtr.current = (mmSpellPtr.current + 1) % pool.length;
-
-          // ── Apply Damage Instantly (Responsive Combat) ──
-          if (dealPlayerDamage) {
-            const damage = 2500 + Math.random() * 1500; // Premium damage scaling
-            const isCrit = Math.random() > 0.85;
-            dealPlayerDamage(nearestTarget.id, damage, isCrit);
-          }
-        }
-      }
-    }
-
-    // Allow manual fire even without nearby target (F/E keys)
-    if (keys.action1 && !hasTarget[0] && now - autoFireTimer[0] > AUTO_FIRE_RATE) {
-      autoFireTimer[0] = now;
+    // ── Execute Attack Function (Spawns VFX & Projectile) ──
+    const executeAttack = (target: UnitRuntimeData | null) => {
       _originVec.set(_charPos.x, _charPos.y + 1.35, _charPos.z);
       camera.getWorldDirection(_camDir);
-      _camDir.y = 0;
-      _camDir.normalize();
+      
+      if (target) {
+        _camDir.set(
+          aimTargetX[0] - _charPos.x,
+          aimTargetY[0] - (_charPos.y + 1.35),
+          aimTargetZ[0] - _charPos.z,
+        ).normalize();
+      } else {
+        _camDir.y = 0;
+        _camDir.normalize();
+      }
+
       _fwdVec.copy(_camDir).multiplyScalar(0.7);
       _originVec.add(_fwdVec);
       spawnVFX([_originVec.x, _originVec.y, _originVec.z], 'muzzle', '#ffaa00');
-      poolRef.current?.fire(_originVec, _camDir);
+
+      if (target && mmSpellsRef?.current) {
+        // Targeted MMORPG Magic/Bullet
+        const pool = mmSpellsRef.current;
+        const s = pool[mmSpellPtr.current];
+        s.active = true;
+        s.isBullet = true;
+        s.fromX = _originVec.x;
+        s.fromY = _originVec.y;
+        s.fromZ = _originVec.z;
+        s.toX = target.position[0];
+        s.toY = target.position[1] + 1.2;
+        s.toZ = target.position[2];
+        s.startTime = simTimeRef?.current || 0;
+        s.color = "#00d4ff";
+        s.targetId = target.id;
+        (s as any).targetPoolIdx = target.poolIdx;
+        (s as any).isSniper = true;
+        (s as any).isFinisher = false;
+        (s as any).bulletSpeed = 135.0;
+        
+        mmSpellPtr.current = (mmSpellPtr.current + 1) % pool.length;
+
+        if (dealPlayerDamage) {
+          const damage = 2500 + Math.random() * 1500;
+          const isCrit = Math.random() > 0.85;
+          dealPlayerDamage(target.id, damage, isCrit);
+        }
+      } else {
+        // Free-fire mode (No target)
+        poolRef.current?.fire(_originVec, _camDir);
+      }
+    };
+
+    // ── MMORPG STATE MACHINE ──
+    
+    // Check Input triggers
+    if (isAttackInput && now - autoFireTimer[0] > AUTO_FIRE_RATE) {
+      if (hasTarget[0]) {
+        const dx = aimTargetX[0] - _charPos.x;
+        const dz = aimTargetZ[0] - _charPos.z;
+        const distSq = dx*dx + dz*dz;
+        
+        if (distSq > ATTACK_RANGE_SQ) {
+          // 4. Otomatis Mengejar Musuh
+          charState[0] = 2; // CHASING
+        } else {
+          // 2. Combo Diam di Tempat (Reset timer jika serang lagi)
+          charState[0] = 1; // ATTACKING
+          attackTimer[0] = now;
+          autoFireTimer[0] = now;
+          ecctrlRef.current?.setMovement({ joystick: { x: 0, y: 0 } });
+          executeAttack(nearestTarget);
+        }
+      } else {
+        // Memukul angin
+        charState[0] = 1; // ATTACKING
+        attackTimer[0] = now;
+        autoFireTimer[0] = now;
+        ecctrlRef.current?.setMovement({ joystick: { x: 0, y: 0 } });
+        executeAttack(null);
+      }
+    }
+
+    // Process Active States
+    if (charState[0] === 1) { 
+      // == STATE: ATTACKING ==
+      if (isMovingInput) {
+        // 3. Batal Memukul Jika Bergerak (Cancel/Override)
+        charState[0] = 0; 
+      } else {
+        // 1. Berhenti Saat Menyerang (Animation Lock)
+        // Force velocity X & Z to 0, but keep Y for gravity
+        const vel = characterStatus.linvel;
+        _originVec.set(0, vel.y, 0);
+        ecctrlRef.current?.setLinVel(_originVec);
+        
+        // Face target dynamically
+        if (hasTarget[0]) {
+          _targetVec.set(aimTargetX[0], _charPos.y, aimTargetZ[0]);
+          if (characterRef.current.parent) characterRef.current.parent.worldToLocal(_targetVec);
+          const localTargetAngle = Math.atan2(_targetVec.x, _targetVec.z);
+          let diff = localTargetAngle - characterRef.current.rotation.y;
+          while (diff < -Math.PI) diff += Math.PI * 2;
+          while (diff > Math.PI) diff -= Math.PI * 2;
+          characterRef.current.rotation.y += diff * 15 * delta;
+        }
+
+        // Force Shoot Animation
+        const shootAction = actions[animationSet.shoot];
+        if (shootAction && shootAction !== activeAction.current) {
+          shootAction.reset().play();
+          if (activeAction.current) activeAction.current.crossFadeTo(shootAction, 0.1, true);
+          activeAction.current = shootAction;
+        }
+
+        // Check if animation lock is over
+        if (now - attackTimer[0] > ATTACK_DURATION) {
+          charState[0] = 0; // Return to normal
+        }
+      }
+    } else if (charState[0] === 2) { 
+      // == STATE: CHASING ==
+      if (isMovingInput) {
+        // Cancel chase if player moves manually
+        charState[0] = 0;
+        ecctrlRef.current?.setMovement({ joystick: { x: 0, y: 0 } });
+      } else if (hasTarget[0]) {
+        const dx = aimTargetX[0] - _charPos.x;
+        const dz = aimTargetZ[0] - _charPos.z;
+        const distSq = dx*dx + dz*dz;
+        
+        if (distSq <= ATTACK_RANGE_SQ) {
+          // Reached Target! Stop and Attack
+          charState[0] = 1; 
+          attackTimer[0] = now;
+          autoFireTimer[0] = now;
+          ecctrlRef.current?.setMovement({ joystick: { x: 0, y: 0 } });
+          executeAttack(nearestTarget);
+        } else {
+          // Keep Chasing (Spoof Joystick Input to run to target)
+          _chaseDir.set(dx, 0, dz).normalize();
+          
+          camera.getWorldDirection(_camProjDir);
+          _camProjDir.y = 0;
+          _camProjDir.normalize();
+          
+          // Calculate standard right vector based on camera
+          _camRightDir.set(1, 0, 0).applyQuaternion(camera.quaternion);
+          _camRightDir.y = 0;
+          _camRightDir.normalize();
+          
+          // Project world direction onto camera's local axes to fake joystick
+          const moveY = _chaseDir.dot(_camProjDir);
+          const moveX = _chaseDir.dot(_camRightDir);
+          
+          ecctrlRef.current?.setMovement({ 
+            joystick: { x: moveX, y: moveY },
+            run: true // Force run mode while chasing
+          });
+          
+          // Reset rotation offset to 0 so character faces movement direction
+          const resetLerpT = Math.min(1, 10 * delta);
+          characterRef.current.rotation.y += (0 - characterRef.current.rotation.y) * resetLerpT;
+        }
+      } else {
+        // Target lost
+        charState[0] = 0;
+        ecctrlRef.current?.setMovement({ joystick: { x: 0, y: 0 } });
+      }
+    } 
+
+    if (charState[0] === 0) {
+      // == STATE: NORMAL ==
+      // Revert animation if stuck in shoot
+      if (activeAction.current === actions[animationSet.shoot]) {
+         const animName = ecctrlAnimationSet[characterStatus.animationStatus] ?? animationSet.idle;
+         const nextAction = actions[animName];
+         if (nextAction && nextAction !== activeAction.current) {
+            nextAction.reset().fadeIn(0.1).play();
+            if (activeAction.current) activeAction.current.crossFadeTo(nextAction, 0.2, true);
+            activeAction.current = nextAction;
+         }
+      }
+      
+      // Revert local rotation offset
+      const resetLerpT = Math.min(1, 10 * delta);
+      characterRef.current.rotation.y += (0 - characterRef.current.rotation.y) * resetLerpT;
     }
   }, -1); // priority -1: runs before physics
 

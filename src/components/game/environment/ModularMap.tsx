@@ -136,6 +136,7 @@ const InstancedMeshPart = ({ meshData, instances }: { meshData: any, instances: 
       args={[meshData.geometry, meshData.material, instances.length]}
       castShadow
       receiveShadow
+      frustumCulled={false} // Prevent objects from disappearing at certain camera angles
     />
   );
 };
