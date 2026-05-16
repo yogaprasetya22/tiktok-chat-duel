@@ -7,7 +7,8 @@ const origin = new THREE.Vector3();
 const direction = new THREE.Vector3(0, -1, 0); // Downward
 
 // Global list of meshes to raycast against
-const colliders: THREE.Mesh[] = [];
+export const colliders: THREE.Mesh[] = [];
+if (typeof window !== 'undefined') (window as any).globalColliders = colliders;
 
 export const registerCollider = (mesh: THREE.Mesh) => {
     if (!colliders.includes(mesh)) {
@@ -36,3 +37,5 @@ export const getGroundHeight = (x: number, z: number, fallbackY: number): number
 
     return fallbackY;
 };
+
+if (typeof window !== 'undefined') (window as any).getGroundHeight = getGroundHeight;

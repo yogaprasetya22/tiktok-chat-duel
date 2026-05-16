@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { getTerrainElevation } from "@/src/core/utils/terrainHeight";
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { applyPainterlyStyle } from '../../systems/effects/PainterlyMaterials';
+import { registerCollider, unregisterCollider } from '@/src/core/utils/globalRaycaster';
 
 const TREE_COUNT = 120;
 
@@ -87,6 +88,13 @@ export const InstancedTrees = ({ mode, baseDistance = 24 }: { mode: 'DIORAMA' | 
         // Prevent disappearing from camera (Frustum culling fix)
         mesh.computeBoundingSphere();
     }, [mode, baseDistance]);
+
+    useEffect(() => {
+        if (meshRef.current) {
+            registerCollider(meshRef.current as any);
+            return () => unregisterCollider(meshRef.current as any);
+        }
+    }, []);
 
     return (
         <instancedMesh 

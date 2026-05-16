@@ -47,7 +47,7 @@ interface ClassPool {
   activeSet: Set<string>;
 }
 
-type ClassKey = 'fighter' | 'tank' | 'mage' | 'marksman' | 'assassin';
+type ClassKey = 'fighter' | 'tank' | 'mage' | 'marksman' | 'assassin' | 'enemy_grunt' | 'enemy_boss';
 
 interface ECSArmyRendererProps {
   unitRegistry: React.RefObject<UnitRuntimeData[]>;
@@ -71,6 +71,8 @@ const CLASS_COLORABLE_KW: Record<ClassKey, string[]> = {
   mage: ['cloth', 'trim', 'jewel', 'robe', 'cloak', 'cape', 'scarf', 'primary', 'team'],
   marksman: ['cloth', 'pattern', 'trim', 'ribbon', 'quiver', 'robe', 'cloak', 'cape', 'primary', 'team'],
   assassin: ['cloth', 'mask', 'hood', 'wrap', 'ribbon', 'robe', 'cloak', 'cape', 'primary', 'team'],
+  enemy_grunt: ['cape', 'cloth', 'trim', 'helmet', 'shoulder', 'robe', 'cloak', 'primary', 'team'],
+  enemy_boss: ['cloth', 'plume', 'trim', 'shield_pattern', 'helmet', 'robe', 'cloak', 'cape', 'primary', 'team'],
 };
 
 
@@ -94,7 +96,12 @@ function resolveAttackAnim(classKey: ClassKey, actions: Record<string, THREE.Ani
       const f = keys.find(n => n === 'Attack' || n.includes('Attack') || n.includes('Slash') || n.includes('Stab') || n.includes('Strike'));
       return f || 'Idle';
     }
+    case 'enemy_grunt':
+      return actions['Attack'] ? 'Attack' : (actions['SwordSlash'] ? 'SwordSlash' : 'Idle');
+    case 'enemy_boss':
+      return actions['Attack'] ? 'Attack' : (actions['ShieldBash'] ? 'ShieldBash' : 'Idle');
     default: return 'Idle';
+
   }
 }
 
@@ -114,10 +121,17 @@ function resolveDeathAnim(actions: Record<string, THREE.AnimationAction>): strin
 }
 
 function getBaseScale(classKey: ClassKey, level: number, isBoss: boolean): number {
-  if (isBoss) {
-    return classKey === 'tank' ? 5.0 : (classKey === 'fighter' ? 4.5 : 4.0);
+  if (isBoss || classKey === 'enemy_boss') {
+    return 3.5; // Premium boss size (consistent)
   }
-  return classKey === 'tank' ? (1.9 + level * 0.12) : (1.4 + level * 0.1);
+  
+  // Standardized scaling logic
+  switch(classKey) {
+    case 'tank': return 1.8 + level * 0.02;
+    case 'enemy_grunt': return 1.35 + level * 0.01;
+    case 'fighter': return 1.4 + level * 0.015;
+    default: return 1.3 + level * 0.01;
+  }
 }
 
 // ─── Scratch objects (zero-alloc) ────────────────────────────────────────────
@@ -144,7 +158,12 @@ const getCachedMaterial = (
   const teamColor = teamIdx === 0 ? towerConfig.player.color : towerConfig.enemy.color;
 
   const rarityIdx = rarity === 'common' ? 0 : (rarity === 'elite' ? 1 : (rarity === 'epic' ? 2 : 3));
-  const classIdx = classKey === 'fighter' ? 0 : (classKey === 'tank' ? 1 : (classKey === 'mage' ? 2 : (classKey === 'marksman' ? 3 : 4)));
+  const classIdx = 
+    classKey === 'fighter' ? 0 : 
+    (classKey === 'tank' ? 1 : 
+    (classKey === 'mage' ? 2 : 
+    (classKey === 'marksman' ? 3 : 
+    (classKey === 'assassin' ? 4 : 5))));
 
   // BITMASK KEY: [Class: 4 bits][Rarity: 2 bits][Team: 1 bit]
   const key = (classIdx << 3) | (rarityIdx << 1) | teamIdx;
@@ -381,10 +400,14 @@ const ECSArmyRendererInner = ({
 
       const classKey = uData.unitClass as ClassKey;
       const team = uData.type as 'player' | 'enemy';
-      const poolKey = (classKey === 'fighter' || classKey === 'tank') 
-          ? `${classKey}_${team}` 
-          : classKey;
-      
+      let poolKey = classKey as string;
+      if (classKey === 'fighter' || classKey === 'tank') {
+          poolKey = `${classKey}_${team}`;
+      } else if (classKey === 'enemy_grunt') {
+          poolKey = 'fighter_enemy';
+      } else if (classKey === 'enemy_boss') {
+          poolKey = 'tank_enemy';
+      }
       const pool = p[poolKey];
       if (!pool) continue;
 
@@ -422,17 +445,12 @@ const ECSArmyRendererInner = ({
       const rarity = uData.rarity || 'common';
       const rScale = uData.isBoss ? 1.0 : (rarity === 'legendary' ? 1.4 : (rarity === 'epic' ? 1.3 : (rarity === 'elite' ? 1.15 : 1.0)));
 
-      const baseDist = towerConfig.baseDistance || 40;
-      const targetTowerZ = team === 'player' ? -baseDist : baseDist;
-      const distToTower = Math.abs(uData.position[2] - targetTowerZ);
-      const proximityScale = distToTower < 5 ? 1.35 : 1.0;
-
       const idNum = uData.poolIdx;
       const hVar = 1.0 + ((idNum % 7) - 3) * 0.015; 
       item.group.scale.set(
-        baseScale * settings.unitScale * rScale * proximityScale,
-        baseScale * settings.unitScale * rScale * hVar * proximityScale,
-        baseScale * settings.unitScale * rScale * proximityScale
+        baseScale * settings.unitScale * rScale,
+        baseScale * settings.unitScale * rScale * hVar,
+        baseScale * settings.unitScale * rScale
       );
 
       const sharedMat = getCachedMaterial(classKey, rarity, team, towerConfig, gltfByPool[poolKey]);

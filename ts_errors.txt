@@ -1,0 +1,21 @@
+src/core/ecs/combat/FighterCombatModule.ts(17,57): error TS6133: 'grid' is declared but its value is never read.
+src/core/ecs/combat/MarksmanCombatModule.ts(140,11): error TS6133: 'cfg' is declared but its value is never read.
+src/core/ecs/systems/DamageResolutionSystem.ts(30,44): error TS6133: 'addKillEvent' is declared but its value is never read.
+src/core/ecs/systems/DamageResolutionSystem.ts(30,58): error TS6133: 'updateStats' is declared but its value is never read.
+src/core/ecs/systems/TargetingSystem.ts(22,7): error TS6133: 'unitIndex' is declared but its value is never read.
+src/hooks/battle/useBattleSystem.ts(14,7): error TS6133: '_scratchCol' is declared but its value is never read.
+src/hooks/battle/useBattleSystem.ts(15,7): error TS6133: '_white' is declared but its value is never read.
+src/hooks/battle/useBattleSystem.ts(27,1): error TS6192: All imports in import declaration are unused.
+src/hooks/battle/useBattleSystem.ts(48,3): error TS6133: 'CORPSE_DESPAWN_MS' is declared but its value is never read.
+src/hooks/battle/useBattleSystem.ts(52,1): error TS6133: 'getTerrainElevation' is declared but its value is never read.
+src/hooks/battle/useBattleSystem.ts(53,1): error TS6133: 'getGroundHeight' is declared but its value is never read.
+src/hooks/battle/useBattleSystem.ts(64,1): error TS6133: 'battleGrid' is declared but its value is never read.
+src/hooks/battle/useBattleSystem.ts(1251,13): error TS6133: 'settings' is declared but its value is never read.
+src/hooks/battle/useBattleSystem.ts(1255,13): error TS6133: 'feverSpeedMult' is declared but its value is never read.
+src/hooks/battle/useBattleSystem.ts(1256,13): error TS6133: 'feverCooldownMult' is declared but its value is never read.
+src/hooks/battle/useBattleSystem.ts(1258,13): error TS6133: 'weatherMults' is declared but its value is never read.
+src/hooks/battle/useBattleSystem.ts(1262,13): error TS6133: 'playerCharPos' is declared but its value is never read.
+src/hooks/battle/useBattleSystem.ts(1310,13): error TS2322: Type '(killer: string, victim: string, victimType: KillEvent["victimType"], profileImage?: string, rarity?: UnitRarity) => void' is not assignable to type '(killer: string, victim: string, victimType: "unit" | "boss" | "base", profileImage?: string | undefined, rarity?: string | undefined) => void'.
+  Types of parameters 'rarity' and 'rarity' are incompatible.
+    Type 'string | undefined' is not assignable to type 'UnitRarity | undefined'.
+      Type 'string' is not assignable to type 'UnitRarity | undefined'.

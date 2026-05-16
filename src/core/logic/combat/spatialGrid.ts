@@ -106,3 +106,4 @@ export class SpatialHashGrid {
 }
 
 export const battleGrid = new SpatialHashGrid(12); // Slightly larger cells for better performance
+if (typeof window !== 'undefined') (window as any).battleGrid = battleGrid;

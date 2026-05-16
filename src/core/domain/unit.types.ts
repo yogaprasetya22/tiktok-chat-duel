@@ -6,7 +6,7 @@
 // ============================================================
 
 export type UnitRarity = "common" | "elite" | "epic" | "legendary";
-export type ClassKey = "fighter" | "tank" | "mage" | "marksman" | "assassin";
+export type ClassKey = "fighter" | "tank" | "mage" | "marksman" | "assassin" | "enemy_grunt" | "enemy_boss";
 
 export const WORLD_UNIT_POOL_SIZE = 300;
 

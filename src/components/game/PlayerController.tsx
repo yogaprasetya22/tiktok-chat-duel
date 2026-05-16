@@ -89,11 +89,18 @@ const hasTarget      = new Uint8Array(1);     // 0=no target, 1=has target
 // Constants
 const ZOOM_MIN   = 1.5;
 const ZOOM_MAX   = 20.0;
-const ZOOM_LERP  = 10.0;
-const EYE_HEIGHT = 1.6;
+const ZOOM_LERP  = 8.0;
+const EYE_HEIGHT = 1.4; // Slightly lower for better center framing
+const SHOULDER_OFFSET = 0.0; // Perfectly centered horizontally
 const AUTO_FIRE_RATE  = 250;   // ms between auto-shots
 const AUTO_AIM_RADIUS = 20.0;  // world units detection radius
 const AUTO_AIM_RSQ    = AUTO_AIM_RADIUS * AUTO_AIM_RADIUS;
+
+// Camera Collision Check
+const _rayDir = new THREE.Vector3();
+const _rayOrigin = new THREE.Vector3();
+const _raycaster = new THREE.Raycaster();
+
 
 // ─── COMPONENT ───────────────────────────────────────────────────────────────
 export const PlayerController = ({
@@ -124,7 +131,14 @@ export const PlayerController = ({
   const { actions }           = useAnimations(animations, characterRef);
   const activeAction          = useRef<THREE.AnimationAction | null>(null);
 
+  // --- RESET CAMERA ON GAME START ---
+  const gameState = useStore(s => s.gameState);
+  useEffect(() => {
+    hasCamInit[0] = 0; // Force camera snap on game state change (Play/Setup)
+  }, [gameState]);
+
   // ─── ANIMATION SYNC (outside useFrame, driven by bvhecctrl store) ─────────
+
   const animationStatus = useAnimationStore((s) => s.animationStatus);
   useEffect(() => {
     // Priority: If shooting, play shoot animation (handled in useFrame for better responsiveness)
@@ -219,50 +233,91 @@ export const PlayerController = ({
 
     const cosPitch = Math.cos(camPitch[0]);
     const sinPitch = Math.sin(camPitch[0]);
-    const dist     = camZoom[0];
+    
+    // --- 1. CALCULATE IDEAL CAMERA POSITION ---
+    // Offset the target slightly to the shoulder for premium look
+    _fwdVec.set(Math.sin(camYaw[0]), 0, Math.cos(camYaw[0])).normalize();
+    const _shoulderOffset = new THREE.Vector3().set(Math.cos(camYaw[0]), 0, -Math.sin(camYaw[0])).multiplyScalar(SHOULDER_OFFSET);
+    
+    _camTarget.copy(_charPos).add(_shoulderOffset);
+    _camTarget.y += EYE_HEIGHT;
 
     _camDesired.set(
-      _charPos.x - Math.sin(camYaw[0]) * cosPitch * dist,
-      _charPos.y + sinPitch * dist + EYE_HEIGHT,
-      _charPos.z - Math.cos(camYaw[0]) * cosPitch * dist,
+      _camTarget.x - Math.sin(camYaw[0]) * cosPitch * camZoom[0],
+      _camTarget.y + sinPitch * camZoom[0],
+      _camTarget.z - Math.cos(camYaw[0]) * cosPitch * camZoom[0],
     );
+
+    // --- 2. CAMERA COLLISION (Ghost Busting Walls/Trees) ---
+    _rayOrigin.copy(_camTarget);
+    _rayDir.subVectors(_camDesired, _rayOrigin).normalize();
+    _raycaster.set(_rayOrigin, _rayDir);
+    _raycaster.far = camZoom[0];
+
+    const colliders = (window as any).globalColliders || [];
+    const intersects = _raycaster.intersectObjects(colliders, false);
+
+    if (intersects.length > 0) {
+      // Push camera forward to hit point (minus buffer to prevent near-plane clipping)
+      const hitDist = intersects[0].distance;
+      const safeDist = Math.max(0.4, hitDist - 0.4); 
+      _camDesired.copy(_rayOrigin).add(_rayDir.multiplyScalar(safeDist));
+      
+      // INSTANT SNAP: If we are colliding, don't lerp slowly into the character
+      // This prevents the "slow zoom" feel when hitting a tree
+      camPosX[0] = _camDesired.x;
+      camPosY[0] = _camDesired.y;
+      camPosZ[0] = _camDesired.z;
+    }
+
+    // --- 3. PREVENT UNDERWORLD CAMERA (Hard Floor) ---
+    // Only check ground if colliders are actually loaded to prevent flickering at start
+    if (colliders.length > 0) {
+      const terrainHeightAtCam = (window as any).getGroundHeight ? (window as any).getGroundHeight(_camDesired.x, _camDesired.z, -1) : -1;
+      if (_camDesired.y < terrainHeightAtCam + 0.6) {
+        _camDesired.y = terrainHeightAtCam + 0.6;
+        camPosY[0] = _camDesired.y; 
+      }
+    }
 
     if (!hasCamInit[0]) {
       camPosX[0] = _camDesired.x;
       camPosY[0] = _camDesired.y;
       camPosZ[0] = _camDesired.z;
-      lookAtX[0] = _charPos.x;
-      lookAtY[0] = _charPos.y + EYE_HEIGHT;
-      lookAtZ[0] = _charPos.z;
+      lookAtX[0] = _camTarget.x;
+      lookAtY[0] = _camTarget.y;
+      lookAtZ[0] = _camTarget.z;
       hasCamInit[0] = 1;
     }
 
     // Lerp camera pos (write to ECS floats first, then push to Three.js once)
-    const lerpT = Math.min(1, 14 * delta);
+    const lerpT = Math.min(1, 15 * delta);
     camPosX[0] += (_camDesired.x - camPosX[0]) * lerpT;
     camPosY[0] += (_camDesired.y - camPosY[0]) * lerpT;
     camPosZ[0] += (_camDesired.z - camPosZ[0]) * lerpT;
     camera.position.set(camPosX[0], camPosY[0], camPosZ[0]);
 
     // Lerp lookAt
-    const lookT = Math.min(1, 18 * delta);
-    lookAtX[0] += (_charPos.x               - lookAtX[0]) * lookT;
-    lookAtY[0] += (_charPos.y + EYE_HEIGHT  - lookAtY[0]) * lookT;
-    lookAtZ[0] += (_charPos.z               - lookAtZ[0]) * lookT;
+    const lookT = Math.min(1, 20 * delta);
+    lookAtX[0] += (_camTarget.x  - lookAtX[0]) * lookT;
+    lookAtY[0] += (_camTarget.y  - lookAtY[0]) * lookT;
+    lookAtZ[0] += (_camTarget.z  - lookAtZ[0]) * lookT;
     _lookAt.set(lookAtX[0], lookAtY[0], lookAtZ[0]);
     camera.lookAt(_lookAt);
 
     const now = performance.now();
   const registry = unitRegistry?.current;
 
-    // ── Find Nearest Enemy Unit ──
+    // ── Find Nearest Enemy Unit (Using Spatial Grid for Precision) ──
     hasTarget[0] = 0;
-    let nearestDistSq = AUTO_AIM_RSQ;
+    const grid = (window as any).battleGrid; // Access singleton
+    if (grid) {
+      const nearby = grid.queryRadius(_charPos.x, _charPos.z, AUTO_AIM_RADIUS);
+      let nearestDistSq = AUTO_AIM_RSQ;
 
-    if (registry) {
-      for (let i = 0; i < registry.length; i++) {
-        const u = registry[i];
-        if (!u.isActive || u.isDying || u.type !== 'enemy') continue;
+      for (let i = 0; i < nearby.length; i++) {
+        const u = nearby[i];
+        if (u.type !== 'enemy' || !u.isActive || u.isDying) continue;
 
         const dx = _charPos.x - u.position[0];
         const dz = _charPos.z - u.position[2];
@@ -450,15 +505,14 @@ export const PlayerController = ({
       <BVHEcctrl
         ref={ecctrlRef}
         paused={paused}
-        position={[0, 15, 0]}
-        floatHeight={0.1}
-        maxWalkSpeed={3}
-        onPointerCancel={true}
-        maxRunSpeed={5}
+        position={[0, 2, 0]}
+        floatHeight={0.3}
+        maxWalkSpeed={3.5}
+        maxRunSpeed={6}
         turnSpeed={20}
-        jumpVel={5}
-        collisionCheckIteration={20}
-        collisionPushBackVelocity={20}
+        jumpVel={4} 
+        collisionCheckIteration={80} 
+        collisionPushBackVelocity={4} 
         collisionPushBackThreshold={0.0001}
       >
         <group ref={characterRef} dispose={null} position={[0, -0.65, 0]}>

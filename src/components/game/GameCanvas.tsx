@@ -161,16 +161,13 @@ const EnemyRespawnManager = ({ spawnUnit, unitRegistry, envReady }: any) => {
     
     // Maintain a minimum of 10 enemies for constant action
     if (activeEnemies.length < 10) {
-       const classes = ['tank', 'fighter', 'mage', 'marksman', 'assassin'];
-       const randomClass = classes[Math.floor(Math.random() * classes.length)];
-       
        // Spawn in a wide arc around the player or at fixed spawn points
        const angle = Math.random() * Math.PI * 2;
        const dist = 30 + Math.random() * 30;
        const rx = Math.cos(angle) * dist;
        const rz = Math.sin(angle) * dist;
        
-       spawnUnit(10, "Reinforcement", "enemy", false, randomClass, undefined, undefined, [rx, -0.4, rz]);
+       spawnUnit(10, "Reinforcement", "enemy", false, "enemy_grunt", undefined, undefined, [rx, -0.4, rz]);
     }
   });
   
@@ -317,11 +314,11 @@ export const GameCanvas = React.memo(({
   useEffect(() => {
     if (envReady && spawnUnit) {
       // Spawn enemies at different points (Scattered across the map)
-      spawnUnit(10, "Guest", "enemy", false, "tank", undefined, undefined, [15, -0.4, -20]);
-      spawnUnit(10, "Guest", "enemy", false, "fighter", undefined, undefined, [0, -0.4, -35]);
-      spawnUnit(10, "Guest", "enemy", false, "mage", undefined, undefined, [-15, -0.4, -20]);
-      spawnUnit(10, "Guest", "enemy", false, "marksman", undefined, undefined, [25, -0.4, -10]);
-      spawnUnit(10, "Guest", "enemy", false, "assassin", undefined, undefined, [-25, -0.4, -10]);
+      spawnUnit(10, "Guest", "enemy", false, "enemy_grunt", undefined, undefined, [15, -0.4, -20]);
+      spawnUnit(10, "Guest", "enemy", false, "enemy_grunt", undefined, undefined, [0, -0.4, -35]);
+      spawnUnit(10, "Guest", "enemy", false, "enemy_grunt", undefined, undefined, [-15, -0.4, -20]);
+      spawnUnit(10, "Guest", "enemy", false, "enemy_grunt", undefined, undefined, [25, -0.4, -10]);
+      spawnUnit(10, "Guest", "enemy", false, "enemy_grunt", undefined, undefined, [-25, -0.4, -10]);
     }
   }, [envReady, spawnUnit]);
 

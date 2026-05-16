@@ -336,16 +336,19 @@ export const useBattleSystem = () => {
     }
     const toFlush: string[] = [];
     for (const [targetId, data] of damageBufferRef.current) {
-      // FIX: Flush if idle for 100ms OR if it's been accumulating for 250ms
+      // GHOST PROTECTION: If target is dead/dying, flush IMMEDIATELY
+      const u = unitIndexRef.current.get(targetId);
+      const isDead = !u || !u.isActive || u.isDying || u.hp <= 0;
+
       const age = now - (data as any).startTime;
       const idle = now - data.lastHit;
 
-      if (idle > 100 || age > 250) {
+      if (idle > 100 || age > 250 || isDead) {
         toFlush.push(targetId);
         if (damageQueueRef.current.length < 500) {
           damageQueueRef.current.push({
             value: Math.round(data.total),
-            position: data.position,
+            position: [...data.position],
             isCrit: data.total > 150,
             color: data.color,
             timestamp: now,
@@ -1057,7 +1060,7 @@ export const useBattleSystem = () => {
       const unitClass =
         forcedClass ||
         (type === "enemy" 
-          ? pickWeightedRandom(["fighter", "tank"], [60, 40])
+          ? (isBoss ? "enemy_boss" : pickWeightedRandom(["enemy_grunt"], [100]))
           : pickWeightedRandom(
               ["fighter", "tank", "assassin", "marksman", "mage"],
               [35, 35, 7, 11, 12],

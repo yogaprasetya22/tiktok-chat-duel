@@ -207,8 +207,16 @@ const Rocks = ({ potatoMode }: { potatoMode?: boolean }) => {
     return merged;
   }, [count]);
 
+  const meshRef = useRef<THREE.Mesh>(null!);
+  useEffect(() => {
+    if (meshRef.current) {
+      registerCollider(meshRef.current);
+      return () => unregisterCollider(meshRef.current);
+    }
+  }, [mergedGeo]);
+
   return (
-    <mesh geometry={mergedGeo} castShadow receiveShadow>
+    <mesh ref={meshRef} geometry={mergedGeo} castShadow receiveShadow>
       <primitive object={RockMat} attach="material" />
     </mesh>
   );
