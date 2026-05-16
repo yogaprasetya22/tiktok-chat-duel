@@ -511,9 +511,10 @@ export const PlayerController = ({
         maxRunSpeed={6}
         turnSpeed={20}
         jumpVel={4} 
-        collisionCheckIteration={80} 
-        collisionPushBackVelocity={4} 
-        collisionPushBackThreshold={0.0001}
+        collisionCheckIteration={15} 
+        collisionPushBackVelocity={1.5} 
+        collisionPushBackDamping={0.05}
+        collisionPushBackThreshold={0.01}
       >
         <group ref={characterRef} dispose={null} position={[0, -0.65, 0]}>
           <primitive object={scene} />

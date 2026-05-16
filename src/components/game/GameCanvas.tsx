@@ -30,6 +30,9 @@ import React, { useState, useRef, useEffect } from "react";
 import { Activity, RefreshCw } from "lucide-react";
 import * as THREE from 'three';
 import { PlayerController, keyboardMap } from "./PlayerController";
+import { WorldEditor } from "./environment/WorldEditor";
+import { WorldEditorUI } from "./environment/WorldEditorUI";
+import { ModularMap } from "./environment/ModularMap";
 
 
 // Map removed as requested. Base ground provided by OrbitControls/Sky.
@@ -198,6 +201,7 @@ interface GameCanvasProps {
   compBuffers?: any;
   spawnUnit?: (level?: number, userName?: string, type?: "player" | "enemy", isBoss?: boolean, forcedClass?: any, profileImage?: string, forcedRarity?: any, customPos?: [number, number, number]) => void;
   dealPlayerDamage?: (targetId: string, damage: number, isCrit?: boolean) => void;
+  isEditor?: boolean;
 }
 
 
@@ -223,11 +227,11 @@ export const GameCanvas = React.memo(({
   clearVFXCache,
   compBuffers,
   dealPlayerDamage,
+  isEditor = false,
 }: GameCanvasProps) => {
 
   const [dpr, setDpr] = useState(1.0);
   const [envReady, setEnvReady] = useState(false); // Terrain BVH readiness gate
-  const gameState = useStore(s => s.gameState);
   const isSettingsOpen = useStore(s => s.isSettingsOpen);
   const environment = useStore(s => s.environment);
   const setEnvironment = useStore(s => s.setEnvironment);
@@ -272,7 +276,7 @@ export const GameCanvas = React.memo(({
       value: towerConfig.baseDistance || 24, min: 10, max: 80, step: 2, label: "Jarak Base",
       onChange: (v) => { if (setTowerConfig) setTowerConfig(prev => ({ ...prev, baseDistance: v })); }
     }
-  }, { collapsed: false });
+  }, { collapsed: false, render: () => debug });
 
   const { fov, fogDensity, exposure } = useControls("World Tuning", {
     timeScale: {
@@ -309,7 +313,7 @@ export const GameCanvas = React.memo(({
       onChange: (v) => { settingsRef.current.vfxQuality = v; }
     }
 
-  }, { collapsed: true }) as any;
+  }, { collapsed: true, render: () => debug }) as any;
 
   useEffect(() => {
     if (envReady && spawnUnit) {
@@ -340,7 +344,7 @@ export const GameCanvas = React.memo(({
       minimal: { value: false, label: "Minimal Stats" },
       deepAnalyze: { value: false, label: "Deep Memory Profile" }
     })
-  }), { collapsed: true });
+  }), { collapsed: true, render: () => debug });
 
   // Fix: Move useFrame inside a child component that sits inside <Canvas>
   const DiagnosticsBridge = () => {
@@ -382,11 +386,10 @@ export const GameCanvas = React.memo(({
   };
 
   return (
-    <div className={`w-full h-full overflow-hidden relative bg-black select-none touch-none ${isFullscreen ? '' : 'rounded-2xl border border-white/10 shadow-2xl'}`}>
+    <div className={`w-full h-full overflow-hidden relative bg-slate-950 flex flex-col select-none touch-none ${isFullscreen ? '' : 'rounded-2xl border border-white/10 shadow-2xl'}`}>
 
       {/* Engine Bridge: Leva Console (Bottom Left) */}
-      <div className={`absolute bottom-6 left-6 z-[1200] w-80 transition-all duration-300 shadow-2xl ${!isSettingsOpen ? 'opacity-0 pointer-events-none translate-y-4' : 'opacity-100 pointer-events-auto translate-y-0'
-        }`}>
+      <div className={`absolute bottom-6 left-6 z-[1200] w-80 transition-all duration-300 shadow-2xl ${!isSettingsOpen ? 'opacity-0 pointer-events-none translate-y-4' : 'opacity-100 pointer-events-auto translate-y-0'}`}>
         <Leva
           hidden={!isSettingsOpen}
           theme={{
@@ -416,149 +419,148 @@ export const GameCanvas = React.memo(({
           <span className="text-[10px] font-black uppercase tracking-widest">Clear VFX Cache</span>
         </button>
       </div>
+      
+      <div className="flex-grow w-full relative h-full">
+        <Leva 
+          hidden={!debug} 
+          theme={{
+            colors: { accent1: '#6366f1' },
+            sizes: { rootWidth: '320px' }
+          }} 
+          fill
+          flat
+        />
 
-      <div className="absolute top-4 left-4 z-10 bg-black/50 p-2 rounded text-[10px] text-white backdrop-blur-md border border-white/10 pointer-events-none">
-        DPR: {dpr.toFixed(2)}
+        <div className="absolute top-4 left-4 z-10 bg-black/50 p-2 rounded text-[10px] text-white backdrop-blur-md border border-white/10 pointer-events-none">
+          DPR: {(dpr || 1).toFixed(2)}
+        </div>
+
+        <KeyboardControls map={keyboardMap}>
+          <Canvas
+            shadows={{ type: THREE.PCFShadowMap }}
+            dpr={dpr}
+            gl={{
+              antialias: true,
+              powerPreference: "high-performance",
+              logarithmicDepthBuffer: false,
+              stencil: false,
+              depth: true,
+              alpha: false,
+              failIfMajorPerformanceCaveat: false,
+              precision: "mediump",
+            }}
+            className="select-none touch-none w-full h-full"
+          >
+            <SceneAnalyzer />
+            {!isEditor && <EnemyRespawnManager spawnUnit={spawnUnit} unitRegistry={unitRegistry} envReady={envReady} />}
+            <StatsGl className="!absolute !top-24 !left-2 !right-auto !bottom-auto !z-[2000]" />
+            <PerformanceMonitor onIncline={() => setDpr(Math.min(dpr + 0.05, 0.9))} onDecline={() => setDpr(Math.max(dpr - 0.05, 0.6))} />
+
+            <AdaptiveEvents />
+            <AdaptiveDpr pixelated={true} />
+
+            {showPerf && (
+              <Perf
+                position={perfPosition}
+                minimal={minimal}
+                showGraph={!minimal}
+                deepAnalyze={deepAnalyze}
+                className="z-[2000]"
+              />
+            )}
+
+            {(isEditor || (!isFullscreen && !envReady)) && (
+              <MapControls
+                enableDamping={true}
+                dampingFactor={0.05}
+                screenSpacePanning={false}
+                minDistance={1}
+                maxDistance={800}
+                maxPolarAngle={Math.PI / 2.1}
+                minPolarAngle={0}
+                makeDefault
+              />
+            )}
+
+            {environment === 'DIORAMA' ? (
+              <WhimsicalDiorama
+                baseDistance={towerConfig.baseDistance || 24}
+                settingsRef={settingsRef}
+                debug={debug}
+                onReady={() => {
+                  requestAnimationFrame(() => {
+                    requestAnimationFrame(() => setEnvReady(true));
+                  });
+                }}
+              />
+            ) : (
+              <StormEnvironment
+                baseDistance={towerConfig.baseDistance || 24}
+                potatoMode={settingsRef.current.potatoMode}
+                debug={debug}
+                onReady={() => {
+                  requestAnimationFrame(() => {
+                    requestAnimationFrame(() => setEnvReady(true));
+                  });
+                }}
+              />
+            )}
+
+            <ModularMap debug={debug} />
+            {isEditor && <WorldEditor />}
+
+            <DiagnosticsBridge />
+            <VisualTuningBridge fov={fov} fogDensity={fogDensity} exposure={exposure} />
+
+            <VFXProvider>
+              {!isEditor && <CameraDirector />}
+              <DamageHUDBatcher damageQueue={damageQueue} />
+
+              {!isEditor && (
+                <>
+                  <BattleArmy
+                    unitRegistry={unitRegistry}
+                    towerConfig={towerConfig}
+                    updateSimulation={updateSimulation}
+                    settingsRef={settingsRef}
+                    simTimeRef={simTimeRef}
+                    spellsRef={spellsRef}
+                    mmSpellsRef={mmSpellsRef}
+                    fighterSpellsRef={fighterSpellsRef}
+                    tankSpellsRef={tankSpellsRef}
+                    assassinSpellsRef={assassinSpellsRef}
+                    compBuffers={compBuffers}
+                  />
+
+                  <PlayerController
+                    damageQueue={damageQueue}
+                    settingsRef={settingsRef}
+                    paused={!envReady}
+                    unitRegistry={unitRegistry}
+                    dealPlayerDamage={dealPlayerDamage}
+                    mmSpellsRef={mmSpellsRef}
+                    simTimeRef={simTimeRef}
+                  />
+                </>
+              )}
+
+              {debug && mapObstacles.map((obs: MapObstacle, i: number) => (
+                <Sphere key={`debug-obs-${i}`} args={[obs.r, 16, 16]} position={[obs.x, -0.4, obs.z]}>
+                  <meshBasicMaterial color="yellow" wireframe transparent opacity={0.3} />
+                </Sphere>
+              ))}
+            </VFXProvider>
+
+            {!settingsRef.current.potatoMode && (
+              <EffectComposer enableNormalPass={false} multisampling={0}>
+                <Bloom luminanceThreshold={1.0} mipmapBlur intensity={0.5} radius={0.4} />
+                <ToneMapping adaptive={false} />
+              </EffectComposer>
+            )}
+          </Canvas>
+        </KeyboardControls>
       </div>
-      <KeyboardControls map={keyboardMap}>
-      <Canvas
-        shadows={{ type: THREE.PCFShadowMap }}
-        dpr={dpr}
-        gl={{
-          antialias: true,
-          powerPreference: "high-performance",
-          logarithmicDepthBuffer: false,
-          stencil: false,
-          depth: true,
-          alpha: false,
-          failIfMajorPerformanceCaveat: false,
-          precision: "mediump",
-        }}
-
-        className="select-none touch-none "
-      >
-        <SceneAnalyzer />
-        <EnemyRespawnManager spawnUnit={spawnUnit} unitRegistry={unitRegistry} envReady={envReady} />
-        <StatsGl className="!absolute !top-24 !left-2 !right-auto !bottom-auto !z-[2000]" />
-        <PerformanceMonitor onIncline={() => setDpr(Math.min(dpr + 0.05, 0.9))} onDecline={() => setDpr(Math.max(dpr - 0.05, 0.6))} />
-
-        <AdaptiveEvents />
-        <AdaptiveDpr pixelated={true} />
-
-        {showPerf && (
-          <Perf
-            position={perfPosition}
-            minimal={minimal}
-            showGraph={!minimal}
-            deepAnalyze={deepAnalyze}
-            className="z-[2000]"
-          />
-        )}
-
-        {!isFullscreen && !envReady && (
-          <MapControls
-            enableDamping={true}
-            dampingFactor={0.05}
-            screenSpacePanning={false}
-            minDistance={10}
-            maxDistance={350}
-            maxPolarAngle={Math.PI / 2.5}
-            minPolarAngle={0}
-            makeDefault
-          />
-        )}
-
-
-
-          {environment === 'DIORAMA' ? (
-            <WhimsicalDiorama
-              baseDistance={towerConfig.baseDistance || 24}
-              settingsRef={settingsRef}
-              debug={debug}
-              onReady={() => {
-                requestAnimationFrame(() => {
-                  requestAnimationFrame(() => setEnvReady(true));
-                });
-              }}
-            />
-          ) : (
-            <StormEnvironment
-              baseDistance={towerConfig.baseDistance || 24}
-              potatoMode={settingsRef.current.potatoMode}
-              debug={debug}
-              onReady={() => {
-                // Extra rAF buffer: ensures StaticCollider has fully
-                // registered the BVH before un-pausing the character
-                requestAnimationFrame(() => {
-                  requestAnimationFrame(() => setEnvReady(true));
-                });
-              }}
-            />
-          )}
-
-
-          <DiagnosticsBridge />
-          <VisualTuningBridge fov={fov} fogDensity={fogDensity} exposure={exposure} />
-
-          <VFXProvider>
-            <CameraDirector />
-            <DamageHUDBatcher damageQueue={damageQueue} />
-
-            <BattleArmy
-              unitRegistry={unitRegistry}
-              towerConfig={towerConfig}
-              updateSimulation={updateSimulation}
-              settingsRef={settingsRef}
-              simTimeRef={simTimeRef}
-              spellsRef={spellsRef}
-              mmSpellsRef={mmSpellsRef}
-              fighterSpellsRef={fighterSpellsRef}
-              tankSpellsRef={tankSpellsRef}
-              assassinSpellsRef={assassinSpellsRef}
-              compBuffers={compBuffers}
-            />
-
-
-
-            {/* BASE AND TOWERS HIDDEN — enemies now target player character */}
-
-            <PlayerController
-              damageQueue={damageQueue}
-              settingsRef={settingsRef}
-              paused={!envReady}
-              unitRegistry={unitRegistry}
-              dealPlayerDamage={dealPlayerDamage}
-              mmSpellsRef={mmSpellsRef}
-              simTimeRef={simTimeRef}
-            />
-            
-
-
-            {/* DEBUG OBSTACLES */}
-            {debug && mapObstacles.map((obs: MapObstacle, i: number) => (
-              <Sphere key={`debug-obs-${i}`} args={[obs.r, 16, 16]} position={[obs.x, -0.4, obs.z]}>
-                <meshBasicMaterial color="yellow" wireframe transparent opacity={0.3} />
-              </Sphere>
-            ))}
-          </VFXProvider>
-
-        {/* Damage text removed for maximum performance and clarity as requested */}
-
-
-        {/* Post Processing: Disabled during SETUP for CPU/GPU savings */}
-        {gameState !== 'SETUP' && !settingsRef.current.potatoMode && (
-          <EffectComposer enableNormalPass={false} multisampling={0}>
-            <Bloom
-              luminanceThreshold={1.0}
-              mipmapBlur
-              intensity={0.5}
-              radius={0.4}
-            />
-            <ToneMapping adaptive={false} />
-          </EffectComposer>
-        )}
-      </Canvas>
-      </KeyboardControls>
+      {isEditor && <WorldEditorUI />}
     </div>
   );
 });

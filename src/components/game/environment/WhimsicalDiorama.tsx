@@ -51,7 +51,7 @@ export const WhimsicalDiorama = ({ baseDistance = 24, settingsRef, debug = false
         }
 
         geo.computeVertexNormals();
-        (geo as any).computeBoundsTree({ maxDepth: 64, maxLeafTris: 5 });
+        (geo as any).computeBoundsTree({ maxDepth: 64, maxLeafSize: 5 });
         return geo;
     }, [baseDistance]); // REMOVED isSetup — this was the root cause!
 
@@ -112,11 +112,12 @@ export const WhimsicalDiorama = ({ baseDistance = 24, settingsRef, debug = false
                 BVHOptions={{
                     strategy: 1, // SAH
                     maxDepth: 64,
-                    maxLeafTris: 5,
+                    maxLeafSize: 5,
                     verbose: false
-                }}
+                } as any}
             >
                 <mesh 
+                    name="terrain"
                     geometry={terrainGeometry}
                     rotation={[-Math.PI / 2, 0, 0]} 
                     position={[0, -0.6, 0]} 

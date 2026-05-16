@@ -10,17 +10,28 @@ const direction = new THREE.Vector3(0, -1, 0); // Downward
 export const colliders: THREE.Mesh[] = [];
 if (typeof window !== 'undefined') (window as any).globalColliders = colliders;
 
-export const registerCollider = (mesh: THREE.Mesh) => {
-    if (!colliders.includes(mesh)) {
-        colliders.push(mesh);
-    }
+export const registerCollider = (obj: THREE.Object3D) => {
+    if (!obj) return;
+    obj.traverse((child) => {
+        if ((child as THREE.Mesh).isMesh) {
+            const mesh = child as THREE.Mesh;
+            if (!colliders.includes(mesh)) {
+                colliders.push(mesh);
+            }
+        }
+    });
 };
 
-export const unregisterCollider = (mesh: THREE.Mesh) => {
-    const idx = colliders.indexOf(mesh);
-    if (idx !== -1) {
-        colliders.splice(idx, 1);
-    }
+export const unregisterCollider = (obj: THREE.Object3D) => {
+    if (!obj) return;
+    obj.traverse((child) => {
+        if ((child as THREE.Mesh).isMesh) {
+            const idx = colliders.indexOf(child as THREE.Mesh);
+            if (idx !== -1) {
+                colliders.splice(idx, 1);
+            }
+        }
+    });
 };
 
 export const getGroundHeight = (x: number, z: number, fallbackY: number): number => {

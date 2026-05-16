@@ -19,23 +19,29 @@ export function getTerrainElevation(
   x: number, 
   z: number, 
   environmentType: "STORM" | "DIORAMA" | string, 
-  baseDistance: number = 24
+  baseDistance: number = 24,
+  config?: { height: number, scale: number, seed: number }
 ): number {
   const dist = Math.sqrt(x * x + z * z);
   let elevation = 0;
   
+  const h = config?.height ?? 35.0;
+  const s = config?.scale ?? 1.0;
+  const seed = config?.seed ?? 0;
+
   if (environmentType === "STORM" || environmentType === "RAIN" || environmentType === "THUNDER" || environmentType === "CLEAR") {
     // StormEnvironment / Open World style
     const mask = THREE.MathUtils.smoothstep(dist, baseDistance + 10.0, baseDistance + 60.0);
-    elevation += noise.noise(x * 0.008, z * 0.008) * 35.0;
-    elevation += noise.noise(x * 0.025, z * 0.025) * 10.0;
-    elevation += noise.noise(x * 0.08, z * 0.08) * 3.0;
+    // Apply dynamic config to the main noise layers
+    elevation += noise.noise((x + seed) * 0.008 * s, (z + seed) * 0.008 * s) * h;
+    elevation += noise.noise((x + seed) * 0.025 * s, (z + seed) * 0.025 * s) * (h * 0.3);
+    elevation += noise.noise((x + seed) * 0.08 * s, (z + seed) * 0.08 * s) * (h * 0.1);
     elevation *= mask;
   } else {
     // WhimsicalDiorama style
     const mask = THREE.MathUtils.smoothstep(dist, baseDistance + 15.0, baseDistance + 50.0);
-    elevation += noise.noise(x * 0.015, z * 0.015) * 35.0;
-    elevation += noise.noise(x * 0.04, z * 0.04) * 8.0;
+    elevation += noise.noise((x + seed) * 0.015 * s, (z + seed) * 0.015 * s) * h;
+    elevation += noise.noise((x + seed) * 0.04 * s, (z + seed) * 0.04 * s) * (h * 0.2);
     elevation *= mask;
   }
 
