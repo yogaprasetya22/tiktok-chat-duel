@@ -17,6 +17,8 @@ const nextConfig: NextConfig = {
     // Ensure that heavy three.js imports are optimized
     transpilePackages: [
         "three",
+        "three-mesh-bvh",
+        "bvhecctrl",
         "@react-three/fiber",
         "@react-three/drei",
         "r3f-perf",
@@ -30,6 +32,14 @@ const nextConfig: NextConfig = {
             { protocol: "http", hostname: "**.tiktokcdn-us.com" },
             { protocol: "https", hostname: "**.ftcdn.net" },
         ],
+    },
+    webpack: (config) => {
+        config.resolve.alias = {
+            ...config.resolve.alias,
+            'three': path.resolve('node_modules/three'),
+            'three-mesh-bvh': path.resolve('node_modules/three-mesh-bvh'),
+        };
+        return config;
     },
     experimental: {
         optimizePackageImports: ["three", "lucide-react", "@react-three/drei"],

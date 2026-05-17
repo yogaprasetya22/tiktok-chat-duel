@@ -2827,7 +2827,8 @@ export const useBattleSystem = () => {
         const dz = newZ - oldZ;
         const moveDistSq = dx * dx + dz * dz;
 
-        const mathElevation = getTerrainElevation(_px[i], _pz[i], (settings as any).environment || "STORM", towerConfigRef.current.baseDistance || 24) - 0.3;
+        const activeEnv = useStore.getState().environment;
+        const mathElevation = getTerrainElevation(_px[i], _pz[i], activeEnv, towerConfigRef.current.baseDistance || 24) - 0.3;
         const targetHeight = getGroundHeight(_px[i], _pz[i], mathElevation);
         const maxStepDist = v.maxSpeed * simDelta * 1.2 + 0.02;
         const maxStepDistSq = maxStepDist * maxStepDist;

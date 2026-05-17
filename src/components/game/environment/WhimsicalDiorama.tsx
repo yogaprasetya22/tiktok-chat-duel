@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useEffect } from 'react';
+import { useMemo, useEffect, useRef } from 'react';
 import React from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
@@ -14,6 +14,7 @@ import {
 } from '../systems/effects/PainterlyMaterials';
 
 import { useStore } from "@/src/state/useStore";
+import { registerCollider, unregisterCollider } from '@/src/core/utils/globalRaycaster';
 
 
 import { PainterlyGrass } from './effects/PainterlyGrass';
@@ -34,6 +35,7 @@ interface WhimsicalDioramaProps {
 
 export const WhimsicalDiorama = ({ baseDistance = 24, settingsRef, debug = false, onReady }: WhimsicalDioramaProps) => {
     const weather = useStore(s => s.weather);
+    const meshRef = useRef<THREE.Mesh>(null!);
 
     const terrainGeometry = useMemo(() => {
         const size = 1500.0;
@@ -62,6 +64,13 @@ export const WhimsicalDiorama = ({ baseDistance = 24, settingsRef, debug = false
         );
         return () => cancelAnimationFrame(id);
     }, [terrainGeometry, onReady]);
+
+    useEffect(() => {
+        if (meshRef.current) {
+            registerCollider(meshRef.current);
+            return () => unregisterCollider(meshRef.current);
+        }
+    }, [terrainGeometry]);
 
     useFrame((state) => {
         const time = state.clock.elapsedTime;
@@ -117,6 +126,7 @@ export const WhimsicalDiorama = ({ baseDistance = 24, settingsRef, debug = false
                 } as any}
             >
                 <mesh 
+                    ref={meshRef}
                     name="terrain"
                     geometry={terrainGeometry}
                     rotation={[-Math.PI / 2, 0, 0]} 

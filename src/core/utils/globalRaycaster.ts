@@ -43,6 +43,11 @@ export const getGroundHeight = (x: number, z: number, fallbackY: number): number
 
     const hits = raycaster.intersectObjects(colliders, false);
     if (hits.length > 0) {
+        // Prioritize hitting the terrain mesh directly to avoid snapping to trees or high obstacles
+        const terrainHit = hits.find(h => h.object.name === "terrain");
+        if (terrainHit) {
+            return terrainHit.point.y;
+        }
         return hits[0].point.y;
     }
 

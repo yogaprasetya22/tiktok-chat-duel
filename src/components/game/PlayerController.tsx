@@ -116,7 +116,7 @@ export const PlayerController = ({
   damageQueue,
   settingsRef,
   paused = false,
-  unitRegistry,
+  unitRegistry: _unitRegistry,
   dealPlayerDamage,
   mmSpellsRef,
   simTimeRef,
@@ -549,8 +549,11 @@ export const PlayerController = ({
       <BVHEcctrl
         ref={ecctrlRef}
         paused={paused}
-        position={[0, 2, 0]}
+        position={[0, 3, 0]}
         floatHeight={0.3}
+        floatSensorRadius={0.3}
+        delay={0.5}
+        colliderCapsuleArgs={[0.4, 1.2, 4, 8]}
         maxWalkSpeed={3.5}
         maxRunSpeed={6}
         turnSpeed={20}

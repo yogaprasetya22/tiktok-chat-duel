@@ -151,7 +151,7 @@ export default function LandingUnitShowcase() {
             ))}
           </div>
 
-          <Canvas shadows dpr={[1, 2]}>
+          <Canvas shadows={{ type: THREE.PCFShadowMap }} dpr={[1, 2]}>
             <PerspectiveCamera makeDefault position={[0, 1, 18]} fov={35} />
             <ambientLight intensity={0.4} color="#ffe4bc" />
             <spotLight position={[5, 10, 5]} angle={0.15} penumbra={1} intensity={2} castShadow color="#ffd4a3" />

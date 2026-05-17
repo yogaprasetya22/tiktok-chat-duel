@@ -54,5 +54,13 @@
   "trustedDependencies": [
     "sharp",
     "unrs-resolver"
-  ]
+  ],
+  "overrides": {
+    "three": "$three",
+    "three-mesh-bvh": "$three-mesh-bvh"
+  },
+  "resolutions": {
+    "three": "^0.183.2",
+    "three-mesh-bvh": "^0.9.9"
+  }
 }

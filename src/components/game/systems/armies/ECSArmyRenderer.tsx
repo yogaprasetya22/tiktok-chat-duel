@@ -524,13 +524,19 @@ const ECSArmyRendererInner = ({
           const bs = (uData.isBoss ? 0.7 : 0.8) * totalVisualScale;
           const ss = 1.1 * totalVisualScale;
 
-          _hudTemp.position.set(vPos.x, -0.45, vPos.z);
-          _hudTemp.quaternion.identity();
-          _hudTemp.scale.set(ss, ss, 1);
-          _hudTemp.updateMatrix();
-          shadowRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
+          if (team === 'player') {
+            _hudTemp.position.set(vPos.x, vPos.y + 0.015, vPos.z);
+            _hudTemp.quaternion.identity();
+            _hudTemp.scale.set(ss, ss, 1);
+            _hudTemp.updateMatrix();
+            shadowRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
+          } else {
+            _hudTemp.scale.set(0.001, 0.001, 0.001);
+            _hudTemp.updateMatrix();
+            shadowRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
+          }
 
-          if (cooldownRef.current && cooldownAttr && uData.hp > 0) {
+          if (team === 'player' && cooldownRef.current && cooldownAttr && uData.hp > 0) {
             const skillCfg = CLASS_CONFIG[classKey];
             const cdTime = (skillCfg.skill_cooldown || 1000) * (1.0 - ((uData as any).cooldownReduction || 0));
             const timeSinceSkill = (simTimeRef.current || 0) - (uData.lastSkillTime || 0);
@@ -582,11 +588,17 @@ const ECSArmyRendererInner = ({
             }
           }
         } else {
-          _hudTemp.position.set(cp.x, -0.45, cp.z);
-          _hudTemp.quaternion.identity(); 
-          _hudTemp.scale.set(uData.isBoss ? 4.5 : 1.6, uData.isBoss ? 4.5 : 1.6, 1);
-          _hudTemp.updateMatrix();
-          shadowRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
+          if (team === 'player') {
+            _hudTemp.position.set(cp.x, cp.y + 0.015, cp.z);
+            _hudTemp.quaternion.identity(); 
+            _hudTemp.scale.set(uData.isBoss ? 4.5 : 1.6, uData.isBoss ? 4.5 : 1.6, 1);
+            _hudTemp.updateMatrix();
+            shadowRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
+          } else {
+            _hudTemp.scale.set(0.001, 0.001, 0.001);
+            _hudTemp.updateMatrix();
+            shadowRef.current.setMatrixAt(hIdx, _hudTemp.matrix);
+          }
 
           _hudTemp.scale.set(0.001, 0.001, 0.001);
           _hudTemp.updateMatrix();

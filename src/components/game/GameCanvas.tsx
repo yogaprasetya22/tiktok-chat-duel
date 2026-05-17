@@ -473,11 +473,16 @@ export const GameCanvas = React.memo(({
               <MapControls
                 enableDamping={true}
                 dampingFactor={0.05}
-                screenSpacePanning={false}
+                screenSpacePanning={true}
                 minDistance={1}
                 maxDistance={800}
                 maxPolarAngle={Math.PI / 2.1}
                 minPolarAngle={0}
+                mouseButtons={{
+                  LEFT: null as any,
+                  MIDDLE: THREE.MOUSE.ROTATE,
+                  RIGHT: THREE.MOUSE.PAN
+                }}
                 makeDefault
               />
             )}
@@ -532,15 +537,17 @@ export const GameCanvas = React.memo(({
                     compBuffers={compBuffers}
                   />
 
-                  <PlayerController
-                    damageQueue={damageQueue}
-                    settingsRef={settingsRef}
-                    paused={!envReady}
-                    unitRegistry={unitRegistry}
-                    dealPlayerDamage={dealPlayerDamage}
-                    mmSpellsRef={mmSpellsRef}
-                    simTimeRef={simTimeRef}
-                  />
+                  {envReady && (
+                    <PlayerController
+                      damageQueue={damageQueue}
+                      settingsRef={settingsRef}
+                      paused={false}
+                      unitRegistry={unitRegistry}
+                      dealPlayerDamage={dealPlayerDamage}
+                      mmSpellsRef={mmSpellsRef}
+                      simTimeRef={simTimeRef}
+                    />
+                  )}
                 </>
               )}
 

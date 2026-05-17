@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { useGLTF } from '@react-three/drei';
 import { SimplexNoise } from 'three-stdlib';
 import { computeBoundsTree, disposeBoundsTree, acceleratedRaycast } from 'three-mesh-bvh';
+import { InstancedStaticCollider } from 'bvhecctrl';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // BVH prototype patch (idempotent)
@@ -117,13 +118,15 @@ const TreePartInstanced = ({ geometry, material, positions, scales, rotations, c
     }, [count, dummy, positions, scales, rotations, globalScale]);
 
     return (
-        <instancedMesh
-            ref={meshRef}
-            args={[geometry, material as THREE.Material, count]}
-            castShadow
-            receiveShadow
-            frustumCulled={true}
-        />
+        <InstancedStaticCollider restitution={0} friction={1}>
+            <instancedMesh
+                ref={meshRef}
+                args={[geometry, material as THREE.Material, count]}
+                castShadow
+                receiveShadow
+                frustumCulled={true}
+            />
+        </InstancedStaticCollider>
     );
 };
 

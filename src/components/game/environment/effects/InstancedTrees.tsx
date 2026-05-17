@@ -6,6 +6,7 @@ import { getTerrainElevation } from "@/src/core/utils/terrainHeight";
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { applyPainterlyStyle } from '../../systems/effects/PainterlyMaterials';
 import { registerCollider, unregisterCollider } from '@/src/core/utils/globalRaycaster';
+import { InstancedStaticCollider } from 'bvhecctrl';
 
 const TREE_COUNT = 120;
 
@@ -97,11 +98,13 @@ export const InstancedTrees = ({ mode, baseDistance = 24 }: { mode: 'DIORAMA' | 
     }, []);
 
     return (
-        <instancedMesh 
-            ref={meshRef} 
-            args={[treeGeometry, treeMaterial, TREE_COUNT]} 
-            castShadow 
-            receiveShadow 
-        />
+        <InstancedStaticCollider restitution={0} friction={1}>
+            <instancedMesh 
+                ref={meshRef} 
+                args={[treeGeometry, treeMaterial, TREE_COUNT]} 
+                castShadow 
+                receiveShadow 
+            />
+        </InstancedStaticCollider>
     );
 };
