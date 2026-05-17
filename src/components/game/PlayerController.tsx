@@ -563,7 +563,7 @@ export const PlayerController = ({
         collisionPushBackDamping={0.05}
         collisionPushBackThreshold={0.01}
       >
-        <group ref={characterRef} dispose={null} position={[0, -0.65, 0]}>
+        <group ref={characterRef} dispose={null} position={[0, -1.3, 0]}>
           <primitive object={scene} />
         </group>
       </BVHEcctrl>
